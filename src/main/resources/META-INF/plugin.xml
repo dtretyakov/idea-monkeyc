@@ -81,6 +81,9 @@
         <newProjectWizard.generator
             implementation="com.github.dtretyakov.monkeyc.ui.wizard.ConnectIqNewProjectWizard"/>
 
+        <fileEditorProvider
+            implementation="com.github.dtretyakov.monkeyc.ui.manifest.ManifestEditorProvider"/>
+
         <editorNotificationProvider
             implementation="com.github.dtretyakov.monkeyc.ui.MissingSdkNotification"/>
 

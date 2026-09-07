@@ -2,6 +2,7 @@ package com.github.dtretyakov.monkeyc.ui
 
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.project.ManifestFile
+import com.github.dtretyakov.monkeyc.project.ManifestText
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.intellij.openapi.actionSystem.ActionUpdateThread
@@ -64,7 +65,7 @@ class EditProductsAction : AnAction() {
     private fun write(project: Project, manifest: Path, devices: List<String>) {
         val file = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(manifest) ?: return
         val document = FileDocumentManager.getInstance().getDocument(file)
-        val updated = ManifestFile.withDevices(document?.text ?: manifest.readText(), devices)
+        val updated = ManifestText.withDevices(document?.text ?: manifest.readText(), devices)
 
         WriteCommandAction.runWriteCommandAction(project, "Edit Products", null, {
             if (document != null) {

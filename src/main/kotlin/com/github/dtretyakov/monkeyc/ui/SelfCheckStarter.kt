@@ -10,6 +10,7 @@ import com.github.dtretyakov.monkeyc.run.MonkeyCRunConfigurationType
 import com.intellij.execution.configurations.ConfigurationTypeUtil
 import com.intellij.ide.wizard.GeneratorNewProjectWizard
 import com.intellij.openapi.application.ModernApplicationStarter
+import com.intellij.openapi.fileEditor.FileEditorProvider
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.redhat.devtools.lsp4ij.dap.DebugAdapterManager
 import com.redhat.devtools.lsp4ij.LanguageServersRegistry
@@ -53,6 +54,12 @@ class SelfCheckStarter : ModernApplicationStarter() {
             problems += "the language server '${MonkeyCLanguageServerFactory.SERVER_ID}' is not registered with LSP4IJ"
         } else {
             println("[self-check] language server: ${languageServer.displayName}")
+        }
+
+        if (FileEditorProvider.EP_FILE_EDITOR_PROVIDER.extensionList.none { it.editorTypeId == "monkeyc-manifest" }) {
+            problems += "the manifest form editor is not registered"
+        } else {
+            println("[self-check] manifest form editor")
         }
 
         val wizard = GeneratorNewProjectWizard.EP_NAME.extensionList.firstOrNull { it.id == "ConnectIQ" }

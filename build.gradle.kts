@@ -1,3 +1,4 @@
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -23,10 +24,15 @@ dependencies {
         intellijIdea(libs.versions.ideaVersion)
         plugin("com.redhat.devtools.lsp4ij:${libs.versions.lsp4ij.get()}")
         pluginVerifier()
+        // Gives the tests a real Project, so the parts that only exist inside an IDE — the
+        // manifest form editor, for one — can be exercised rather than only compiled.
+        testFramework(TestFrameworkType.Platform)
     }
 
     testImplementation(libs.junitJupiter)
+    testImplementation(libs.junit4)
     testRuntimeOnly(libs.junitPlatformLauncher)
+    testRuntimeOnly(libs.junitVintage)
 }
 
 tasks.withType<Test>().configureEach {

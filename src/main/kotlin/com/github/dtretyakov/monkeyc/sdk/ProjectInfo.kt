@@ -32,6 +32,12 @@ data class ProjectTemplate(
     val files: List<TemplateFile>,
 )
 
+/** A permission an app may ask for, as `projectInfo.xml` describes it. */
+data class AppPermission(val id: String, val name: String, val description: String)
+
+/** A language an app may declare a translation for. */
+data class AppLanguage(val id: String, val name: String)
+
 /**
  * A `${name}` in a template file, and what it is replaced with.
  *
@@ -55,8 +61,22 @@ class ProjectInfo private constructor(
     val placeholders: List<TemplatePlaceholder>,
     /** API levels a project may declare, oldest first. */
     val apiLevels: List<SdkVersion>,
+    val permissions: List<AppPermission>,
+    val languages: List<AppLanguage>,
     private val barrelCapableLevels: Set<String>,
+    private val permissionsByAppType: Map<String, Set<String>>,
 ) {
+    /**
+     * The permissions this kind of app may ask for.
+     *
+     * Not every permission applies to every app type — a watch face cannot record an activity —
+     * and offering one the compiler will reject is worse than not offering it.
+     */
+    fun permissionsFor(appType: String?): List<AppPermission> {
+        val allowed = permissionsByAppType[appType] ?: return permissions
+        return permissions.filter { it.id in allowed }
+    }
+
     fun templatesFor(appType: String): List<ProjectTemplate> = templates.filter { it.appType == appType }
 
     /** Barrels only run on API levels that support them, and most early ones do not. */
@@ -105,10 +125,27 @@ class ProjectInfo private constructor(
                     )
                 },
                 apiLevels = versions.mapNotNull { SdkVersion.parse(it.textContent) },
+                permissions = projectInfo.elements("appPermissions")
+                    .flatMap { it.childElements("permission") }
+                    .map {
+                        AppPermission(
+                            it.getAttribute("id"),
+                            it.getAttribute("name").ifEmpty { it.getAttribute("id") },
+                            it.getAttribute("description"),
+                        )
+                    },
+                languages = projectInfo.elements("language").map {
+                    AppLanguage(it.getAttribute("id"), it.getAttribute("name").ifEmpty { it.getAttribute("id") })
+                },
                 barrelCapableLevels = versions
                     .filter { it.getAttribute("supportsBarrels") == "true" }
                     .map { it.textContent.trim() }
                     .toSet(),
+                permissionsByAppType = projectInfo.elements("permissionMap").associate { map ->
+                    map.getAttribute("appType") to map.elements("permission")
+                        .map { it.getAttribute("id") }
+                        .toSet()
+                },
             )
         }
 

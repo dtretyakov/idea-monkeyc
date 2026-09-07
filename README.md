@@ -33,10 +33,12 @@ before it can answer `initialize`.
 
 ## What works
 
-* **Starting** — a Connect IQ entry in the New Project dialog, built from the SDK's own templates,
-  and an action to add or remove the devices a project targets. The signing key can be generated
-  from the settings page: it is a 4096-bit RSA key in PKCS#8 DER, which the JVM can write, so no
-  openssl is needed.
+* **Starting** — a Connect IQ entry in the New Project dialog, built from the SDK's own templates.
+  The signing key can be generated from the settings page: it is a 4096-bit RSA key in PKCS#8 DER,
+  which the JVM can write, so no openssl is needed.
+* **The manifest** — a form tab beside the XML for the parts that are lists of identifiers nobody
+  remembers: devices, permissions, language codes. It edits the file as text rather than through a
+  DOM, so the comments and the formatting of a file being edited by hand in the next tab survive.
 * **Editing** — completion over the whole Toybox API, diagnostics, go-to-definition, hover with
   documentation, rename, find usages, document and workspace symbols, folding, type and call
   hierarchies. Syntax highlighting, commenting and bracket matching for `.mc`, `.jungle` and `.mss`.
@@ -104,6 +106,9 @@ passing when it has in fact skipped.
 registered simply never starts, and what the user sees is an editor with no completion and nothing
 to report.
 
+Between the two sit the tests that need a real `Project` — the manifest form is assembled inside
+one, because a UI that compiles is not a UI that builds.
+
 ## Layout
 
 ```
@@ -114,5 +119,5 @@ lsp/       the language server client and the workarounds it needs
 build/     the compiler, and its output turned into build events
 run/       run configurations, the simulator, monkeydo
 dap/       the debug adapter client
-ui/        settings, the device widget, export, products, the wizard, the self-check
+ui/        settings, the device widget, export, the wizard, the manifest form, the self-check
 ```

@@ -72,7 +72,7 @@ class ManifestFileTest {
             </iq:manifest>
         """.trimIndent()
 
-        val updated = ManifestFile.withDevices(original, listOf("fenix7", "fenix6"))
+        val updated = ManifestText.withDevices(original, listOf("fenix7", "fenix6"))
 
         assertTrue(updated.contains("<!-- keep me -->"), "comments in the template must survive")
         assertTrue(updated.contains("""<iq:product id="fenix6"/>"""))
@@ -86,7 +86,7 @@ class ManifestFileTest {
 
     @Test
     fun `an empty product element is filled in`(@TempDir root: Path) {
-        val updated = ManifestFile.withDevices(
+        val updated = ManifestText.withDevices(
             """
             <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
                 <iq:application entry="App" id="0123" type="watch-app">

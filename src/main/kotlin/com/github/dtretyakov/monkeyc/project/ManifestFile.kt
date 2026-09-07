@@ -15,7 +15,12 @@ import kotlin.io.path.exists
 data class ManifestFile(
     val appType: String?,
     val entry: String?,
+    val applicationId: String?,
+    val displayName: String?,
+    val launcherIcon: String?,
     val devices: List<String>,
+    val permissions: List<String>,
+    val languages: List<String>,
     val minSdkVersion: SdkVersion?,
     val barrelVersion: String?,
 ) {
@@ -24,30 +29,13 @@ data class ManifestFile(
     companion object {
         const val FILE_NAME = "manifest.xml"
 
-        /**
-         * Rewrites the product list, leaving everything else in the file exactly as it was.
-         *
-         * Text surgery rather than a DOM round-trip on purpose: a manifest carries the comments
-         * Garmin's template puts there, and re-serialising a parsed document would quietly
-         * reformat a file the user has been editing by hand.
-         */
-        fun withDevices(text: String, devices: List<String>): String {
-            val indent = Regex("^([ \t]*)<iq:products", RegexOption.MULTILINE)
-                .find(text)
-                ?.groupValues
-                ?.get(1)
-                ?: "        "
-            val products = devices.sorted().joinToString("\n") { "$indent    <iq:product id=\"$it\"/>" }
-            val replacement = if (devices.isEmpty()) {
-                "<iq:products>\n$indent</iq:products>"
-            } else {
-                "<iq:products>\n$products\n$indent</iq:products>"
-            }
-            return text.replace(Regex("<iq:products\\s*/>|<iq:products>.*?</iq:products>", RegexOption.DOT_MATCHES_ALL), replacement)
-        }
-
         fun parse(path: Path): ManifestFile? {
             if (!path.exists()) return null
+            return runCatching { path.toFile().readText() }.getOrNull()?.let { parseText(it) }
+        }
+
+        /** Parses a manifest that has not been saved yet — what the form editor reads. */
+        fun parseText(xml: String): ManifestFile? {
             return runCatching {
                 val factory = DocumentBuilderFactory.newInstance().apply {
                     // A manifest is a local project file, but it costs nothing to refuse
@@ -55,24 +43,38 @@ data class ManifestFile(
                     setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
                     isNamespaceAware = true
                 }
-                val document = path.toFile().inputStream().use { factory.newDocumentBuilder().parse(it) }
+                val document = xml.byteInputStream().use { factory.newDocumentBuilder().parse(it) }
 
                 val application = document.getElementsByTagNameNS("*", "application").item(0)
                 val barrel = document.getElementsByTagNameNS("*", "barrel").item(0)
                 val holder = application ?: barrel
 
-                val products = document.getElementsByTagNameNS("*", "product")
-                val devices = (0 until products.length).mapNotNull { index ->
-                    products.item(index).attributes?.getNamedItem("id")?.nodeValue
-                }
+                fun attribute(name: String) = holder?.attributes?.getNamedItem(name)?.nodeValue
+
+                fun ids(tag: String, attribute: String?) =
+                    document.getElementsByTagNameNS("*", tag).let { nodes ->
+                        (0 until nodes.length).mapNotNull { index ->
+                            val node = nodes.item(index)
+                            if (attribute == null) {
+                                node.textContent?.trim()?.takeIf { it.isNotEmpty() }
+                            } else {
+                                node.attributes?.getNamedItem(attribute)?.nodeValue
+                            }
+                        }
+                    }
 
                 ManifestFile(
-                    appType = holder?.attributes?.getNamedItem("type")?.nodeValue?.takeIf { application != null },
-                    entry = holder?.attributes?.getNamedItem("entry")?.nodeValue,
-                    devices = devices,
-                    minSdkVersion = SdkVersion.parse(
-                        holder?.attributes?.getNamedItem("minSdkVersion")?.nodeValue,
-                    ),
+                    appType = attribute("type")?.takeIf { application != null },
+                    entry = attribute("entry"),
+                    applicationId = attribute("id"),
+                    displayName = attribute("name"),
+                    launcherIcon = attribute("launcherIcon"),
+                    devices = ids("product", "id"),
+                    permissions = ids("uses-permission", "id"),
+                    languages = ids("language", null),
+                    // The attribute was renamed between manifest versions and both are in the
+                    // wild — the templates write minApiLevel, the samples minSdkVersion.
+                    minSdkVersion = SdkVersion.parse(attribute("minSdkVersion") ?: attribute("minApiLevel")),
                     barrelVersion = barrel?.attributes?.getNamedItem("version")?.nodeValue,
                 )
             }.getOrNull()
