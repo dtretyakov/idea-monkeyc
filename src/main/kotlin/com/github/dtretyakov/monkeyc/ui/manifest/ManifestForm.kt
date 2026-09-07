@@ -11,7 +11,10 @@ import com.intellij.ui.CheckBoxList
 import com.intellij.ui.CheckBoxListListener
 import com.intellij.ui.ListSpeedSearch
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.ui.dsl.builder.COLUMNS_MEDIUM
+import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.JBUI
 import java.awt.Dimension
@@ -67,7 +70,6 @@ internal class ManifestForm(
                     cell(attributeField("module", manifest.module, "Change Module Name"))
                         .align(AlignX.FILL)
                         .comment("The name other projects import this barrel under.")
-                        .also { preferredFocusedComponent = it.component }
                 }
 
                 row("Version:") {
@@ -93,7 +95,6 @@ internal class ManifestForm(
                     cell(attributeField("entry", manifest.entry, "Change Entry Class"))
                         .align(AlignX.FILL)
                         .comment("The class the device starts, which must exist in the source.")
-                        .also { preferredFocusedComponent = it.component }
                 }
 
                 row("Display name:") {
@@ -123,7 +124,13 @@ internal class ManifestForm(
             }
 
             row(if (manifest.isBarrel) "Barrel ID:" else "Application ID:") {
-                label(manifest.applicationId.orEmpty())
+                // A field rather than a label: the id is a thing people copy — into the store
+                // listing, into a bug report — and a label cannot even be selected.
+                cell(JBTextField(manifest.applicationId.orEmpty()).apply { isEditable = false })
+                    .columns(COLUMNS_MEDIUM)
+                    // Focus lands here when the tab opens: it is near the top, and typing into it
+                    // does nothing. A text field that takes the first keystroke would not do.
+                    .also { preferredFocusedComponent = it.component }
                 button("New ID...") { regenerateId() }
                     .comment("The store knows this by its ID. A new one is a different thing to it.")
             }

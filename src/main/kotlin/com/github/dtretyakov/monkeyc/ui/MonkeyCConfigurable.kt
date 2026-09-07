@@ -8,7 +8,9 @@ import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.project.OptimizationLevel
 import com.github.dtretyakov.monkeyc.project.ProjectLayout
 import com.github.dtretyakov.monkeyc.project.TypeCheckLevel
+import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
 import com.github.dtretyakov.monkeyc.sdk.DeveloperKey
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.fileChooser.FileSaverDescriptor
@@ -16,13 +18,17 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.options.BoundSearchableConfigurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
-import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.openapi.util.io.FileUtil
+import com.intellij.ui.dsl.builder.COLUMNS_LARGE
+import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.builder.toNullableProperty
 import java.nio.file.Path
+import javax.swing.Icon
+import javax.swing.JEditorPane
 import javax.swing.JLabel
 
 /**
@@ -41,20 +47,37 @@ class MonkeyCConfigurable(private val project: Project) :
         val model = MonkeyCProject.getInstance(project)
         val sdkService = ConnectIqSdkService.getInstance()
 
-        lateinit var detected: JLabel
+        val sdk = sdkService.sdk
+        val devices = model.primaryRoot()?.let { model.buildableDevices(it) }.orEmpty()
+        val target = DeviceChoices(devices)
+
+        lateinit var summary: JLabel
+        lateinit var location: JEditorPane
 
         return panel {
-            group("SDK") {
+            group("SDK (this computer)") {
                 row {
-                    detected = label(describeSdk()).component
+                    // Not one long line: the path alone is a hundred characters, and a label that
+                    // wide sets the width of the whole dialog and is still cut off at the end.
+                    summary = label(sdkSummary()).applyToComponent { icon = sdkIcon() }.component
+                    button("Reload") {
+                        sdkService.refresh()
+                        summary.text = sdkSummary()
+                        summary.icon = sdkIcon()
+                        location.text = sdkLocation()
+                    }
                 }
+                row {
+                    location = comment(sdkLocation()).component
+                }
+
                 row("Location:") {
                     textFieldWithBrowseButton(
                         FileChooserDescriptorFactory.createSingleFolderDescriptor()
                             .withTitle("Connect IQ SDK")
                             .withDescription("The directory holding bin/, inside the SDK Manager's Sdks folder"),
                     )
-                        .align(AlignX.FILL)
+                        .columns(COLUMNS_LARGE)
                         .bindText(app::sdkPath)
                         .comment(
                             "Leave empty to follow the SDK Manager's own choice, which it records " +
@@ -66,26 +89,27 @@ class MonkeyCConfigurable(private val project: Project) :
                         FileChooserDescriptorFactory.createSingleFileOrFolderDescriptor()
                             .withTitle("Java"),
                     )
-                        .align(AlignX.FILL)
+                        .columns(COLUMNS_LARGE)
                         .bindText(app::javaPath)
                         .comment("A JDK home or a <code>java</code> executable. Leave empty to use the IDE's own.")
-                }
-                row {
-                    button("Reload") {
-                        sdkService.refresh()
-                        detected.text = describeSdk()
-                    }
                 }
             }
 
             group("Project") {
                 row("Target device:") {
-                    val devices = model.primaryRoot()?.let { model.buildableDevices(it) }.orEmpty()
-                    comboBox(listOf("") + devices.map { it.id })
-                        .bindItem(settings::targetDevice.toNullableProperty())
+                    comboBox(target.labels)
+                        .bindItem(
+                            { target.labelFor(settings.targetDevice) },
+                            { settings.targetDevice = target.idFor(it) },
+                        )
+                        .enabled(devices.isNotEmpty())
                         .comment(
-                            devices.joinToString(", ", limit = 6) { "${it.displayName} (${it.id})" }
-                                .ifEmpty { "No devices. Download some with the SDK Manager." },
+                            if (devices.isEmpty()) {
+                                "None of the devices this project declares is downloaded. " +
+                                    "Get them with the SDK Manager."
+                            } else {
+                                "What Build and Run target. A run configuration can name a different one."
+                            },
                         )
                 }
                 row("Developer key:") {
@@ -93,7 +117,7 @@ class MonkeyCConfigurable(private val project: Project) :
                         FileChooserDescriptorFactory.createSingleFileDescriptor("der")
                             .withTitle("Developer Key"),
                     )
-                        .align(AlignX.FILL)
+                        .columns(COLUMNS_LARGE)
                         .bindText(settings::developerKeyPath)
                         .comment("Leave empty to use the key the SDK Manager generated.")
 
@@ -103,14 +127,14 @@ class MonkeyCConfigurable(private val project: Project) :
                 }
                 row("Jungle files:") {
                     textField()
-                        .align(AlignX.FILL)
+                        .columns(COLUMNS_LARGE)
                         .bindText(settings::jungleFiles)
                         .comment(
                             "Separated by <code>;</code>, relative to the project root. " +
                                 "Empty means <code>${ProjectLayout.DEFAULT_JUNGLE}</code>.",
                         )
                 }
-            }
+            }.enabled(sdk != null)
 
             group("Compiler") {
                 row("Type checking:") {
@@ -132,7 +156,7 @@ class MonkeyCConfigurable(private val project: Project) :
                 }
                 row("Extra arguments:") {
                     textField()
-                        .align(AlignX.FILL)
+                        .columns(COLUMNS_LARGE)
                         .bindText(settings::compilerOptions)
                 }
             }
@@ -170,12 +194,50 @@ class MonkeyCConfigurable(private val project: Project) :
             .getOrNull()
     }
 
-    private fun describeSdk(): String {
-        val sdk = ConnectIqSdkService.getInstance().sdk
-            ?: return "No Connect IQ SDK found. Install one with Garmin's SDK Manager."
-        val devices = ConnectIqSdkService.getInstance().devices().size
+    /** The headline: which SDK, and how much of it is usable. */
+    private fun sdkSummary(): String {
+        val service = ConnectIqSdkService.getInstance()
+        val sdk = service.sdk ?: return "No Connect IQ SDK found"
         val version = sdk.version?.let { "SDK $it" } ?: "SDK of unknown version"
-        val server = if (sdk.hasLanguageServer) "" else " — no language server, so no code intelligence"
-        return "$version at ${sdk.root}, $devices devices downloaded$server"
+        return "$version, ${service.devices().size} devices downloaded"
+    }
+
+    private fun sdkIcon(): Icon? = if (ConnectIqSdkService.getInstance().sdk == null) AllIcons.General.Warning else null
+
+    /**
+     * The second line: where it is, or what to do about it not being there.
+     *
+     * A path shortened to `~/…` and set as a comment rather than a label, because the full one runs
+     * to a hundred characters and a label that wide decides the width of the settings dialog.
+     */
+    private fun sdkLocation(): String {
+        val sdk = ConnectIqSdkService.getInstance().sdk
+            ?: return "Install one with Garmin's SDK Manager, or point at it above."
+        val where = FileUtil.getLocationRelativeToUserHome(sdk.root.toString())
+        if (!sdk.hasLanguageServer) {
+            return "$where — this one has no language server, so there is no code intelligence."
+        }
+        return where
+    }
+
+    /**
+     * The device list as it should read: a name first, the id the compiler wants in brackets.
+     *
+     * The setting stores the id, so the two have to be mapped back and forth — and an unset device
+     * is a value of its own rather than a blank line.
+     */
+    private class DeviceChoices(devices: List<ConnectIqDevice>) {
+        private val byLabel = devices.associateBy { "${it.displayName}  (${it.id})" }
+
+        val labels: List<String> = listOf(NOT_SET) + byLabel.keys
+
+        fun labelFor(id: String): String =
+            byLabel.entries.firstOrNull { it.value.id == id }?.key ?: NOT_SET
+
+        fun idFor(label: String?): String = byLabel[label]?.id.orEmpty()
+
+        private companion object {
+            const val NOT_SET = "Not set"
+        }
     }
 }
