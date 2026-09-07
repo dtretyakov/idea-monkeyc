@@ -38,7 +38,9 @@ object ManifestText {
         val updated = if (existing != null) {
             open.tag.replaceRange(existing.range, "${existing.groupValues[1]}${escape(value)}\"")
         } else {
-            val end = open.tag.indexOfLast { it == '/' || it == '>' }
+            // Before the `>`, or before the `/` of a self-closing tag: putting it after the slash
+            // both breaks the XML and turns `<iq:barrel …/>` into a tag that is never closed.
+            val end = open.tag.length - if (open.tag.endsWith("/>")) 2 else 1
             open.tag.replaceRange(end, end, """ $name="${escape(value)}"""")
         }
         return text.replaceRange(open.range, updated)

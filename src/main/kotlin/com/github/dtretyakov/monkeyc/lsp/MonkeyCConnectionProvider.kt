@@ -20,6 +20,9 @@ import kotlin.io.path.exists
  */
 class MonkeyCConnectionProvider(private val project: Project) : OSProcessStreamConnectionProvider() {
 
+    @Volatile
+    private var output: OutputStream? = null
+
     override fun start() {
         val sdk = ConnectIqSdkService.getInstance().sdk
             ?: throw CannotStartProcessException(
@@ -39,11 +42,22 @@ class MonkeyCConnectionProvider(private val project: Project) : OSProcessStreamC
             .withWorkingDirectory(project.guessProjectDir()?.toNioPath())
 
         super.start()
+        output = super.getOutputStream()?.let { SignatureHelpContextFilter(it) }
     }
 
-    /** See [SignatureHelpContextFilter] for why requests do not go straight to the process. */
-    override fun getOutputStream(): OutputStream? =
-        super.getOutputStream()?.let { SignatureHelpContextFilter(it) }
+    /**
+     * See [SignatureHelpContextFilter] for why requests do not go straight to the process.
+     *
+     * One filter per started process, not one per call: the filter holds the bytes of a message
+     * that has arrived only in part, and a second instance would start with an empty buffer and
+     * interleave its writes with whatever the first one is still holding.
+     */
+    override fun getOutputStream(): OutputStream? = output
+
+    override fun stop() {
+        output = null
+        super.stop()
+    }
 
     override fun getInitializationOptions(rootUri: VirtualFile?): Any =
         LanguageServerSettings.initializationOptions(project)

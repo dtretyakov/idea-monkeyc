@@ -17,6 +17,8 @@ data class ManifestFile(
     val entry: String?,
     val applicationId: String?,
     val displayName: String?,
+    /** A barrel's module name; an application has none. */
+    val module: String?,
     val launcherIcon: String?,
     val devices: List<String>,
     val permissions: List<String>,
@@ -68,6 +70,7 @@ data class ManifestFile(
                     entry = attribute("entry"),
                     applicationId = attribute("id"),
                     displayName = attribute("name"),
+                    module = attribute("module"),
                     launcherIcon = attribute("launcherIcon"),
                     devices = ids("product", "id"),
                     permissions = ids("uses-permission", "id"),

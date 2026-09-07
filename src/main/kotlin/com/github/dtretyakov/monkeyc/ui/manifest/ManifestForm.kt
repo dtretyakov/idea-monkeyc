@@ -62,7 +62,19 @@ internal class ManifestForm(
 
     private fun build(): JComponent = panel {
         group(if (manifest.isBarrel) "Barrel" else "Application") {
-            if (!manifest.isBarrel) {
+            if (manifest.isBarrel) {
+                row("Module:") {
+                    cell(attributeField("module", manifest.module, "Change Module Name"))
+                        .align(AlignX.FILL)
+                        .comment("The name other projects import this barrel under.")
+                        .also { preferredFocusedComponent = it.component }
+                }
+
+                row("Version:") {
+                    cell(attributeField("version", manifest.barrelVersion, "Change Barrel Version"))
+                        .align(AlignX.FILL)
+                }
+            } else {
                 row("Type:") {
                     comboBox(appTypes.map { it.name })
                         .applyToComponent {
@@ -76,24 +88,24 @@ internal class ManifestForm(
                         }
                         .enabled(appTypes.isNotEmpty())
                 }
-            }
 
-            row("Entry class:") {
-                cell(attributeField("entry", manifest.entry, "Change Entry Class"))
-                    .align(AlignX.FILL)
-                    .comment("The class the device starts, which must exist in the source.")
-                    .also { preferredFocusedComponent = it.component }
-            }
+                row("Entry class:") {
+                    cell(attributeField("entry", manifest.entry, "Change Entry Class"))
+                        .align(AlignX.FILL)
+                        .comment("The class the device starts, which must exist in the source.")
+                        .also { preferredFocusedComponent = it.component }
+                }
 
-            row("Display name:") {
-                cell(attributeField("name", manifest.displayName, "Change Display Name"))
-                    .align(AlignX.FILL)
-                    .comment("Usually a resource, such as <code>@Strings.AppName</code>.")
-            }
+                row("Display name:") {
+                    cell(attributeField("name", manifest.displayName, "Change Display Name"))
+                        .align(AlignX.FILL)
+                        .comment("Usually a resource, such as <code>@Strings.AppName</code>.")
+                }
 
-            row("Launcher icon:") {
-                cell(attributeField("launcherIcon", manifest.launcherIcon, "Change Launcher Icon"))
-                    .align(AlignX.FILL)
+                row("Launcher icon:") {
+                    cell(attributeField("launcherIcon", manifest.launcherIcon, "Change Launcher Icon"))
+                        .align(AlignX.FILL)
+                }
             }
 
             row("Minimum API level:") {
@@ -110,10 +122,10 @@ internal class ManifestForm(
                     .comment("Devices older than this cannot install the app.")
             }
 
-            row("Application ID:") {
+            row(if (manifest.isBarrel) "Barrel ID:" else "Application ID:") {
                 label(manifest.applicationId.orEmpty())
                 button("New ID...") { regenerateId() }
-                    .comment("The store knows an app by this. A new one is a different app.")
+                    .comment("The store knows this by its ID. A new one is a different thing to it.")
             }
         }
 

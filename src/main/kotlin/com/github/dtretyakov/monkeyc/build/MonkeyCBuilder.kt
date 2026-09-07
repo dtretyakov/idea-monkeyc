@@ -34,7 +34,13 @@ object MonkeyCBuilder {
         onOutput: (text: String, isError: Boolean) -> Unit,
     ): BuildResult {
         val sdkService = ConnectIqSdkService.getInstance()
-        val sdk = sdkService.sdk ?: error("No Connect IQ SDK found.")
+        // A failed result rather than an exception: every caller already knows how to report a
+        // build that did not succeed, and one of them runs in a background task where a thrown
+        // exception reaches the user as an IDE error report instead of a sentence.
+        val sdk = sdkService.sdk ?: return failed(
+            "No Connect IQ SDK found. Install one with Garmin's SDK Manager, " +
+                "or set its location in Settings | Languages & Frameworks | Monkey C.",
+        )
 
         spec.output.parent?.createDirectories()
 
@@ -80,6 +86,11 @@ object MonkeyCBuilder {
 
         return BuildResult(exitCode, messages)
     }
+
+    private fun failed(reason: String) = BuildResult(
+        exitCode = -1,
+        messages = listOf(CompilerMessage(CompilerMessage.Severity.ERROR, null, null, null, null, reason)),
+    )
 
     /** A one-line summary for a failure notification, preferring the compiler's own words. */
     fun describeFailure(result: BuildResult): String =

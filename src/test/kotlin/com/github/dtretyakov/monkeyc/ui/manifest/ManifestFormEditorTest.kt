@@ -71,6 +71,58 @@ class ManifestFormEditorTest : IdeTestCase() {
         assertEquals(listOf("fenix7"), parsed.devices)
     }
 
+    fun testABarrelKeepsItsShape() {
+        // A barrel has a module and a version where an application has an entry class and a
+        // launcher icon, and it is often written self-closing — the shape that used to be
+        // corrupted the first time the form added an attribute to it.
+        myFixture.addFileToProject("monkey.jungle", "project.manifest = manifest.xml")
+        val manifest = myFixture.addFileToProject(
+            ManifestFile.FILE_NAME,
+            """
+            <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+                <iq:barrel id="4567" module="Shared"/>
+            </iq:manifest>
+            """.trimIndent(),
+        )
+        val document = FileDocumentManager.getInstance().getDocument(manifest.virtualFile)!!
+
+        ManifestModel(project, document).setAttribute("version", "1.3.0", "Change Barrel Version")
+
+        val parsed = ManifestFile.parseText(document.text)
+        assertNotNull("the manifest must still parse", parsed)
+        assertEquals("1.3.0", parsed!!.barrelVersion)
+        assertEquals("Shared", parsed.module)
+
+        val editor = ManifestEditorProvider().createEditor(project, manifest.virtualFile)
+        try {
+            assertNotNull(editor.component)
+        } finally {
+            com.intellij.openapi.util.Disposer.dispose(editor)
+        }
+    }
+
+    fun testTheApiLevelMovesUnderEverySpellingTheFileUses() {
+        myFixture.addFileToProject("monkey.jungle", "project.manifest = manifest.xml")
+        val manifest = myFixture.addFileToProject(
+            ManifestFile.FILE_NAME,
+            """
+            <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+                <iq:application entry="App" id="0123" minApiLevel="3.2.0" minSdkVersion="3.2.0" type="watch-app">
+                    <iq:products/>
+                </iq:application>
+            </iq:manifest>
+            """.trimIndent(),
+        )
+        val document = FileDocumentManager.getInstance().getDocument(manifest.virtualFile)!!
+
+        ManifestModel(project, document).setMinApiLevel("5.0.0")
+
+        // Leaving one behind would give the file two different minimums.
+        assertFalse(document.text, document.text.contains("3.2.0"))
+        assertTrue(document.text, document.text.contains("""minApiLevel="5.0.0""""))
+        assertTrue(document.text, document.text.contains("""minSdkVersion="5.0.0""""))
+    }
+
     fun testAHalfTypedManifestDoesNotBreakTheForm() {
         myFixture.addFileToProject("monkey.jungle", "project.manifest = manifest.xml")
         val manifest = myFixture.addFileToProject(ManifestFile.FILE_NAME, "<iq:manifest")

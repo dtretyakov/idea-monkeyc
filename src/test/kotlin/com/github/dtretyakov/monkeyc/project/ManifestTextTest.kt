@@ -83,6 +83,21 @@ class ManifestTextTest {
     }
 
     @Test
+    fun `adds an attribute to a self-closing element without breaking it`() {
+        // A barrel with nothing in it is written self-closing, and putting the new attribute after
+        // the slash both breaks the XML and leaves a tag that is never closed.
+        val barrel = """
+            <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+                <iq:barrel id="4567" module="Shared"/>
+            </iq:manifest>
+        """.trimIndent()
+
+        val updated = ManifestText.withAttribute(barrel, "version", "1.3.0")
+
+        assertTrue(updated.contains("""<iq:barrel id="4567" module="Shared" version="1.3.0"/>"""), updated)
+    }
+
+    @Test
     fun `a barrel has its attributes on its own element`() {
         val barrel = """
             <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">

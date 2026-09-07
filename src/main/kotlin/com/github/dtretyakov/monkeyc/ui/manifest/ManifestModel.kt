@@ -21,14 +21,17 @@ class ManifestModel(private val project: Project, private val document: Document
         edit(commandName) { ManifestText.withAttribute(it, name, value) }
 
     /**
-     * Sets the minimum API level under whichever name the file already uses.
+     * Sets the minimum API level under whichever name — or names — the file already uses.
      *
-     * The templates write `minApiLevel` and the samples `minSdkVersion`; the compiler takes either,
-     * but writing the other one would leave the file with two and no way to tell which wins.
+     * The templates write `minApiLevel` and the samples `minSdkVersion`. Adding the other one would
+     * leave the file with two and no way to tell which wins; a file that already has both, from
+     * having been through two generations of Garmin's tools, needs both moved together for the
+     * same reason.
      */
     fun setMinApiLevel(value: String) {
-        val name = if (document.text.contains("minSdkVersion=")) "minSdkVersion" else "minApiLevel"
-        setAttribute(name, value, "Change Minimum API Level")
+        val present = SPELLINGS.filter { document.text.contains("$it=\"") }
+        (present.ifEmpty { listOf(DEFAULT_SPELLING) })
+            .forEach { setAttribute(it, value, "Change Minimum API Level") }
     }
 
     fun setDevices(ids: List<String>) = edit("Change Products") { ManifestText.withDevices(it, ids) }
@@ -49,5 +52,8 @@ class ManifestModel(private val project: Project, private val document: Document
     private companion object {
         /** One undo group, so a run of toggles in the form does not need a run of undos. */
         const val GROUP = "monkeyc.manifest"
+
+        const val DEFAULT_SPELLING = "minApiLevel"
+        val SPELLINGS = listOf("minSdkVersion", DEFAULT_SPELLING)
     }
 }

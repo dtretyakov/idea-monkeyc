@@ -8,6 +8,8 @@ import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.process.ProcessOutputTypes
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import java.io.OutputStream
@@ -27,6 +29,16 @@ class MonkeyCLaunchProcessHandler(
     @Volatile
     private var running: OSProcessHandler? = null
 
+    /**
+     * Set when the user presses Stop.
+     *
+     * Stop can arrive while the compiler is still working, when there is no process to kill yet.
+     * The build then finishes on its own — but the app must not be launched afterwards, which is
+     * what the user asked for.
+     */
+    @Volatile
+    private var stopped = false
+
     override fun startNotify() {
         super.startNotify()
         ApplicationManager.getApplication().executeOnPooledThread { launch() }
@@ -37,6 +49,7 @@ class MonkeyCLaunchProcessHandler(
             val prepared = MonkeyCLaunch.prepare(project, options) { step ->
                 notifyTextAvailable("$step\n", ProcessOutputTypes.SYSTEM)
             }
+            if (stopped) return
 
             val java = ConnectIqSdkService.getInstance().java().toString()
             val handler = OSProcessHandler(MonkeyDo.commandLine(prepared, java, options))
@@ -54,16 +67,24 @@ class MonkeyCLaunchProcessHandler(
 
             notifyTextAvailable("\nRunning on ${prepared.device}...\n\n", ProcessOutputTypes.SYSTEM)
             handler.startNotify()
-        } catch (e: ExecutionException) {
-            notifyTextAvailable("\n${e.message}\n", ProcessOutputTypes.STDERR)
+        } catch (e: ProcessCanceledException) {
+            throw e
+        } catch (e: Throwable) {
+            // Everything, not only ExecutionException: a build can fail on a read-only directory
+            // or a full disk, and an escaping exception would leave the Run window showing a live
+            // process with an empty console and no way to see why.
+            notifyTextAvailable("\n${e.message ?: e.javaClass.simpleName}\n", ProcessOutputTypes.STDERR)
+            if (e !is ExecutionException) LOG.warn("Could not run the Connect IQ app", e)
             notifyProcessTerminated(1)
         }
     }
 
     override fun destroyProcessImpl() {
+        stopped = true
         val handler = running
         if (handler == null) {
-            // Killed during the build; the compiler will finish on its own and be ignored.
+            // Stopped during the build. The compiler finishes on its own, but `stopped` keeps the
+            // app from being pushed to the simulator once it does.
             notifyProcessTerminated(1)
         } else {
             handler.destroyProcess()
@@ -71,10 +92,15 @@ class MonkeyCLaunchProcessHandler(
     }
 
     override fun detachProcessImpl() {
+        stopped = true
         running?.detachProcess() ?: notifyProcessDetached()
     }
 
     override fun detachIsDefault(): Boolean = false
 
     override fun getProcessInput(): OutputStream? = running?.processInput
+
+    private companion object {
+        val LOG = logger<MonkeyCLaunchProcessHandler>()
+    }
 }
