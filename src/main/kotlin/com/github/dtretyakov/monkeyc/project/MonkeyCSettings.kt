@@ -44,6 +44,14 @@ class MonkeyCSettings : PersistentStateComponent<MonkeyCSettings> {
     /** Extra compiler arguments, split on whitespace. */
     var compilerOptions: String = ""
 
+    /**
+     * Whether the source and output directories have been marked once already.
+     *
+     * Recorded so that a developer who rearranges the roots afterwards does not find them
+     * rearranged back the next time the project opens.
+     */
+    var rootsConfigured: Boolean = false
+
     val typeCheck: TypeCheckLevel get() = TypeCheckLevel.of(typeCheckLevel)
     val optimization: OptimizationLevel get() = OptimizationLevel.of(optimizationLevel)
     val debugLog: DebugLogLevel get() = DebugLogLevel.of(debugLogLevel)

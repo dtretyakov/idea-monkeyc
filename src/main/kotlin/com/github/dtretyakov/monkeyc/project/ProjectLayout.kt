@@ -19,6 +19,16 @@ object ProjectLayout {
     const val OUTPUT_DIRECTORY = "bin"
 
     /**
+     * Where the SDK's templates put `.mc` files, and the compiler's own default.
+     *
+     * A jungle can say otherwise with `sourcePath`, and a project that does is left alone rather
+     * than guessed at — resolving a jungle properly means resolving its variables and its
+     * per-device overrides, which is the compiler's job and not worth reimplementing to colour a
+     * folder.
+     */
+    const val SOURCE_DIRECTORY = "source"
+
+    /**
      * Is this directory a Connect IQ project?
      *
      * A manifest alone is enough: a project can be built from a jungle with any name, but it cannot
