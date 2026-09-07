@@ -19,28 +19,37 @@ class MonkeyCColorSettingsPage : ColorSettingsPage {
 
     override fun getColorDescriptors(): Array<ColorDescriptor> = ColorDescriptor.EMPTY_ARRAY
 
-    override fun getAdditionalHighlightingTagToDescriptorMap(): Map<String, TextAttributesKey>? = null
+    /**
+     * The colours the annotator applies, which the lexer cannot: an identifier is one token whether
+     * it names a class, a call or a constant, so the demo text has to say which is which.
+     */
+    override fun getAdditionalHighlightingTagToDescriptorMap(): Map<String, TextAttributesKey> = mapOf(
+        "class" to MonkeyCColors.CLASS_REFERENCE,
+        "declaration" to MonkeyCColors.FUNCTION_DECLARATION,
+        "call" to MonkeyCColors.FUNCTION_CALL,
+        "constant" to MonkeyCColors.CONSTANT,
+    )
 
     override fun getDemoText(): String = """
-        import Toybox.Graphics;
-        import Toybox.WatchUi;
+        import <class>Toybox</class>.<class>Graphics</class>;
+        import <class>Toybox</class>.<class>WatchUi</class>;
 
         /**
          * The face itself.
          */
-        class SampleFace extends WatchUi.WatchFace {
+        class <class>SampleFace</class> extends <class>WatchUi</class>.<class>WatchFace</class> {
 
             hidden var mCounter as Number = 0;
 
-            function initialize() {
-                WatchFace.initialize();
+            function <declaration>initialize</declaration>() {
+                <class>WatchFace</class>.<call>initialize</call>();
             }
 
             (:test)
-            function onUpdate(dc as Dc) as Void {
-                var seconds = System.getClockTime().sec;   // 0 to 59
-                dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(dc.getWidth() / 2, 0.5f, Graphics.FONT_LARGE, "" + seconds, 0x01);
+            function <declaration>onUpdate</declaration>(dc as Dc) as Void {
+                var seconds = <class>System</class>.<call>getClockTime</call>().sec;   // 0 to 59
+                dc.<call>setColor</call>(<class>Graphics</class>.<constant>COLOR_WHITE</constant>, <class>Graphics</class>.<constant>COLOR_TRANSPARENT</constant>);
+                dc.<call>drawText</call>(dc.<call>getWidth</call>() / 2, 0.5f, <class>Graphics</class>.<constant>FONT_LARGE</constant>, "" + seconds, 0x01);
                 mCounter += 1l;
             }
         }
@@ -54,6 +63,10 @@ class MonkeyCColorSettingsPage : ColorSettingsPage {
             AttributesDescriptor("Keyword", MonkeyCColors.KEYWORD),
             AttributesDescriptor("Built-in type", MonkeyCColors.BUILTIN_TYPE),
             AttributesDescriptor("Identifier", MonkeyCColors.IDENTIFIER),
+            AttributesDescriptor("Class or module reference", MonkeyCColors.CLASS_REFERENCE),
+            AttributesDescriptor("Function declaration", MonkeyCColors.FUNCTION_DECLARATION),
+            AttributesDescriptor("Function call", MonkeyCColors.FUNCTION_CALL),
+            AttributesDescriptor("Constant", MonkeyCColors.CONSTANT),
             AttributesDescriptor("Symbol", MonkeyCColors.SYMBOL),
             AttributesDescriptor("String", MonkeyCColors.STRING),
             AttributesDescriptor("Number", MonkeyCColors.NUMBER),

@@ -1,6 +1,10 @@
 package com.github.dtretyakov.monkeyc.live
 
+import com.github.dtretyakov.monkeyc.lsp.CanonicalPaths
+import com.github.dtretyakov.monkeyc.lsp.InitializationOptions
 import com.github.dtretyakov.monkeyc.lsp.LanguageServerSettings
+import com.github.dtretyakov.monkeyc.lsp.MonkeyCFileUriSupport
+import com.github.dtretyakov.monkeyc.lsp.WorkspaceSettings
 import com.github.dtretyakov.monkeyc.lsp.RequiredFieldsFilter
 import com.github.dtretyakov.monkeyc.lsp.SdkServerCommands
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
@@ -8,7 +12,14 @@ import com.github.dtretyakov.monkeyc.sdk.JavaLocator
 import com.github.dtretyakov.monkeyc.testing.IdeTestCase
 import com.google.gson.Gson
 import com.redhat.devtools.lsp4ij.internal.capabilities.ClientCapabilitiesFactory
+import com.intellij.openapi.util.io.FileUtil
+import org.eclipse.lsp4j.DefinitionParams
+import org.eclipse.lsp4j.DidOpenTextDocumentParams
 import org.eclipse.lsp4j.InitializeParams
+import org.eclipse.lsp4j.InitializedParams
+import org.eclipse.lsp4j.Position
+import org.eclipse.lsp4j.TextDocumentIdentifier
+import org.eclipse.lsp4j.TextDocumentItem
 import org.eclipse.lsp4j.MessageActionItem
 import org.eclipse.lsp4j.MessageParams
 import org.eclipse.lsp4j.PublishDiagnosticsParams
@@ -23,6 +34,7 @@ import org.eclipse.lsp4j.services.LanguageClient
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
+import kotlin.io.path.readText
 
 /**
  * Shakes hands with the language server using exactly what the plugin sends it.
@@ -33,6 +45,92 @@ import java.util.concurrent.TimeUnit
  * server answer `initialize` with "Internal error", so nothing worked at all.
  */
 class LanguageServerHandshakeTest : IdeTestCase() {
+
+    /**
+     * Goes all the way to a definition and back, through the client's own URI handling.
+     *
+     * The server's answer names a file, and what the IDE does with that name is the whole of
+     * go-to-definition: a URI it cannot resolve is indistinguishable, to the user, from a server
+     * that found nothing.
+     */
+    fun testGoToDefinitionResolvesToAFile() {
+        if (!LiveSdk.enabled) return
+        val sdk = ConnectIqSdk.detect() ?: return
+        if (!sdk.hasLanguageServer) return
+
+        val root = CanonicalPaths.of(LiveSdk.fixture(FileUtil.createTempDirectory("monkeyc", null).toPath()))
+        val source = root.resolve("source/FixtureApp.mc")
+        val text = source.readText()
+
+        val process = ProcessBuilder(SdkServerCommands.languageServer(sdk, JavaLocator.resolve(null)))
+            .directory(root.toFile())
+            .start()
+
+        try {
+            val client = SilentClient()
+            val launcher = LSPLauncher.createClientLauncher(
+                client,
+                process.inputStream,
+                RequiredFieldsFilter(process.outputStream),
+            )
+            launcher.startListening()
+            val server = launcher.remoteProxy
+
+            server.initialize(
+                InitializeParams().apply {
+                    processId = ProcessHandle.current().pid().toInt()
+                    capabilities = ClientCapabilitiesFactory.create(null)
+                    workspaceFolders = listOf(WorkspaceFolder(root.toUri().toString(), root.fileName.toString()))
+                    initializationOptions = InitializationOptions(
+                        publishWarnings = true,
+                        compilerOptions = "",
+                        typeCheckMsgDisplayed = true,
+                        workspaceSettings = listOf(
+                            WorkspaceSettings(
+                                root.toString(),
+                                listOf(root.resolve("monkey.jungle").toString()),
+                                listOf("Gradual", "Default", "fenix7"),
+                            ),
+                        ),
+                    )
+                },
+            ).get(60, TimeUnit.SECONDS)
+            server.initialized(InitializedParams())
+
+            val document = TextDocumentIdentifier(source.toUri().toString())
+            server.textDocumentService.didOpen(
+                DidOpenTextDocumentParams(TextDocumentItem(document.uri, "monkeyc", 1, text)),
+            )
+
+            // The per-file context is built after the workspace build, and nothing announces it.
+            val index = text.indexOf("new FixtureView") + 4
+            val before = text.substring(0, index)
+            val position = Position(before.count { it == '\n' }, before.length - before.lastIndexOf('\n') - 1)
+
+            val uri = eventually("a definition for FixtureView") {
+                val answer = server.textDocumentService
+                    .definition(DefinitionParams(document, position))
+                    .get(60, TimeUnit.SECONDS)
+                answer.left?.firstOrNull()?.uri ?: answer.right?.firstOrNull()?.targetUri
+            }
+
+            val file = MonkeyCFileUriSupport.findFileByUri(uri)
+            assertNotNull("the client could not resolve the URI the server sent: $uri", file)
+            assertEquals(source.toString(), file!!.path)
+        } finally {
+            process.destroy()
+            process.waitFor(10, TimeUnit.SECONDS)
+        }
+    }
+
+    private fun <T : Any> eventually(what: String, attempt: () -> T?): T {
+        val deadline = System.currentTimeMillis() + 120_000
+        while (System.currentTimeMillis() < deadline) {
+            attempt()?.let { return it }
+            Thread.sleep(500)
+        }
+        throw AssertionError("the server never answered with $what")
+    }
 
     fun testTheServerAcceptsWhatThePluginSends() {
         if (!LiveSdk.enabled) return

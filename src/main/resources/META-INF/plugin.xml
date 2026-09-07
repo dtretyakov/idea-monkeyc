@@ -62,6 +62,8 @@
         <lang.braceMatcher language="MonkeyC" implementationClass="com.github.dtretyakov.monkeyc.lang.MonkeyCBraceMatcher"/>
         <lang.braceMatcher language="MSS" implementationClass="com.github.dtretyakov.monkeyc.lang.MssBraceMatcher"/>
 
+        <annotator language="MonkeyC" implementationClass="com.github.dtretyakov.monkeyc.lang.MonkeyCAnnotator"/>
+
         <colorSettingsPage implementation="com.github.dtretyakov.monkeyc.lang.MonkeyCColorSettingsPage"/>
 
         <postStartupActivity implementation="com.github.dtretyakov.monkeyc.lsp.MonkeyCServerLifecycle"/>

@@ -116,6 +116,14 @@ intellijPlatformTesting {
                 providers.gradleProperty("fixture")
                     .getOrElse(layout.projectDirectory.dir("src/test/resources/fixture-app").asFile.absolutePath),
             )
+            jvmArgumentProviders.add(
+                CommandLineArgumentProvider {
+                    // The LSP client's own logging, in idea.log rather than only in the LSP
+                    // console: what the server was asked and what it answered is the first thing
+                    // worth knowing when a feature does nothing.
+                    listOf("-Didea.log.debug.categories=#com.redhat.devtools.lsp4ij")
+                },
+            )
         }
     }
 }
