@@ -42,11 +42,11 @@ class MonkeyCConnectionProvider(private val project: Project) : OSProcessStreamC
             .withWorkingDirectory(project.guessProjectDir()?.toNioPath())
 
         super.start()
-        output = super.getOutputStream()?.let { SignatureHelpContextFilter(it) }
+        output = super.getOutputStream()?.let { RequiredFieldsFilter(it) }
     }
 
     /**
-     * See [SignatureHelpContextFilter] for why requests do not go straight to the process.
+     * See [RequiredFieldsFilter] for why requests do not go straight to the process.
      *
      * One filter per started process, not one per call: the filter holds the bytes of a message
      * that has arrived only in part, and a second instance would start with an empty buffer and

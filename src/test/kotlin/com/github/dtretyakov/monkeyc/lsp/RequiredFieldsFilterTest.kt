@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 
-class SignatureHelpContextFilterTest {
+class RequiredFieldsFilterTest {
 
     @Test
     fun `adds the context the server dereferences without checking`() {
@@ -51,7 +51,7 @@ class SignatureHelpContextFilterTest {
         // lsp4j writes the header and the body separately, and a large body in several chunks.
         val original = message("""{"jsonrpc":"2.0","id":7,"method":"textDocument/signatureHelp","params":{}}""")
         val sink = ByteArrayOutputStream()
-        SignatureHelpContextFilter(sink).use { filter ->
+        RequiredFieldsFilter(sink).use { filter ->
             original.forEach { filter.write(it.toInt()) }
         }
 
@@ -62,13 +62,55 @@ class SignatureHelpContextFilterTest {
     fun `nothing is forwarded until a message is complete`() {
         val whole = message("""{"jsonrpc":"2.0","id":7,"method":"textDocument/signatureHelp","params":{}}""")
         val sink = ByteArrayOutputStream()
-        val filter = SignatureHelpContextFilter(sink)
+        val filter = RequiredFieldsFilter(sink)
 
         filter.write(whole, 0, whole.size - 5)
         assertEquals(0, sink.size(), "a half-read message cannot be inspected, so it waits")
 
         filter.write(whole, whole.size - 5, 5)
         assertTrue(sink.size() > 0)
+    }
+
+    @Test
+    fun `declares dynamic registration wherever the client left it out`() {
+        // The server unboxes this straight to a boolean seventeen times during initialize, so one
+        // capability without it means the server never starts at all.
+        val out = filter(
+            message(
+                """{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"capabilities":{""" +
+                    """"textDocument":{"synchronization":{"willSave":true},"hover":{"dynamicRegistration":true},""" +
+                    """"foldingRange":{"dynamicRegistration":true}},""" +
+                    """"workspace":{"symbol":{},"workspaceFolders":true}}}}""",
+            ),
+        )
+
+        val capabilities = body(out).getAsJsonObject("params").getAsJsonObject("capabilities")
+        val textDocument = capabilities.getAsJsonObject("textDocument")
+        assertFalse(
+            textDocument.getAsJsonObject("synchronization").get("dynamicRegistration").asBoolean,
+            "absent means unsupported, so that is what gets written down",
+        )
+        assertTrue(
+            textDocument.getAsJsonObject("hover").get("dynamicRegistration").asBoolean,
+            "what the client did say must survive",
+        )
+        assertFalse(capabilities.getAsJsonObject("workspace").getAsJsonObject("symbol").get("dynamicRegistration").asBoolean)
+        assertFalse(
+            textDocument.getAsJsonObject("foldingRange").get("lineFoldingOnly").asBoolean,
+            "the one field outside the dynamicRegistration pattern, unboxed the same way",
+        )
+        // A capability that is a plain value, not an object, is left as it is.
+        assertTrue(capabilities.getAsJsonObject("workspace").get("workspaceFolders").asBoolean)
+    }
+
+    @Test
+    fun `an initialize that already declares everything is left alone`() {
+        val original = message(
+            """{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"capabilities":""" +
+                """{"textDocument":{"hover":{"dynamicRegistration":true}}}}}""",
+        )
+
+        assertArrayEquals(original, filter(original))
     }
 
     @Test
@@ -89,7 +131,7 @@ class SignatureHelpContextFilterTest {
 
     private fun filter(input: ByteArray): ByteArrayOutputStream {
         val sink = ByteArrayOutputStream()
-        SignatureHelpContextFilter(sink).use { it.write(input, 0, input.size) }
+        RequiredFieldsFilter(sink).use { it.write(input, 0, input.size) }
         return sink
     }
 

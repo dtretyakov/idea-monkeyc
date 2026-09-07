@@ -4,7 +4,7 @@ import com.github.dtretyakov.monkeyc.lsp.CanonicalPaths
 import com.github.dtretyakov.monkeyc.lsp.InitializationOptions
 import com.github.dtretyakov.monkeyc.lsp.MonkeyCFileUriSupport
 import com.github.dtretyakov.monkeyc.lsp.SdkServerCommands
-import com.github.dtretyakov.monkeyc.lsp.SignatureHelpContextFilter
+import com.github.dtretyakov.monkeyc.lsp.RequiredFieldsFilter
 import com.github.dtretyakov.monkeyc.lsp.WorkspaceSettings
 import com.github.dtretyakov.monkeyc.project.ProjectLayout
 import com.github.dtretyakov.monkeyc.sdk.JavaLocator
@@ -93,7 +93,7 @@ class LanguageServerLiveTest {
             val launcher = LSPLauncher.createClientLauncher(
                 client,
                 process.inputStream,
-                SignatureHelpContextFilter(process.outputStream),
+                RequiredFieldsFilter(process.outputStream),
             )
             val server = launcher.remoteProxy
             launcher.startListening()
@@ -164,7 +164,7 @@ class LanguageServerLiveTest {
 
     /**
      * Without a context the server throws; the request here carries none, and only arrives with one
-     * because [SignatureHelpContextFilter] is in the way. A successful answer is the proof.
+     * because [RequiredFieldsFilter] is in the way. A successful answer is the proof.
      */
     private fun assertSignatureHelpNeedsTheFilter(
         server: LanguageServer,

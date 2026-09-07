@@ -18,7 +18,7 @@ object LiveSdk {
     private const val ENABLED = "monkeyc.liveTests"
 
     /** The build passes this through; see the Test task in build.gradle.kts for why not the env. */
-    private val enabled: Boolean
+    val enabled: Boolean
         get() = System.getProperty(ENABLED).orEmpty() !in setOf("", "false")
 
     fun require(): ConnectIqSdk {
