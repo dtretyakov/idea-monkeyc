@@ -19,6 +19,7 @@ import com.intellij.openapi.options.BoundSearchableConfigurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.util.io.FileUtil
+import com.intellij.ui.components.fields.ExpandableTextField
 import com.intellij.ui.dsl.builder.COLUMNS_LARGE
 import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.bindItem
@@ -97,6 +98,9 @@ class MonkeyCConfigurable(private val project: Project) :
             }
 
             group("Project") {
+                row {
+                    comment("Stored with the project, in <code>.idea/monkeyc.xml</code>.")
+                }
                 row("Target device:") {
                     comboBox(target.labels)
                         .bindItem(
@@ -133,7 +137,9 @@ class MonkeyCConfigurable(private val project: Project) :
                     }
                 }
                 row("Jungle files:") {
-                    textField()
+                    // Expandable: several jungles on one line separated by semicolons is how the
+                    // compiler wants them and not how anyone wants to read them.
+                    cell(ExpandableTextField({ it.split(';').map(String::trim) }, { it.joinToString(";") }))
                         .columns(COLUMNS_LARGE)
                         .bindText(settings::jungleFiles)
                         .comment(
@@ -148,6 +154,12 @@ class MonkeyCConfigurable(private val project: Project) :
             }.enabled(sdk != null)
 
             group("Compiler") {
+                row {
+                    comment(
+                        "<b>Default</b> leaves the flag out, so the compiler's own default applies — " +
+                            "which is not the same as <b>Off</b> or <b>None</b>.",
+                    )
+                }
                 row("Type checking:") {
                     comboBox(TypeCheckLevel.entries.map { it.display })
                         .bindItem(settings::typeCheckLevel.toNullableProperty())

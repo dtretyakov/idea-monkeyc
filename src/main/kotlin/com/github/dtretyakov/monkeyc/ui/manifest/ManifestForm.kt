@@ -4,12 +4,15 @@ import com.github.dtretyakov.monkeyc.project.ManifestFile
 import com.github.dtretyakov.monkeyc.sdk.AppType
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
 import com.github.dtretyakov.monkeyc.sdk.ProjectInfo
+import com.github.dtretyakov.monkeyc.ui.MonkeyCConfigurable
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.ui.Messages
 import com.intellij.ui.CheckBoxList
-import com.intellij.ui.CheckBoxListListener
-import com.intellij.ui.ListSpeedSearch
+import com.intellij.ui.DocumentAdapter
+import com.intellij.ui.SearchTextField
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
@@ -17,12 +20,15 @@ import com.intellij.ui.dsl.builder.COLUMNS_MEDIUM
 import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.JBUI
+import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 import java.util.UUID
 import javax.swing.JComponent
+import javax.swing.JPanel
 import javax.swing.JTextField
+import javax.swing.event.DocumentEvent
 
 /**
  * The controls, and what each of them writes.
@@ -81,6 +87,19 @@ internal class ManifestForm(
     override fun dispose() = Unit
 
     private fun build(): JComponent = panel {
+        if (info == null) {
+            // Every list on this form is filled from the SDK, so without one the page is a set of
+            // empty boxes with no reason given.
+            row {
+                icon(AllIcons.General.Warning)
+                text(
+                    "No Connect IQ SDK found, so there are no devices, permissions or API levels to " +
+                        "choose from. <a href='settings'>Open settings</a> or install one with Garmin's " +
+                        "SDK Manager.",
+                ) { ShowSettingsUtil.getInstance().showSettingsDialog(project, MonkeyCConfigurable::class.java) }
+            }
+        }
+
         group(if (manifest.isBarrel) "Barrel" else "Application") {
             if (manifest.isBarrel) {
                 row("Module:") {
@@ -154,7 +173,7 @@ internal class ManifestForm(
         }
 
         group("Products") {
-            val products = ChoiceList(productChoices, PRODUCTS_HEIGHT) { ids ->
+            val products = ChoiceList(productChoices, PRODUCTS_HEIGHT, searchable = true) { ids ->
                 edit { model -> model.setDevices(ids) }
             }
             // A hundred and sixty devices is not a list anyone ticks one by one, and "every device
@@ -169,7 +188,7 @@ internal class ManifestForm(
             row {
                 cell(products.component)
                     .align(AlignX.FILL)
-                    .comment("Start typing in the list to search. A build produces one executable per device.")
+                    .comment("A build produces one executable per device. The buttons above act on what is shown.")
             }
         }
 
@@ -181,7 +200,7 @@ internal class ManifestForm(
                         group("Permissions") {
                             row {
                                 cell(
-                                    ChoiceList(permissionChoices, SHORT_LIST_HEIGHT) { ids ->
+                                    ChoiceList(permissionChoices, SHORT_LIST_HEIGHT, searchable = false) { ids ->
                                         edit { model -> model.setPermissions(ids) }
                                     }.component,
                                 )
@@ -196,7 +215,7 @@ internal class ManifestForm(
                         group("Languages") {
                             row {
                                 cell(
-                                    ChoiceList(languageChoices, SHORT_LIST_HEIGHT) { ids ->
+                                    ChoiceList(languageChoices, SHORT_LIST_HEIGHT, searchable = true) { ids ->
                                         edit { model -> model.setLanguages(ids) }
                                     }.component,
                                 )
@@ -230,29 +249,57 @@ internal class ManifestForm(
         }
     }
 
-    /** A list of ticked names, and the two ways it changes: by hand, or all at once. */
+    /**
+     * A list of ticked names, with a search box and the bulk actions that go with one.
+     *
+     * The ticks are kept apart from the list widget rather than read out of it, because filtering
+     * empties and refills the widget — reading the ticks off it would forget everything hidden.
+     */
     private class ChoiceList(
         private val choices: List<Choice>,
         height: Int,
+        searchable: Boolean,
         private val onChange: (List<String>) -> Unit,
     ) {
-        private val list = CheckBoxList<String>().apply {
-            choices.forEach { addItem(it.id, it.label, it.selected) }
-            ListSpeedSearch.installOn(this) { item -> item as? String }
-        }
+        private val ticked: MutableSet<String> = choices.filter { it.selected }.map { it.id }.toMutableSet()
+        private val list = CheckBoxList<String>()
+        private var visible: List<Choice> = choices
 
-        val component: JComponent = JBScrollPane(list).apply { preferredSize = Dimension(LIST_WIDTH, height) }
+        val component: JComponent
 
         init {
-            list.setCheckBoxListListener(CheckBoxListListener { _, _ -> onChange(selected()) })
+            fill(choices)
+            list.setCheckBoxListListener { index, value ->
+                visible.getOrNull(index)?.let { choice ->
+                    if (value) ticked += choice.id else ticked -= choice.id
+                    onChange(selected())
+                }
+            }
+
+            val scroller = JBScrollPane(list).apply { preferredSize = Dimension(LIST_WIDTH, height) }
+            component = if (!searchable) {
+                scroller
+            } else {
+                JPanel(BorderLayout(0, JBUI.scale(4))).apply {
+                    val search = SearchTextField(false)
+                    search.addDocumentListener(
+                        object : DocumentAdapter() {
+                            override fun textChanged(event: DocumentEvent) = filter(search.text)
+                        },
+                    )
+                    add(search, BorderLayout.NORTH)
+                    add(scroller, BorderLayout.CENTER)
+                }
+            }
         }
 
-        /** Ticks every choice the predicate accepts and unticks the rest, in one edit. */
+        /** Ticks every visible choice the predicate accepts and unticks the visible rest. */
         fun select(wanted: (String) -> Boolean) {
             var changed = false
-            choices.forEach { choice ->
+            visible.forEach { choice ->
                 val target = wanted(choice.id)
-                if (list.isItemSelected(choice.id) != target) {
+                if ((choice.id in ticked) != target) {
+                    if (target) ticked += choice.id else ticked -= choice.id
                     list.setItemSelected(choice.id, target)
                     changed = true
                 }
@@ -263,7 +310,19 @@ internal class ManifestForm(
             }
         }
 
-        private fun selected(): List<String> = choices.map { it.id }.filter { list.isItemSelected(it) }
+        private fun filter(query: String) {
+            val trimmed = query.trim()
+            fill(if (trimmed.isEmpty()) choices else choices.filter { it.label.contains(trimmed, ignoreCase = true) })
+        }
+
+        private fun fill(items: List<Choice>) {
+            visible = items
+            list.clear()
+            items.forEach { list.addItem(it.id, it.label, it.id in ticked) }
+        }
+
+        /** Everything ticked, hidden entries included, in the order the list declares them. */
+        private fun selected(): List<String> = choices.map { it.id }.filter { it in ticked }
     }
 
     /**
