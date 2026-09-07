@@ -15,10 +15,14 @@ import kotlin.io.path.exists
  */
 object LiveSdk {
 
-    private const val ENABLED = "MONKEYC_LIVE_TESTS"
+    private const val ENABLED = "monkeyc.liveTests"
+
+    /** The build passes this through; see the Test task in build.gradle.kts for why not the env. */
+    private val enabled: Boolean
+        get() = System.getProperty(ENABLED).orEmpty() !in setOf("", "false")
 
     fun require(): ConnectIqSdk {
-        assumeTrue(System.getenv(ENABLED) == "1", "set $ENABLED=1 to run against the real SDK")
+        assumeTrue(enabled, "run with -PliveTests to drive the real SDK")
         val sdk = ConnectIqSdk.detect()
         assumeTrue(sdk != null, "no Connect IQ SDK is installed")
         assumeTrue(sdk!!.hasLanguageServer, "the SDK at ${sdk.root} has no LanguageServer.jar")

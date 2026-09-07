@@ -33,6 +33,10 @@ before it can answer `initialize`.
 
 ## What works
 
+* **Starting** — a Connect IQ entry in the New Project dialog, built from the SDK's own templates,
+  and an action to add or remove the devices a project targets. The signing key can be generated
+  from the settings page: it is a 4096-bit RSA key in PKCS#8 DER, which the JVM can write, so no
+  openssl is needed.
 * **Editing** — completion over the whole Toybox API, diagnostics, go-to-definition, hover with
   documentation, rename, find usages, document and workspace symbols, folding, type and call
   hierarchies. Syntax highlighting, commenting and bracket matching for `.mc`, `.jungle` and `.mss`.
@@ -70,7 +74,7 @@ fixes it:
 ./gradlew build          # compile and run the unit tests
 ./gradlew runSelfCheck   # headless IDE: is the plugin whole and are its extensions registered?
 ./gradlew runIde         # sandbox IDE
-./gradlew verifyPlugin   # compatibility check
+./gradlew verifyPlugin   # compatibility check (add -PverifyAgainst=<unpacked IDE> to skip its download)
 ./gradlew buildPlugin    # distributable zip
 ```
 
@@ -83,12 +87,17 @@ fixes it:
 ### Verifying against the real SDK
 
 ```bash
-MONKEYC_LIVE_TESTS=1 ./gradlew test
+./gradlew test -PliveTests
 ```
 
-These build the fixture with the actual compiler, drive the actual language server and shake hands
-with the actual debug adapter. They are opt-in so a checkout on a machine without Connect IQ still
-goes green — a red test there would be reporting the machine rather than the code.
+These build the fixture with the actual compiler, generate a project from an SDK template and
+compile that too, drive the actual language server, and shake hands with the actual debug adapter.
+They are opt-in so a checkout on a machine without Connect IQ still goes green — a red test there
+would be reporting the machine rather than the code.
+
+A Gradle property rather than an environment variable, because a Gradle test JVM inherits the
+*daemon's* environment and not the shell's, and getting that wrong looks like the whole live suite
+passing when it has in fact skipped.
 
 `runSelfCheck` is the other half, and it catches a different kind of failure: an extension named in
 `plugin.xml` that does not register is silent at runtime. A language server that was never
@@ -105,5 +114,5 @@ lsp/       the language server client and the workarounds it needs
 build/     the compiler, and its output turned into build events
 run/       run configurations, the simulator, monkeydo
 dap/       the debug adapter client
-ui/        settings, the device widget, export, the self-check
+ui/        settings, the device widget, export, products, the wizard, the self-check
 ```

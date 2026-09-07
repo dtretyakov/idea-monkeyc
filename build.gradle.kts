@@ -31,9 +31,19 @@ dependencies {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
-    // The live tests drive the real SDK; they opt in rather than out so a clean
-    // checkout on a machine without Connect IQ still goes green.
-    environment("MONKEYC_LIVE_TESTS", providers.environmentVariable("MONKEYC_LIVE_TESTS").getOrElse(""))
+    // The live tests drive the real SDK; they opt in rather than out so a clean checkout on a
+    // machine without Connect IQ still goes green. A Gradle property rather than only an
+    // environment variable, because a test JVM inherits the *daemon's* environment and not the
+    // one the developer typed the command in — which shows up as the whole live suite silently
+    // skipping.
+    systemProperty(
+        "monkeyc.liveTests",
+        providers.gradleProperty("liveTests")
+            // `-PliveTests` with no value is the natural way to type it, and arrives as "".
+            .map { it.ifEmpty { "true" } }
+            .orElse(providers.environmentVariable("MONKEYC_LIVE_TESTS").map { if (it == "1") "true" else it })
+            .getOrElse("false"),
+    )
     testLogging {
         showStandardStreams = providers.gradleProperty("showOutput").isPresent
     }
@@ -46,6 +56,16 @@ intellijPlatform {
             FailureLevel.DEPRECATED_API_USAGES,
             FailureLevel.EXPERIMENTAL_API_USAGES,
         )
+
+        ides {
+            // By default the verifier downloads the IDEs JetBrains recommends, which is another
+            // gigabyte and a half on top of the one the build already has. Point it at an IDE that
+            // is already unpacked when that download is not worth waiting for:
+            //
+            //     ./gradlew verifyPlugin -PverifyAgainst=/path/to/idea-2026.2.2
+            val unpacked = providers.gradleProperty("verifyAgainst").orNull?.takeIf { it.isNotBlank() }
+            if (unpacked != null) local(file(unpacked)) else recommended()
+        }
     }
 
     pluginConfiguration {

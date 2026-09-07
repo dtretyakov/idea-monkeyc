@@ -8,6 +8,7 @@ import com.github.dtretyakov.monkeyc.lsp.MonkeyCLanguageServerFactory
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.run.MonkeyCRunConfigurationType
 import com.intellij.execution.configurations.ConfigurationTypeUtil
+import com.intellij.ide.wizard.GeneratorNewProjectWizard
 import com.intellij.openapi.application.ModernApplicationStarter
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.redhat.devtools.lsp4ij.dap.DebugAdapterManager
@@ -52,6 +53,13 @@ class SelfCheckStarter : ModernApplicationStarter() {
             problems += "the language server '${MonkeyCLanguageServerFactory.SERVER_ID}' is not registered with LSP4IJ"
         } else {
             println("[self-check] language server: ${languageServer.displayName}")
+        }
+
+        val wizard = GeneratorNewProjectWizard.EP_NAME.extensionList.firstOrNull { it.id == "ConnectIQ" }
+        if (wizard == null) {
+            problems += "the New Project generator is not registered"
+        } else {
+            println("[self-check] new project wizard: ${wizard.name}")
         }
 
         val debugAdapter = DebugAdapterManager.getInstance()

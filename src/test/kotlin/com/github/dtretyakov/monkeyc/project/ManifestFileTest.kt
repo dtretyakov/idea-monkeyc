@@ -58,6 +58,48 @@ class ManifestFileTest {
         assertNull(ManifestFile.parse(root.resolve("nothing-here.xml")))
     }
 
+    @Test
+    fun `rewrites the product list and leaves the rest of the file alone`(@TempDir root: Path) {
+        val original = """
+            <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+                <iq:application entry="App" id="0123" type="watch-app">
+                    <!-- keep me -->
+                    <iq:products>
+                        <iq:product id="venu2"/>
+                    </iq:products>
+                    <iq:permissions/>
+                </iq:application>
+            </iq:manifest>
+        """.trimIndent()
+
+        val updated = ManifestFile.withDevices(original, listOf("fenix7", "fenix6"))
+
+        assertTrue(updated.contains("<!-- keep me -->"), "comments in the template must survive")
+        assertTrue(updated.contains("""<iq:product id="fenix6"/>"""))
+        assertTrue(updated.contains("""<iq:product id="fenix7"/>"""))
+        assertFalse(updated.contains("venu2"))
+        assertTrue(updated.contains("<iq:permissions/>"))
+
+        val parsed = write(root, updated)
+        assertEquals(listOf("fenix6", "fenix7"), parsed.devices, "sorted, and still parseable")
+    }
+
+    @Test
+    fun `an empty product element is filled in`(@TempDir root: Path) {
+        val updated = ManifestFile.withDevices(
+            """
+            <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+                <iq:application entry="App" id="0123" type="watch-app">
+                    <iq:products></iq:products>
+                </iq:application>
+            </iq:manifest>
+            """.trimIndent(),
+            listOf("fenix7"),
+        )
+
+        assertEquals(listOf("fenix7"), write(root, updated).devices)
+    }
+
     private fun write(root: Path, xml: String): ManifestFile {
         val path = root.resolve(ManifestFile.FILE_NAME)
         path.writeText(xml.trimIndent())

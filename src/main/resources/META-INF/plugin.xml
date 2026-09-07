@@ -78,6 +78,12 @@
 
         <notificationGroup id="Monkey C" displayType="BALLOON"/>
 
+        <newProjectWizard.generator
+            implementation="com.github.dtretyakov.monkeyc.ui.wizard.ConnectIqNewProjectWizard"/>
+
+        <editorNotificationProvider
+            implementation="com.github.dtretyakov.monkeyc.ui.MissingSdkNotification"/>
+
         <appStarter
             id="monkeyCSelfCheck"
             implementation="com.github.dtretyakov.monkeyc.ui.SelfCheckStarter"/>
@@ -90,6 +96,13 @@
     </extensions>
 
     <actions>
+        <action
+            id="MonkeyC.EditProducts"
+            class="com.github.dtretyakov.monkeyc.ui.EditProductsAction"
+            text="Edit Connect IQ Products..."
+            description="Chooses which devices this project is built for">
+            <add-to-group group-id="BuildMenu" anchor="last"/>
+        </action>
         <action
             id="MonkeyC.Export"
             class="com.github.dtretyakov.monkeyc.ui.ExportAction"

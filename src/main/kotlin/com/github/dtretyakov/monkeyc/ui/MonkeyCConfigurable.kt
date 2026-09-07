@@ -8,7 +8,11 @@ import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.project.OptimizationLevel
 import com.github.dtretyakov.monkeyc.project.ProjectLayout
 import com.github.dtretyakov.monkeyc.project.TypeCheckLevel
+import com.github.dtretyakov.monkeyc.sdk.DeveloperKey
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
+import com.intellij.openapi.fileChooser.FileChooserFactory
+import com.intellij.openapi.fileChooser.FileSaverDescriptor
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.options.BoundSearchableConfigurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
@@ -18,6 +22,7 @@ import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.builder.toNullableProperty
+import java.nio.file.Path
 import javax.swing.JLabel
 
 /**
@@ -84,13 +89,17 @@ class MonkeyCConfigurable(private val project: Project) :
                         )
                 }
                 row("Developer key:") {
-                    textFieldWithBrowseButton(
+                    val field = textFieldWithBrowseButton(
                         FileChooserDescriptorFactory.createSingleFileDescriptor("der")
                             .withTitle("Developer Key"),
                     )
                         .align(AlignX.FILL)
                         .bindText(settings::developerKeyPath)
                         .comment("Leave empty to use the key the SDK Manager generated.")
+
+                    button("Generate...") {
+                        generateDeveloperKey(project)?.let { field.component.text = it.toString() }
+                    }
                 }
                 row("Jungle files:") {
                     textField()
@@ -134,6 +143,31 @@ class MonkeyCConfigurable(private val project: Project) :
         super.apply()
         // The server reads all of this once, at initialize; it has to be told to start over.
         project.messageBus.syncPublisher(MonkeyCSettings.TOPIC).settingsChanged(project)
+    }
+
+    /**
+     * Writes a new signing key where the user chooses.
+     *
+     * Garmin documents this as a pair of openssl commands, but the file is a 4096-bit RSA private
+     * key in PKCS#8 DER and the JVM can write one — so this works on a machine with no openssl,
+     * which on Windows is most of them.
+     */
+    private fun generateDeveloperKey(project: Project): Path? {
+        val chosen = FileChooserFactory.getInstance()
+            .createSaveFileDialog(
+                FileSaverDescriptor("Generate Developer Key", "Where to write the new signing key", "der"),
+                project,
+            )
+            .save("developer_key.der")
+            ?.file
+            ?.toPath()
+            ?: return null
+
+        return runCatching { DeveloperKey.generate(chosen) }
+            .onFailure {
+                Messages.showErrorDialog(project, it.message ?: "Could not write the key.", "Developer Key")
+            }
+            .getOrNull()
     }
 
     private fun describeSdk(): String {

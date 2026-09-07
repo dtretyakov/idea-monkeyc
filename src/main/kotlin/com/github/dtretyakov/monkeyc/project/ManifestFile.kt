@@ -24,6 +24,28 @@ data class ManifestFile(
     companion object {
         const val FILE_NAME = "manifest.xml"
 
+        /**
+         * Rewrites the product list, leaving everything else in the file exactly as it was.
+         *
+         * Text surgery rather than a DOM round-trip on purpose: a manifest carries the comments
+         * Garmin's template puts there, and re-serialising a parsed document would quietly
+         * reformat a file the user has been editing by hand.
+         */
+        fun withDevices(text: String, devices: List<String>): String {
+            val indent = Regex("^([ \t]*)<iq:products", RegexOption.MULTILINE)
+                .find(text)
+                ?.groupValues
+                ?.get(1)
+                ?: "        "
+            val products = devices.sorted().joinToString("\n") { "$indent    <iq:product id=\"$it\"/>" }
+            val replacement = if (devices.isEmpty()) {
+                "<iq:products>\n$indent</iq:products>"
+            } else {
+                "<iq:products>\n$products\n$indent</iq:products>"
+            }
+            return text.replace(Regex("<iq:products\\s*/>|<iq:products>.*?</iq:products>", RegexOption.DOT_MATCHES_ALL), replacement)
+        }
+
         fun parse(path: Path): ManifestFile? {
             if (!path.exists()) return null
             return runCatching {
