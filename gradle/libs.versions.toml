@@ -1,0 +1,20 @@
+[versions]
+kotlin = "2.4.20"
+# Applied in settings.gradle.kts, which is where the version has to be literal.
+intellijPlatform = "2.18.1"
+# IDEA ships as one distribution since 2025.3, with the paid features gated by the
+# licence rather than by the build. The plugin uses only platform API, so it runs in
+# the free tier and in Android Studio just as well.
+ideaVersion = "2026.2.2"
+# LSP4IJ supplies both the LSP client and the DAP client. It is a runtime
+# dependency too — see the <depends> in plugin.xml.
+lsp4ij = "0.21.0"
+junit = "6.1.3"
+
+[plugins]
+kotlin = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+
+[libraries]
+junitJupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junitPlatformLauncher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit" }

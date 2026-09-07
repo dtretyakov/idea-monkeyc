@@ -1,0 +1,67 @@
+<idea-plugin>
+    <vendor url="https://github.com/dtretyakov">Dmitry Tretyakov</vendor>
+
+    <description><![CDATA[
+        Garmin Connect IQ development in IntelliJ IDEA: Monkey C editing, building, running in the
+        Connect IQ simulator and debugging.
+        <p>
+        The plugin brings no language model of its own. Code intelligence comes from the language
+        server Garmin ships in the Connect IQ SDK, and building, running and debugging drive the
+        SDK's own tools, so everything stays in step with the SDK the user has installed.
+        </p>
+        <p>Requires the Connect IQ SDK, installed with Garmin's SDK Manager.</p>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.redhat.devtools.lsp4ij</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <fileType
+            name="Monkey C"
+            language="MonkeyC"
+            extensions="mc;mcgen;mb"
+            implementationClass="com.github.dtretyakov.monkeyc.lang.MonkeyCFileType"
+            fieldName="INSTANCE"/>
+        <fileType
+            name="Jungle"
+            language="Jungle"
+            extensions="jungle"
+            implementationClass="com.github.dtretyakov.monkeyc.lang.JungleFileType"
+            fieldName="INSTANCE"/>
+        <fileType
+            name="MSS"
+            language="MSS"
+            extensions="mss"
+            implementationClass="com.github.dtretyakov.monkeyc.lang.MssFileType"
+            fieldName="INSTANCE"/>
+
+        <lang.parserDefinition
+            language="MonkeyC"
+            implementationClass="com.github.dtretyakov.monkeyc.lang.MonkeyCParserDefinition"/>
+        <lang.parserDefinition
+            language="Jungle"
+            implementationClass="com.github.dtretyakov.monkeyc.lang.JungleParserDefinition"/>
+        <lang.parserDefinition
+            language="MSS"
+            implementationClass="com.github.dtretyakov.monkeyc.lang.MssParserDefinition"/>
+
+        <lang.syntaxHighlighterFactory
+            language="MonkeyC"
+            implementationClass="com.github.dtretyakov.monkeyc.lang.MonkeyCSyntaxHighlighterFactory"/>
+        <lang.syntaxHighlighterFactory
+            language="Jungle"
+            implementationClass="com.github.dtretyakov.monkeyc.lang.JungleSyntaxHighlighterFactory"/>
+        <lang.syntaxHighlighterFactory
+            language="MSS"
+            implementationClass="com.github.dtretyakov.monkeyc.lang.MssSyntaxHighlighterFactory"/>
+
+        <lang.commenter language="MonkeyC" implementationClass="com.github.dtretyakov.monkeyc.lang.MonkeyCCommenter"/>
+        <lang.commenter language="Jungle" implementationClass="com.github.dtretyakov.monkeyc.lang.JungleCommenter"/>
+        <lang.commenter language="MSS" implementationClass="com.github.dtretyakov.monkeyc.lang.MssCommenter"/>
+
+        <lang.braceMatcher language="MonkeyC" implementationClass="com.github.dtretyakov.monkeyc.lang.MonkeyCBraceMatcher"/>
+        <lang.braceMatcher language="MSS" implementationClass="com.github.dtretyakov.monkeyc.lang.MssBraceMatcher"/>
+
+        <colorSettingsPage implementation="com.github.dtretyakov.monkeyc.lang.MonkeyCColorSettingsPage"/>
+    </extensions>
+</idea-plugin>
