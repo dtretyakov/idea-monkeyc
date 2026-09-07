@@ -63,5 +63,53 @@
         <lang.braceMatcher language="MSS" implementationClass="com.github.dtretyakov.monkeyc.lang.MssBraceMatcher"/>
 
         <colorSettingsPage implementation="com.github.dtretyakov.monkeyc.lang.MonkeyCColorSettingsPage"/>
+
+        <postStartupActivity implementation="com.github.dtretyakov.monkeyc.lsp.MonkeyCServerLifecycle"/>
+
+        <configurationType
+            implementation="com.github.dtretyakov.monkeyc.run.MonkeyCRunConfigurationType"/>
+
+        <projectConfigurable
+            parentId="language"
+            id="settings.monkeyc"
+            displayName="Monkey C"
+            instance="com.github.dtretyakov.monkeyc.ui.MonkeyCConfigurable"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">
+        <server
+            id="monkeyc"
+            name="Monkey C"
+            factoryClass="com.github.dtretyakov.monkeyc.lsp.MonkeyCLanguageServerFactory">
+            <description><![CDATA[
+                The language server Garmin ships in the Connect IQ SDK, at
+                <code>bin/LanguageServer.jar</code>. It is found through the SDK Manager's
+                <code>current-sdk.cfg</code>, so it is always the SDK the user has selected.
+            ]]></description>
+        </server>
+
+        <!--
+          The server also serves the resource XML of a project, which is why plain XML is mapped
+          too; the document matcher keeps that to files inside a Connect IQ project.
+        -->
+        <languageMapping language="MonkeyC" serverId="monkeyc" languageId="monkeyc"/>
+        <languageMapping language="Jungle" serverId="monkeyc" languageId="jungle"/>
+        <languageMapping language="MSS" serverId="monkeyc" languageId="mss"/>
+        <languageMapping
+            language="XML"
+            serverId="monkeyc"
+            languageId="xml"
+            documentMatcher="com.github.dtretyakov.monkeyc.lsp.ConnectIqXmlMatcher"/>
+
+        <debugAdapterServer
+            id="monkeyc"
+            name="Monkey C"
+            factoryClass="com.github.dtretyakov.monkeyc.dap.MonkeyCDebugAdapterFactory">
+            <description><![CDATA[
+                The debug adapter Garmin ships in the Connect IQ SDK. It is started from
+                <code>bin/LanguageServer.jar</code>, which is the only jar in the SDK that carries
+                both the adapter and the gson it needs.
+            ]]></description>
+        </debugAdapterServer>
     </extensions>
 </idea-plugin>
