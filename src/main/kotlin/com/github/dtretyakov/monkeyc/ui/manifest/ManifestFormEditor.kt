@@ -18,6 +18,7 @@ import java.awt.BorderLayout
 import java.beans.PropertyChangeListener
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.SwingUtilities
 
 /**
  * The form half of `manifest.xml`.
@@ -43,6 +44,9 @@ class ManifestFormEditor(
 
     private var form: ManifestForm? = null
 
+    /** The scroll pane of the form on screen, so a rebuild can restore where it was. */
+    private var scrolled: JBScrollPane? = null
+
     init {
         rebuild()
     }
@@ -62,6 +66,10 @@ class ManifestFormEditor(
             return
         }
 
+        // Anything typed into the old form is written first: rebuilding takes the focus away
+        // without the fields noticing, and their last edit would go with it.
+        form?.flush()
+
         val manifest = model.read()
         if (manifest == null) {
             container.setContent(
@@ -78,12 +86,16 @@ class ManifestFormEditor(
         Disposer.register(this, form)
         this.form = form
 
-        container.setContent(
-            JBScrollPane(form.component).apply {
-                border = JBUI.Borders.empty()
-                verticalScrollBar.unitIncrement = SCROLL_STEP
-            },
-        )
+        val offset = scrolled?.verticalScrollBar?.value ?: 0
+        val pane = JBScrollPane(form.component).apply {
+            border = JBUI.Borders.empty()
+            verticalScrollBar.unitIncrement = SCROLL_STEP
+        }
+        scrolled = pane
+        container.setContent(pane)
+        // Put the user back where they were reading, once the new content has a size.
+        if (offset > 0) SwingUtilities.invokeLater { pane.verticalScrollBar.value = offset }
+
         builtFrom = document.modificationStamp
     }
 

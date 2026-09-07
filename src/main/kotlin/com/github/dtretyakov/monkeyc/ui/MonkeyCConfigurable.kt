@@ -30,6 +30,7 @@ import java.nio.file.Path
 import javax.swing.Icon
 import javax.swing.JEditorPane
 import javax.swing.JLabel
+import kotlin.io.path.exists
 
 /**
  * Settings | Languages &amp; Frameworks | Monkey C.
@@ -120,6 +121,12 @@ class MonkeyCConfigurable(private val project: Project) :
                         .columns(COLUMNS_LARGE)
                         .bindText(settings::developerKeyPath)
                         .comment("Leave empty to use the key the SDK Manager generated.")
+                        .validationOnApply { field ->
+                            val given = field.text.trim().takeIf { it.isNotEmpty() }
+                            given?.let { path ->
+                                DeveloperKey.problemWith(Path.of(path))?.let { error(it) }
+                            }
+                        }
 
                     button("Generate...") {
                         generateDeveloperKey(project)?.let { field.component.text = it.toString() }
@@ -133,6 +140,10 @@ class MonkeyCConfigurable(private val project: Project) :
                             "Separated by <code>;</code>, relative to the project root. " +
                                 "Empty means <code>${ProjectLayout.DEFAULT_JUNGLE}</code>.",
                         )
+                        // A jungle the compiler cannot find is not an error the user ever sees:
+                        // the language server logs "does not exist" to a console nobody opens and
+                        // then indexes nothing at all.
+                        .validationOnApply { field -> missingJungle(model, field.text)?.let { error(it) } }
                 }
             }.enabled(sdk != null)
 
@@ -192,6 +203,13 @@ class MonkeyCConfigurable(private val project: Project) :
                 Messages.showErrorDialog(project, it.message ?: "Could not write the key.", "Developer Key")
             }
             .getOrNull()
+    }
+
+    /** The first jungle file that is named but not there, if any. */
+    private fun missingJungle(model: MonkeyCProject, configured: String): String? {
+        val root = model.primaryRoot() ?: return null
+        val missing = ProjectLayout.jungleFiles(root, configured).firstOrNull { !it.exists() } ?: return null
+        return "No such file: ${FileUtil.getLocationRelativeToUserHome(missing.toString())}"
     }
 
     /** The headline: which SDK, and how much of it is usable. */

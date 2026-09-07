@@ -1,6 +1,7 @@
 package com.github.dtretyakov.monkeyc.sdk
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -9,6 +10,7 @@ import java.security.KeyFactory
 import java.security.interfaces.RSAPrivateKey
 import java.security.spec.PKCS8EncodedKeySpec
 import kotlin.io.path.readBytes
+import kotlin.io.path.writeText
 
 class DeveloperKeyTest {
 
@@ -22,6 +24,20 @@ class DeveloperKeyTest {
             .generatePrivate(PKCS8EncodedKeySpec(key.readBytes())) as RSAPrivateKey
 
         assertEquals(4096, parsed.modulus.bitLength())
+    }
+
+    @Test
+    fun `says what is wrong with a key before a build has to`(@TempDir temp: Path) {
+        assertEquals("No such file.", DeveloperKey.problemWith(temp.resolve("missing.der")))
+
+        val notAKey = temp.resolve("notes.der")
+        notAKey.writeText("this is not a key")
+        assertTrue(
+            DeveloperKey.problemWith(notAKey)!!.startsWith("Not a PKCS#8"),
+            DeveloperKey.problemWith(notAKey).orEmpty(),
+        )
+
+        assertNull(DeveloperKey.problemWith(DeveloperKey.generate(temp.resolve("good.der"))))
     }
 
     @Test

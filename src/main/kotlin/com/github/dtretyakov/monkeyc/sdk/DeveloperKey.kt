@@ -1,8 +1,13 @@
 package com.github.dtretyakov.monkeyc.sdk
 
 import java.nio.file.Path
+import java.security.KeyFactory
 import java.security.KeyPairGenerator
+import java.security.spec.PKCS8EncodedKeySpec
 import kotlin.io.path.createParentDirectories
+import kotlin.io.path.exists
+import kotlin.io.path.isRegularFile
+import kotlin.io.path.readBytes
 import kotlin.io.path.writeBytes
 
 /**
@@ -19,6 +24,25 @@ import kotlin.io.path.writeBytes
 object DeveloperKey {
 
     private const val BITS = 4096
+
+    /**
+     * What is wrong with a key, said in the settings dialog rather than at the end of a build.
+     *
+     * The compiler reads the file as PKCS#8 DER and says little when it cannot; the same check
+     * here costs milliseconds and happens while the user is still looking at the field.
+     */
+    fun problemWith(path: Path): String? {
+        if (!path.exists()) return "No such file."
+        if (!path.isRegularFile()) return "Not a file."
+
+        val bytes = runCatching { path.readBytes() }.getOrElse { return "Cannot be read." }
+        return runCatching {
+            KeyFactory.getInstance("RSA").generatePrivate(PKCS8EncodedKeySpec(bytes))
+            null
+        }.getOrElse {
+            "Not a PKCS#8 RSA private key. Generate one, or export the one the SDK Manager made."
+        }
+    }
 
     fun generate(destination: Path): Path {
         val generator = KeyPairGenerator.getInstance("RSA").apply { initialize(BITS) }

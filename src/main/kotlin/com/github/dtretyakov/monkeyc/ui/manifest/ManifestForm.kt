@@ -35,7 +35,7 @@ internal class ManifestForm(
     private val project: Project,
     private val manifest: ManifestFile,
     private val info: ProjectInfo?,
-    devices: List<ConnectIqDevice>,
+    private val devices: List<ConnectIqDevice>,
     private val edit: ManifestEdit,
 ) : Disposable {
 
@@ -56,10 +56,27 @@ internal class ManifestForm(
         inManifest = manifest.languages,
     )
 
+    /** Downloaded devices new enough for the minimum API level the manifest declares. */
+    private val compatibleDevices: Set<String> = manifest.minSdkVersion?.let { minimum ->
+        devices.filter { it.sdkVersion == null || it.sdkVersion >= minimum }.map { it.id }.toSet()
+    } ?: devices.map { it.id }.toSet()
+
     var preferredFocusedComponent: JComponent? = null
         private set
 
+    /**
+     * What each text field would write if it lost focus now.
+     *
+     * A field writes when focus leaves it, and rebuilding the form takes the focus away without
+     * ever telling the field — so what the user typed last would be thrown away. This is how it
+     * gets written first.
+     */
+    private val pending = mutableListOf<() -> Unit>()
+
     val component: JComponent = build()
+
+    /** Writes whatever has been typed but not yet committed. Called before the form is replaced. */
+    fun flush() = pending.forEach { it() }
 
     override fun dispose() = Unit
 
@@ -137,32 +154,59 @@ internal class ManifestForm(
         }
 
         group("Products") {
+            val products = ChoiceList(productChoices, PRODUCTS_HEIGHT) { ids ->
+                edit { model -> model.setDevices(ids) }
+            }
+            // A hundred and sixty devices is not a list anyone ticks one by one, and "every device
+            // that can run this" is the choice most projects actually want.
             row {
-                cell(list(productChoices) { ids -> edit { model -> model.setDevices(ids) } })
+                link("All") { products.select { true } }
+                link("None") { products.select { false } }
+                link("Compatible") { products.select { it in compatibleDevices } }
+                    .enabled(compatibleDevices.isNotEmpty())
+                    .comment("Downloaded devices that support the minimum API level above.")
+            }
+            row {
+                cell(products.component)
                     .align(AlignX.FILL)
-                    .comment(
-                        "Devices downloaded with the SDK Manager. Start typing to search. " +
-                            "A build produces one executable per device.",
-                    )
+                    .comment("Start typing in the list to search. A build produces one executable per device.")
             }
         }
 
         if (!manifest.isBarrel) {
-            group("Permissions") {
-                row {
-                    cell(list(permissionChoices) { ids -> edit { model -> model.setPermissions(ids) } })
-                        .align(AlignX.FILL)
-                        .comment("Only the ones this kind of app may ask for are listed.")
-                }
-            }
-
-            group("Languages") {
-                row {
-                    cell(list(languageChoices) { ids -> edit { model -> model.setLanguages(ids) } })
-                        .align(AlignX.FILL)
-                        .comment("The translations the app ships.")
-                }
-            }
+            // Side by side: stacked, the three lists made a form taller than any screen.
+            twoColumnsRow(
+                {
+                    panel {
+                        group("Permissions") {
+                            row {
+                                cell(
+                                    ChoiceList(permissionChoices, SHORT_LIST_HEIGHT) { ids ->
+                                        edit { model -> model.setPermissions(ids) }
+                                    }.component,
+                                )
+                                    .align(AlignX.FILL)
+                                    .comment("Only the ones this kind of app may ask for.")
+                            }
+                        }
+                    }
+                },
+                {
+                    panel {
+                        group("Languages") {
+                            row {
+                                cell(
+                                    ChoiceList(languageChoices, SHORT_LIST_HEIGHT) { ids ->
+                                        edit { model -> model.setLanguages(ids) }
+                                    }.component,
+                                )
+                                    .align(AlignX.FILL)
+                                    .comment("The translations the app ships.")
+                            }
+                        }
+                    }
+                },
+            )
         }
     }.apply { border = JBUI.Borders.empty(8) }
 
@@ -175,6 +219,7 @@ internal class ManifestForm(
     private fun attributeField(attribute: String, value: String?, commandName: String): JTextField {
         val original = value.orEmpty()
         return JTextField(original).apply {
+            pending += { if (text != original) edit { it.setAttribute(attribute, text, commandName) } }
             addFocusListener(
                 object : FocusAdapter() {
                     override fun focusLost(event: FocusEvent) {
@@ -185,18 +230,40 @@ internal class ManifestForm(
         }
     }
 
-    private fun list(choices: List<Choice>, onChange: (List<String>) -> Unit): JComponent {
-        val list = CheckBoxList<String>()
-        choices.forEach { list.addItem(it.id, it.label, it.selected) }
-        ListSpeedSearch.installOn(list) { item -> item as? String }
+    /** A list of ticked names, and the two ways it changes: by hand, or all at once. */
+    private class ChoiceList(
+        private val choices: List<Choice>,
+        height: Int,
+        private val onChange: (List<String>) -> Unit,
+    ) {
+        private val list = CheckBoxList<String>().apply {
+            choices.forEach { addItem(it.id, it.label, it.selected) }
+            ListSpeedSearch.installOn(this) { item -> item as? String }
+        }
 
-        list.setCheckBoxListListener(
-            CheckBoxListListener { _, _ ->
-                onChange(choices.map { it.id }.filter { list.isItemSelected(it) })
-            },
-        )
+        val component: JComponent = JBScrollPane(list).apply { preferredSize = Dimension(LIST_WIDTH, height) }
 
-        return JBScrollPane(list).apply { preferredSize = Dimension(360, 220) }
+        init {
+            list.setCheckBoxListListener(CheckBoxListListener { _, _ -> onChange(selected()) })
+        }
+
+        /** Ticks every choice the predicate accepts and unticks the rest, in one edit. */
+        fun select(wanted: (String) -> Boolean) {
+            var changed = false
+            choices.forEach { choice ->
+                val target = wanted(choice.id)
+                if (list.isItemSelected(choice.id) != target) {
+                    list.setItemSelected(choice.id, target)
+                    changed = true
+                }
+            }
+            if (changed) {
+                list.repaint()
+                onChange(selected())
+            }
+        }
+
+        private fun selected(): List<String> = choices.map { it.id }.filter { list.isItemSelected(it) }
     }
 
     /**
@@ -219,6 +286,12 @@ internal class ManifestForm(
     }
 
     private class Choice(val id: String, val label: String, val selected: Boolean)
+
+    private companion object {
+        const val LIST_WIDTH = 340
+        const val PRODUCTS_HEIGHT = 300
+        const val SHORT_LIST_HEIGHT = 220
+    }
 
     /**
      * The list to show: what the SDK offers, plus anything the manifest already names that it does
