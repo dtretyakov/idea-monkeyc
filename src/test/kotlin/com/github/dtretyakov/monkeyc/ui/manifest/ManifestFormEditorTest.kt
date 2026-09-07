@@ -2,6 +2,9 @@ package com.github.dtretyakov.monkeyc.ui.manifest
 
 import com.github.dtretyakov.monkeyc.project.ManifestFile
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.ui.components.JBTabbedPane
+import java.awt.Component
+import java.awt.Container
 import com.github.dtretyakov.monkeyc.testing.IdeTestCase
 
 /**
@@ -48,12 +51,47 @@ class ManifestFormEditorTest : IdeTestCase() {
         val editor = ManifestEditorProvider().createEditor(project, manifest.virtualFile)
         try {
             // Assembling the panel is the part that cannot be checked by compiling: the UI DSL,
-            // the check box lists, the speed search over 166 devices.
+            // the check box lists, the search over a hundred and sixty devices.
             assertNotNull(editor.component)
             assertEquals("Manifest", editor.name)
+
+            val tabs = find<JBTabbedPane>(editor.component)
+            assertNotNull("the three lists live in tabs", tabs)
+            assertEquals(3, tabs!!.tabCount)
+            // The count belongs in the title, so the tab says what is inside without being opened.
+            assertTrue(tabs.getTitleAt(0), tabs.getTitleAt(0).startsWith("Products"))
+            assertTrue(tabs.getTitleAt(0), tabs.getTitleAt(0).trim().endsWith("1"))
         } finally {
             com.intellij.openapi.util.Disposer.dispose(editor)
         }
+    }
+
+    fun testABarrelHasOnlyProducts() {
+        myFixture.addFileToProject("monkey.jungle", "project.manifest = manifest.xml")
+        val manifest = myFixture.addFileToProject(
+            ManifestFile.FILE_NAME,
+            """
+            <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+                <iq:barrel id="4567" module="Shared" version="1.0.0"/>
+            </iq:manifest>
+            """.trimIndent(),
+        )
+
+        val editor = ManifestEditorProvider().createEditor(project, manifest.virtualFile)
+        try {
+            // A barrel declares no permissions and no languages, so it is offered neither.
+            assertEquals(1, find<JBTabbedPane>(editor.component)?.tabCount)
+        } finally {
+            com.intellij.openapi.util.Disposer.dispose(editor)
+        }
+    }
+
+    private inline fun <reified T : Component> find(root: Component): T? = find(root, T::class.java)
+
+    private fun <T : Component> find(root: Component, type: Class<T>): T? {
+        if (type.isInstance(root)) return type.cast(root)
+        if (root !is Container) return null
+        return root.components.firstNotNullOfOrNull { find(it, type) }
     }
 
     fun testAnEditThroughTheFormLandsInTheDocument() {

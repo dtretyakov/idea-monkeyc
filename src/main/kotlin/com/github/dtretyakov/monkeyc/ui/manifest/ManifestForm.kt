@@ -10,10 +10,13 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.ui.panel.ComponentPanelBuilder
 import com.intellij.ui.CheckBoxList
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.SearchTextField
+import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.components.JBTabbedPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.COLUMNS_MEDIUM
@@ -22,6 +25,7 @@ import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
 import java.awt.Dimension
+import java.awt.FlowLayout
 import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 import java.util.UUID
@@ -172,61 +176,12 @@ internal class ManifestForm(
             }
         }
 
-        group("Products") {
-            val products = ChoiceList(productChoices, PRODUCTS_HEIGHT, searchable = true) { ids ->
-                edit { model -> model.setDevices(ids) }
-            }
-            // A hundred and sixty devices is not a list anyone ticks one by one, and "every device
-            // that can run this" is the choice most projects actually want.
-            row {
-                link("All") { products.select { true } }
-                link("None") { products.select { false } }
-                link("Compatible") { products.select { it in compatibleDevices } }
-                    .enabled(compatibleDevices.isNotEmpty())
-                    .comment("Downloaded devices that support the minimum API level above.")
-            }
-            row {
-                cell(products.component)
-                    .align(AlignX.FILL)
-                    .comment("A build produces one executable per device. The buttons above act on what is shown.")
-            }
+        row {
+            cell(lists())
+                .align(AlignX.FILL)
+                .comment("Everything here comes from the SDK: the devices it has downloaded, and what this kind of app may declare.")
         }
 
-        if (!manifest.isBarrel) {
-            // Side by side: stacked, the three lists made a form taller than any screen.
-            twoColumnsRow(
-                {
-                    panel {
-                        group("Permissions") {
-                            row {
-                                cell(
-                                    ChoiceList(permissionChoices, SHORT_LIST_HEIGHT, searchable = false) { ids ->
-                                        edit { model -> model.setPermissions(ids) }
-                                    }.component,
-                                )
-                                    .align(AlignX.FILL)
-                                    .comment("Only the ones this kind of app may ask for.")
-                            }
-                        }
-                    }
-                },
-                {
-                    panel {
-                        group("Languages") {
-                            row {
-                                cell(
-                                    ChoiceList(languageChoices, SHORT_LIST_HEIGHT, searchable = true) { ids ->
-                                        edit { model -> model.setLanguages(ids) }
-                                    }.component,
-                                )
-                                    .align(AlignX.FILL)
-                                    .comment("The translations the app ships.")
-                            }
-                        }
-                    }
-                },
-            )
-        }
     }.apply { border = JBUI.Borders.empty(8) }
 
     /**
@@ -250,6 +205,57 @@ internal class ManifestForm(
     }
 
     /**
+     * The three lists, as tabs.
+     *
+     * One under another they made a form taller than a screen, and side by side they were too
+     * narrow for a device name. Tabs give each of them the same space and cost one click — and
+     * the count in the tab says what is inside without opening it.
+     */
+    private fun lists(): JComponent {
+        val tabs = JBTabbedPane().apply { preferredSize = Dimension(TABS_WIDTH, TABS_HEIGHT) }
+
+        fun tab(title: String, choices: List<Choice>, help: String, list: ChoiceList) {
+            val index = tabs.tabCount
+            list.onCountChanged = { count -> tabs.setTitleAt(index, "$title  $count") }
+            tabs.addTab("$title  ${choices.count { it.selected }}", list.panel(help))
+        }
+
+        tab(
+            "Products",
+            productChoices,
+            "A build produces one executable per device. The buttons act on what is shown.",
+            ChoiceList(
+                choices = productChoices,
+                searchable = true,
+                actions = listOf(
+                    "All" to { _: String -> true },
+                    "None" to { _: String -> false },
+                    "Compatible" to { id: String -> id in compatibleDevices },
+                ),
+            ) { ids -> edit { model -> model.setDevices(ids) } },
+        )
+
+        if (!manifest.isBarrel) {
+            tab(
+                "Permissions",
+                permissionChoices,
+                "Only the ones this kind of app may ask for. Ask for fewer than you can.",
+                ChoiceList(permissionChoices) { ids -> edit { model -> model.setPermissions(ids) } },
+            )
+            tab(
+                "Languages",
+                languageChoices,
+                "The translations the app ships.",
+                ChoiceList(languageChoices, searchable = true) { ids ->
+                    edit { model -> model.setLanguages(ids) }
+                },
+            )
+        }
+
+        return tabs
+    }
+
+    /**
      * A list of ticked names, with a search box and the bulk actions that go with one.
      *
      * The ticks are kept apart from the list widget rather than read out of it, because filtering
@@ -257,44 +263,59 @@ internal class ManifestForm(
      */
     private class ChoiceList(
         private val choices: List<Choice>,
-        height: Int,
-        searchable: Boolean,
+        private val searchable: Boolean = false,
+        private val actions: List<Pair<String, (String) -> Boolean>> = emptyList(),
         private val onChange: (List<String>) -> Unit,
     ) {
         private val ticked: MutableSet<String> = choices.filter { it.selected }.map { it.id }.toMutableSet()
         private val list = CheckBoxList<String>()
         private var visible: List<Choice> = choices
 
-        val component: JComponent
+        /** Told the new count whenever the ticks change, so the tab title can say it. */
+        var onCountChanged: (Int) -> Unit = {}
 
         init {
             fill(choices)
             list.setCheckBoxListListener { index, value ->
                 visible.getOrNull(index)?.let { choice ->
                     if (value) ticked += choice.id else ticked -= choice.id
-                    onChange(selected())
-                }
-            }
-
-            val scroller = JBScrollPane(list).apply { preferredSize = Dimension(LIST_WIDTH, height) }
-            component = if (!searchable) {
-                scroller
-            } else {
-                JPanel(BorderLayout(0, JBUI.scale(4))).apply {
-                    val search = SearchTextField(false)
-                    search.addDocumentListener(
-                        object : DocumentAdapter() {
-                            override fun textChanged(event: DocumentEvent) = filter(search.text)
-                        },
-                    )
-                    add(search, BorderLayout.NORTH)
-                    add(scroller, BorderLayout.CENTER)
+                    report()
                 }
             }
         }
 
+        fun panel(help: String): JComponent = JPanel(BorderLayout(0, JBUI.scale(4))).apply {
+            border = JBUI.Borders.empty(8)
+
+            val header = JPanel(BorderLayout(0, JBUI.scale(4)))
+            if (actions.isNotEmpty()) {
+                header.add(
+                    JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0)).apply {
+                        actions.forEach { (title, wanted) -> add(ActionLink(title) { select(wanted) }) }
+                    },
+                    BorderLayout.NORTH,
+                )
+            }
+            if (searchable) {
+                header.add(
+                    SearchTextField(false).also { search ->
+                        search.addDocumentListener(
+                            object : DocumentAdapter() {
+                                override fun textChanged(event: DocumentEvent) = filter(search.text)
+                            },
+                        )
+                    },
+                    BorderLayout.CENTER,
+                )
+            }
+            if (header.componentCount > 0) add(header, BorderLayout.NORTH)
+
+            add(JBScrollPane(list), BorderLayout.CENTER)
+            add(ComponentPanelBuilder.createCommentComponent(help, true), BorderLayout.SOUTH)
+        }
+
         /** Ticks every visible choice the predicate accepts and unticks the visible rest. */
-        fun select(wanted: (String) -> Boolean) {
+        private fun select(wanted: (String) -> Boolean) {
             var changed = false
             visible.forEach { choice ->
                 val target = wanted(choice.id)
@@ -306,8 +327,14 @@ internal class ManifestForm(
             }
             if (changed) {
                 list.repaint()
-                onChange(selected())
+                report()
             }
+        }
+
+        private fun report() {
+            val selected = selected()
+            onCountChanged(selected.size)
+            onChange(selected)
         }
 
         private fun filter(query: String) {
@@ -347,9 +374,8 @@ internal class ManifestForm(
     private class Choice(val id: String, val label: String, val selected: Boolean)
 
     private companion object {
-        const val LIST_WIDTH = 340
-        const val PRODUCTS_HEIGHT = 300
-        const val SHORT_LIST_HEIGHT = 220
+        const val TABS_WIDTH = 460
+        const val TABS_HEIGHT = 340
     }
 
     /**
