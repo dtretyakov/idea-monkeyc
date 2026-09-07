@@ -6,6 +6,7 @@ import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettingsListener
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import com.redhat.devtools.lsp4ij.LanguageServerManager
@@ -21,7 +22,8 @@ import com.redhat.devtools.lsp4ij.LanguageServerManager
 class MonkeyCServerLifecycle : ProjectActivity {
 
     override suspend fun execute(project: Project) {
-        if (MonkeyCProject.getInstance(project).roots().isEmpty()) return
+        // Content roots are part of the module model, which may only be read under a read action.
+        if (readAction { MonkeyCProject.getInstance(project).roots() }.isEmpty()) return
 
         val connection = project.messageBus.connect()
         connection.subscribe(

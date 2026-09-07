@@ -67,7 +67,7 @@
         <colorSettingsPage implementation="com.github.dtretyakov.monkeyc.lang.MonkeyCColorSettingsPage"/>
 
         <postStartupActivity implementation="com.github.dtretyakov.monkeyc.lsp.MonkeyCServerLifecycle"/>
-        <postStartupActivity implementation="com.github.dtretyakov.monkeyc.project.MonkeyCRootSetup"/>
+        <postStartupActivity implementation="com.github.dtretyakov.monkeyc.project.MonkeyCProjectSetup"/>
 
         <configurationType
             implementation="com.github.dtretyakov.monkeyc.run.MonkeyCRunConfigurationType"/>

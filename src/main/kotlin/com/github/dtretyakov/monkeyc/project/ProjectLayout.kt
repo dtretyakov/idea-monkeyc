@@ -28,6 +28,9 @@ object ProjectLayout {
      */
     const val SOURCE_DIRECTORY = "source"
 
+    /** Where the SDK's templates put strings, drawables and layouts. */
+    const val RESOURCE_DIRECTORY = "resources"
+
     /**
      * Is this directory a Connect IQ project?
      *
