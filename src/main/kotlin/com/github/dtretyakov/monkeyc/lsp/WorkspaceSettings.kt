@@ -19,7 +19,7 @@ data class InitializationOptions(
 )
 
 data class WorkspaceSettings(
-    /** The project root, as a plain filesystem path — not a URI. */
+    /** The project root, as a plain filesystem path — not a URI, and with symlinks resolved. */
     val path: String,
     /**
      * Absolute paths. A relative one is silently dropped: the server logs
@@ -56,8 +56,9 @@ object LanguageServerSettings {
         val model = MonkeyCProject.getInstance(project)
         return model.roots().map { root ->
             WorkspaceSettings(
-                path = root.toString(),
-                jungleFiles = model.jungleFiles(root).map { it.toString() },
+                // Symlinks resolved: see CanonicalPaths for what happens when they are not.
+                path = CanonicalPaths.of(root).toString(),
+                jungleFiles = model.jungleFiles(root).map { CanonicalPaths.of(it).toString() },
                 options = listOf(
                     settings.typeCheck.display,
                     settings.debugLog.display,

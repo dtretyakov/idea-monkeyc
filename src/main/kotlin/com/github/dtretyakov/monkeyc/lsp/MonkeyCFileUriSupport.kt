@@ -3,6 +3,7 @@ package com.github.dtretyakov.monkeyc.lsp
 import com.intellij.openapi.vfs.VirtualFile
 import com.redhat.devtools.lsp4ij.client.features.FileUriSupport
 import java.net.URI
+import java.nio.file.Path
 
 /**
  * Repairs the file URIs the Monkey C language server sends back.
@@ -16,7 +17,16 @@ object MonkeyCFileUriSupport : FileUriSupport {
     private const val MALFORMED_PREFIX = "file:/"
     private const val WELL_FORMED_PREFIX = "file:///"
 
-    override fun getFileUri(file: VirtualFile): URI? = FileUriSupport.DEFAULT.getFileUri(file)
+    /**
+     * The URI the server is told about a file, with symlinks resolved — see [CanonicalPaths] for
+     * why a document it cannot match to a compiled file gets no answers at all.
+     */
+    override fun getFileUri(file: VirtualFile): URI? {
+        val uri = FileUriSupport.DEFAULT.getFileUri(file) ?: return null
+        val path = runCatching { Path.of(uri) }.getOrNull() ?: return uri
+        val real = CanonicalPaths.of(path)
+        return if (real == path) uri else real.toUri()
+    }
 
     override fun findFileByUri(uri: String): VirtualFile? =
         FileUriSupport.DEFAULT.findFileByUri(repair(uri))

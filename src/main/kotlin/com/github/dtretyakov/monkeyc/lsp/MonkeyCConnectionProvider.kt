@@ -35,14 +35,8 @@ class MonkeyCConnectionProvider(private val project: Project) : OSProcessStreamC
             )
         }
 
-        commandLine = GeneralCommandLine(
-            ConnectIqSdkService.getInstance().java().toString(),
-            // Without this the server bounces a Java icon in the macOS dock on every start.
-            "-Dapple.awt.UIElement=true",
-            "-classpath",
-            sdk.languageServerJar.toString(),
-            "com.garmin.monkeybrains.languageserver.LSLauncher",
-        ).withWorkingDirectory(project.guessProjectDir()?.toNioPath())
+        commandLine = GeneralCommandLine(SdkServerCommands.languageServer(sdk, ConnectIqSdkService.getInstance().java()))
+            .withWorkingDirectory(project.guessProjectDir()?.toNioPath())
 
         super.start()
     }

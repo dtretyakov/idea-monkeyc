@@ -1,6 +1,7 @@
 package com.github.dtretyakov.monkeyc.dap
 
 import com.github.dtretyakov.monkeyc.lang.MonkeyCFileType
+import com.github.dtretyakov.monkeyc.lsp.SdkServerCommands
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.run.MonkeyCLaunch
 import com.github.dtretyakov.monkeyc.run.MonkeyCRunOptions
@@ -19,11 +20,9 @@ import kotlin.io.path.exists
 /**
  * The debug adapter Garmin ships in the Connect IQ SDK.
  *
- * It is the same program the official VS Code extension runs, and it is in the SDK rather than only
- * in that extension: `com.garmin.monkeybrains.monkeydodo.DebugAdapterProtocol` is present in both
- * `monkeybrains.jar` and `LanguageServer.jar`. It has to be started from the latter — the former
- * carries no gson, so it dies on `NoClassDefFoundError: com/google/gson/TypeAdapterFactory` before
- * it can answer `initialize`.
+ * It is the same program the official VS Code extension runs — the extension bundles its own copy,
+ * but the SDK has one too, so nothing here depends on VS Code being installed. Which jar it comes
+ * out of is not arbitrary; see [SdkServerCommands.debugAdapter].
  */
 class MonkeyCDebugAdapterDescriptor(
     private val options: RunConfigurationOptions,
@@ -59,12 +58,8 @@ class MonkeyCDebugAdapterDescriptor(
             ?: throw ExecutionException("No Connect IQ SDK found.")
 
         return startServer(
-            GeneralCommandLine(
-                ConnectIqSdkService.getInstance().java().toString(),
-                "-classpath",
-                sdk.languageServerJar.toString(),
-                "com.garmin.monkeybrains.monkeydodo.DebugAdapterProtocol",
-            ).withWorkingDirectory(prepared.root),
+            GeneralCommandLine(SdkServerCommands.debugAdapter(sdk, ConnectIqSdkService.getInstance().java()))
+                .withWorkingDirectory(prepared.root),
         )
     }
 
