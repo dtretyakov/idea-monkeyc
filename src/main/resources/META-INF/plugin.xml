@@ -68,6 +68,19 @@
 
         <configurationType
             implementation="com.github.dtretyakov.monkeyc.run.MonkeyCRunConfigurationType"/>
+        <runConfigurationProducer
+            implementation="com.github.dtretyakov.monkeyc.run.MonkeyCRunConfigurationProducer"/>
+
+        <statusBarWidgetFactory
+            id="MonkeyCDevice"
+            order="first"
+            implementation="com.github.dtretyakov.monkeyc.ui.DeviceStatusBarWidgetFactory"/>
+
+        <notificationGroup id="Monkey C" displayType="BALLOON"/>
+
+        <appStarter
+            id="monkeyCSelfCheck"
+            implementation="com.github.dtretyakov.monkeyc.ui.SelfCheckStarter"/>
 
         <projectConfigurable
             parentId="language"
@@ -75,6 +88,16 @@
             displayName="Monkey C"
             instance="com.github.dtretyakov.monkeyc.ui.MonkeyCConfigurable"/>
     </extensions>
+
+    <actions>
+        <action
+            id="MonkeyC.Export"
+            class="com.github.dtretyakov.monkeyc.ui.ExportAction"
+            text="Export Connect IQ App..."
+            description="Builds a signed .iq for the Connect IQ Store, for every device the manifest declares">
+            <add-to-group group-id="BuildMenu" anchor="last"/>
+        </action>
+    </actions>
 
     <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">
         <server

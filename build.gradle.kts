@@ -61,3 +61,35 @@ intellijPlatform {
         }
     }
 }
+
+/**
+ * A sandbox IDE with a Connect IQ project already open, so a change can be looked at rather than
+ * only compiled.
+ *
+ *     ./gradlew runIdeWithFixture
+ */
+intellijPlatformTesting {
+    /**
+     * A headless IDE that checks the plugin is whole: extensions registered, file types bound,
+     * the SDK reachable. See SelfCheckStarter for why a unit test cannot answer any of that.
+     *
+     *     ./gradlew runSelfCheck
+     */
+    runIde.register("runSelfCheck") {
+        task {
+            args = listOf("monkeyCSelfCheck")
+            jvmArgumentProviders.add(
+                CommandLineArgumentProvider { listOf("-Djava.awt.headless=true", "-Didea.is.internal=true") },
+            )
+        }
+    }
+
+    runIde.register("runIdeWithFixture") {
+        task {
+            args = listOf(
+                providers.gradleProperty("fixture")
+                    .getOrElse(layout.projectDirectory.dir("src/test/resources/fixture-app").asFile.absolutePath),
+            )
+        }
+    }
+}

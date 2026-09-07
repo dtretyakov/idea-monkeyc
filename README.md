@@ -11,44 +11,89 @@ find those programs and speak their protocols:
 
 | Concern | What runs it | How the plugin talks to it |
 |---|---|---|
-| Code intelligence | `bin/LanguageServer.jar` | LSP over stdio |
-| Building | `bin/monkeybrains.jar` | command line, output parsed into Problems |
+| Code intelligence | `bin/LanguageServer.jar` | LSP over stdio, through [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij) |
+| Building | `bin/monkeybrains.jar` | command line, output parsed into the Build tool window |
 | Running | `bin/ConnectIQ.app` + `MonkeyDoDeux` | command line |
-| Debugging | `bin/LanguageServer.jar` | DAP over stdio |
+| Debugging | `bin/LanguageServer.jar` | DAP over stdio, through LSP4IJ's DAP client |
 
-Nothing from Garmin is redistributed: the plugin locates the SDK the user installed with the SDK
+Nothing from Garmin is redistributed: the plugin finds the SDK the user installed with the SDK
 Manager and launches its jars.
 
 That is the whole design argument. Monkey C changes with every SDK release — new types, new
-annotations, new `.mss` properties — and a parser maintained in this plugin would be behind from
-the day it shipped. The language server *is* the compiler front end, so it is never behind.
+annotations, new `.mss` properties — and a parser maintained in this plugin would be behind from the
+day it shipped. The language server *is* the compiler's front end, so it is never behind. What the
+plugin does implement is a lexer, which is what colouring, commenting and bracket matching need and
+all they need.
 
-## Status
+The debug adapter is worth a note, because the received wisdom is that it lives only inside the
+official VS Code extension. It does not: `com.garmin.monkeybrains.monkeydodo.DebugAdapterProtocol`
+is in the SDK. It has to be started from `LanguageServer.jar` rather than `monkeybrains.jar` —
+that one has the adapter and lsp4j but no gson between them, and dies on `NoClassDefFoundError`
+before it can answer `initialize`.
 
-Work in progress. The language layer is in place; building, running and debugging are next.
+## What works
+
+* **Editing** — completion over the whole Toybox API, diagnostics, go-to-definition, hover with
+  documentation, rename, find usages, document and workspace symbols, folding, type and call
+  hierarchies. Syntax highlighting, commenting and bracket matching for `.mc`, `.jungle` and `.mss`.
+* **Building** — in the Build tool window, with the compiler's errors as something to click.
+* **Running** — Run and Debug configurations for the app and for its unit tests, a target device in
+  the status bar, and an Export action that produces the `.iq` for the store.
+* **Debugging** — breakpoints, stepping, variables, and evaluate-on-hover.
+
+### Three things the server does that a client has to work around
+
+All three were confirmed against SDK 9.1.0, and each has a live test that will go red when Garmin
+fixes it:
+
+* `textDocument/definition` answers with `file:/abs/path` — one slash, no authority — so nothing
+  downstream resolves it. Repaired in `MonkeyCFileUriSupport`.
+* `textDocument/signatureHelp` dereferences a context the protocol says is optional, and throws an
+  NPE without one. LSP4IJ builds that request and exposes no hook for altering it, so the context is
+  added on the wire by `SignatureHelpContextFilter`.
+* The server matches an open document against the files the compiler resolved, and the compiler
+  resolves through symlinks. A project reached by another name gets `Could not find file context`
+  for everything — no completion, no navigation, and no error anywhere. `CanonicalPaths` resolves
+  symlinks out of both the workspace root and the document URIs, which is what it takes.
 
 ## Requirements
 
-* The Connect IQ SDK, installed with Garmin's SDK Manager (8.1.0 or newer for code intelligence —
-  that is when `LanguageServer.jar` first shipped)
+* The Connect IQ SDK, installed with Garmin's SDK Manager. Code intelligence needs 8.1.0 or newer —
+  that is when `LanguageServer.jar` first shipped; building and running work with anything older.
 * IntelliJ IDEA 2025.2 or newer
-* [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij), which the IDE installs along with
-  this plugin
+* [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij), which the IDE installs alongside this
+  plugin
 
 ## Build
 
 ```bash
 ./gradlew build          # compile and run the unit tests
-./gradlew runIde         # sandbox IDE with the plugin installed
-./gradlew verifyPlugin   # plugin compatibility check
+./gradlew runSelfCheck   # headless IDE: is the plugin whole and are its extensions registered?
+./gradlew runIde         # sandbox IDE
+./gradlew verifyPlugin   # compatibility check
 ./gradlew buildPlugin    # distributable zip
 ```
 
-Tests that drive the real SDK are opt-in, so a machine without Connect IQ still goes green:
+`runIdeWithFixture` opens the sandbox IDE on the test fixture, which is a real Connect IQ project:
+
+```bash
+./gradlew runIdeWithFixture
+```
+
+### Verifying against the real SDK
 
 ```bash
 MONKEYC_LIVE_TESTS=1 ./gradlew test
 ```
+
+These build the fixture with the actual compiler, drive the actual language server and shake hands
+with the actual debug adapter. They are opt-in so a checkout on a machine without Connect IQ still
+goes green — a red test there would be reporting the machine rather than the code.
+
+`runSelfCheck` is the other half, and it catches a different kind of failure: an extension named in
+`plugin.xml` that does not register is silent at runtime. A language server that was never
+registered simply never starts, and what the user sees is an editor with no completion and nothing
+to report.
 
 ## Layout
 
@@ -56,8 +101,9 @@ MONKEYC_LIVE_TESTS=1 ./gradlew test
 sdk/       finding the SDK, reading the device catalogue, locating a JVM — no IDE API
 project/   settings, project layout, manifest and jungle conventions
 lang/      lexers, file types, colouring, commenting, bracket matching
-lsp/       the language server client
-build/     the compiler, and its output turned into Problems
-run/       run configurations: build, simulator, tests, export
+lsp/       the language server client and the workarounds it needs
+build/     the compiler, and its output turned into build events
+run/       run configurations, the simulator, monkeydo
 dap/       the debug adapter client
+ui/        settings, the device widget, export, the self-check
 ```
