@@ -1,7 +1,9 @@
-.gradle/
-.kotlin/
-.intellijPlatform/
-build/
-out/
+# Anchored to the repository root: the plugin has a source package called
+# `build`, and an unanchored pattern silently swallowed it.
+/.gradle/
+/.kotlin/
+/.intellijPlatform/
+/build/
+/out/
 *.iml
-.idea/
+/.idea/
