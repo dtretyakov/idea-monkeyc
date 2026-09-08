@@ -84,13 +84,33 @@ class MonkeyCLaunchProcessHandler(
         } else {
             notifyTextAvailable("\n$verb ${built.output}\n", ProcessOutputTypes.SYSTEM)
         }
-        if (options.forDevice) {
+        if (options.forDevice) offerToInstall(built)
+        notifyProcessTerminated(0)
+    }
+
+    /**
+     * Says where the build can go, and offers to put it there when a watch is plugged in.
+     *
+     * A build for the device exists to end up on a device, and until now the console said so and
+     * left the four clerical steps — find the volume, find `GARMIN/APPS`, copy, unplug — to the
+     * developer. Offered rather than done: it writes to hardware the user owns, and the moment
+     * they connected it is not necessarily the moment they meant to install anything.
+     */
+    private fun offerToInstall(built: BuiltArtifact) {
+        val volumes = GarminVolume.mounted()
+        if (volumes.isEmpty()) {
             notifyTextAvailable(
                 "Copy it to GARMIN/APPS on the watch over USB to install it.\n",
                 ProcessOutputTypes.SYSTEM,
             )
+            return
         }
-        notifyProcessTerminated(0)
+
+        notifyTextAvailable(
+            "Connected: ${volumes.joinToString { it.name }}.\n",
+            ProcessOutputTypes.SYSTEM,
+        )
+        MonkeyCInstallNotice.offer(project, built, volumes)
     }
 
     private fun runInSimulator() {

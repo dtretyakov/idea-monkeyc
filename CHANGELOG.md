@@ -14,6 +14,10 @@ First release.
 - The language server can be turned off per project, for machines and layouts where a second JVM
   compiling in the background costs more than it gives. Building, running, debugging and
   highlighting are unaffected, and the setup checklist says when it is off.
+- When the language server dies it is said out loud, with an offer to start it again; when it keeps
+  dying, that is said instead, because starting it again is then not the answer.
+- The server reports its worst failures as `null`. Where the plugin can see the cause — no devices
+  downloaded, device data it cannot read, a jungle file it cannot reach — it says so.
 - Parameter info, the file structure popup, breadcrumbs, and moving the caret to the start or end
   of a block.
 - The Connect IQ SDK and the project's barrels under External Libraries, searchable and openable.
@@ -28,7 +32,9 @@ First release.
 
 - Run configurations for the app, its unit tests, a build that runs nothing, an export to `.iq`,
   a barrel, and a barrel's tests.
-- A build for the watch rather than the simulator, producing a `.prg` to copy to `GARMIN/APPS`.
+- A build for the watch rather than the simulator. When a Garmin device is plugged in, the plugin
+  offers to install the `.prg` on it, with the settings the simulator wrote — and says that the
+  file vanishing from the folder afterwards is the install working, not failing.
 - Builds are skipped when the output already matches the sources and the compiler flags — except
   an export, which is always built fresh, because a stale `.iq` is found out after it is published.
 - Every build reports what it takes of the target device's memory, and what is left. The limits
@@ -36,7 +42,10 @@ First release.
   between devices.
 - The target device is chosen beside the Run button and defaults to the first product the
   manifest declares. Devices that cannot run this kind of app are not offered.
-- Compiler diagnostics in the Build tool window, with clickable locations.
+- Compiler diagnostics in the Build tool window, with clickable locations, and how long the build
+  took beside them.
+- A device the manifest declares but the SDK Manager never downloaded is named before the build
+  starts, rather than reported by the compiler as a device it cannot find.
 - A run survives the simulator refusing it: the SDK leaks two pipes per run and stops accepting
   connections after a few dozen, so the app is pushed again, and the simulator restarted before a
   third attempt.
@@ -56,6 +65,8 @@ First release.
 
 ### Around it
 
+- A setup checklist that names the JVM and its version: the JRE is the largest unmarked
+  performance variable on this platform, and nothing anywhere suggests looking at it.
 - A new project wizard built on the SDK's own templates.
 - Developer key generation, without needing openssl.
 - A form editor for `manifest.xml`, with products, permissions and languages.
