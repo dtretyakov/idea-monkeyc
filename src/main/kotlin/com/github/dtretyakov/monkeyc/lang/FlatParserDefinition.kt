@@ -78,6 +78,23 @@ class MssParserDefinition : FlatParserDefinition(
         SourceFile(viewProvider, MssLanguage, MssFileType)
 }
 
+/**
+ * The API surface reuses the Monkey C lexer.
+ *
+ * The IR is Monkey C's syntax with annotations and empty bodies, so every keyword, string and
+ * comment lexes the same; what differs - `<init>` blocks, `[@file = ...]` annotation lists - falls
+ * out as operators and identifiers, which is exactly how they should look.
+ */
+class ApiMirParserDefinition : FlatParserDefinition(
+    ApiMirTokens.FILE,
+    MonkeyCTokens.COMMENTS,
+    MonkeyCTokens.STRINGS,
+) {
+    override fun createLexer(project: Project?): Lexer = MonkeyCLexer()
+    override fun createFile(viewProvider: FileViewProvider): PsiFile =
+        SourceFile(viewProvider, ApiMirLanguage, ApiMirFileType)
+}
+
 /** The PSI file for all three languages; it carries tokens and nothing else. */
 class SourceFile(
     viewProvider: FileViewProvider,

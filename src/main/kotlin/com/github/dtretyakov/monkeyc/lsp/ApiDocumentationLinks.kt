@@ -39,7 +39,15 @@ object ApiDocumentationLinks {
         return DEAD_MARKDOWN_LINK.replace(DEAD_LINK.replace(linked) { it.groupValues[1] }) { it.groupValues[1] }
     }
 
-    private fun documentationUrl(sdk: ConnectIqSdk?, member: String, module: String): String? {
+    /**
+     * The page the SDK ships for a symbol, as a `file:` URL.
+     *
+     * `module` is the scope that owns the page — `Toybox.Graphics` for a constant, and
+     * `Toybox.Graphics.Dc` for one of its methods — and `member` is the anchor, which the doc
+     * generator writes as `<name>-<kind>`: `COLOR_WHITE-const`, `drawText-instance_function`.
+     * Null when this SDK has no such page, so a caller can say so rather than open nothing.
+     */
+    fun documentationUrl(sdk: ConnectIqSdk?, member: String, module: String): String? {
         if (sdk == null || module.isEmpty()) return null
         val page = module.split('.').fold(sdk.root.resolve("doc")) { path, part -> path.resolve(part) }
         val file = page.resolveSibling("${page.fileName}.html")

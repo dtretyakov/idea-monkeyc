@@ -27,3 +27,17 @@ object MssFileType : LanguageFileType(MssLanguage) {
     override fun getDefaultExtension(): String = "mss"
     override fun getIcon(): Icon = MonkeyCIcons.MSS
 }
+
+/**
+ * `api.mir`, and the per-file `.mir` the compiler writes into `bin/`.
+ *
+ * Read-only in practice rather than by declaration: the SDK's copy lives outside every content
+ * root, so the platform's own non-project-file banner covers it, and the project's own are under
+ * an excluded directory.
+ */
+object ApiMirFileType : LanguageFileType(ApiMirLanguage) {
+    override fun getName(): String = "Connect IQ API"
+    override fun getDescription(): String = "Connect IQ API surface"
+    override fun getDefaultExtension(): String = "mir"
+    override fun getIcon(): Icon = MonkeyCIcons.CONNECT_IQ
+}

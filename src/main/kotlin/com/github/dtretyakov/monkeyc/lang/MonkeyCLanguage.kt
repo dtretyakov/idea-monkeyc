@@ -29,3 +29,18 @@ object MssLanguage : Language("MSS") {
     override fun getDisplayName(): String = "Monkey Style Sheet"
     override fun isCaseSensitive(): Boolean = true
 }
+
+/**
+ * The intermediate representation the SDK ships the Toybox API in.
+ *
+ * A language of its own rather than an extra extension on Monkey C, and that is the point: LSP4IJ
+ * sends `didOpen` for every file mapped to a language the server serves, and handing the server
+ * its own `api.mir` would light the whole file up red. This language has no `languageMapping`, so
+ * nothing is ever sent for it. The syntax is close enough to Monkey C to reuse the lexer for
+ * colour, and everything else about the file — its outline, its folding — comes from the index.
+ */
+object ApiMirLanguage : Language("ConnectIqApi") {
+    private fun readResolve(): Any = ApiMirLanguage
+    override fun getDisplayName(): String = "Connect IQ API"
+    override fun isCaseSensitive(): Boolean = true
+}

@@ -1,6 +1,7 @@
 package com.github.dtretyakov.monkeyc.ui
 
 import com.github.dtretyakov.monkeyc.dap.MonkeyCDebugAdapterFactory
+import com.github.dtretyakov.monkeyc.lang.ApiMirFileType
 import com.github.dtretyakov.monkeyc.lang.JungleFileType
 import com.github.dtretyakov.monkeyc.lang.MonkeyCFileType
 import com.github.dtretyakov.monkeyc.lang.MssFileType
@@ -8,7 +9,14 @@ import com.github.dtretyakov.monkeyc.lsp.MonkeyCLanguageServerFactory
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.run.MonkeyCRunConfigurationType
 import com.intellij.execution.configurations.ConfigurationTypeUtil
+import com.github.dtretyakov.monkeyc.navigation.ApiMirGotoClassContributor
+import com.github.dtretyakov.monkeyc.navigation.ApiMirGotoDeclarationHandler
+import com.github.dtretyakov.monkeyc.navigation.ApiMirGotoSymbolContributor
+import com.github.dtretyakov.monkeyc.sdk.ApiMirService
+import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler
 import com.intellij.ide.highlighter.ArchiveFileType
+import com.intellij.navigation.ChooseByNameContributor
+import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.ide.wizard.GeneratorNewProjectWizard
 import com.intellij.openapi.application.ModernApplicationStarter
 import com.intellij.openapi.fileEditor.FileEditorProvider
@@ -48,11 +56,12 @@ class SelfCheckStarter : ModernApplicationStarter() {
             "mcgen" to MonkeyCFileType,
             "jungle" to JungleFileType,
             "mss" to MssFileType,
+            "mir" to ApiMirFileType,
         ).forEach { (extension, expected) ->
             val actual = fileTypes.getFileTypeByExtension(extension)
             if (actual != expected) problems += ".$extension is $actual, expected ${expected.name}"
         }
-        println("[self-check] file types: .mc .mcgen .jungle .mss")
+        println("[self-check] file types: .mc .mcgen .jungle .mss .mir")
 
         problems += barrelProblems()
 
@@ -89,6 +98,8 @@ class SelfCheckStarter : ModernApplicationStarter() {
         } else {
             println("[self-check] library provider: ${libraries.javaClass.simpleName}")
         }
+
+        problems += apiSurfaceProblems()
 
         val debugAdapter = DebugAdapterManager.getInstance()
             .getDebugAdapterServerById(MonkeyCDebugAdapterFactory.SERVER_ID)
@@ -151,6 +162,50 @@ class SelfCheckStarter : ModernApplicationStarter() {
         } finally {
             Files.deleteIfExists(probe)
         }
+    }
+
+    /**
+     * That the Toybox API can be searched and navigated into.
+     *
+     * Three registrations and one parser, and if any of them is wrong the result is the same as
+     * before any of this existed — F12 does nothing and Ctrl+N finds nothing — which is not a
+     * state anything reports. On a machine with an SDK the index is parsed for real, because a
+     * registration that resolves over a file that no longer parses is no better than no
+     * registration at all.
+     */
+    private fun apiSurfaceProblems(): List<String> {
+        val problems = mutableListOf<String>()
+
+        if (GotoDeclarationHandler.EP_NAME.extensionList.none { it is ApiMirGotoDeclarationHandler }) {
+            problems += "go to definition for Toybox symbols is not registered"
+        }
+        if (ChooseByNameContributor.SYMBOL_EP_NAME.extensionList.none { it is ApiMirGotoSymbolContributor }) {
+            problems += "Go to Symbol does not reach the Connect IQ API"
+        }
+        if (ChooseByNameContributor.CLASS_EP_NAME.extensionList.none { it is ApiMirGotoClassContributor }) {
+            problems += "Go to Class does not reach the Connect IQ API"
+        }
+        if (ActionManager.getInstance().getAction("MonkeyC.OpenApiDocumentation") == null) {
+            problems += "the API documentation action is not registered"
+        }
+
+        val sdk = ConnectIqSdkService.getInstance().sdk
+        if (sdk == null) {
+            println("[self-check] api surface: registered; no SDK here to parse")
+            return problems
+        }
+
+        val index = ApiMirService.getInstance().index()
+        when {
+            index == null -> problems += "the SDK at ${sdk.root} has no readable bin/api.mir"
+            index.size < 2_000 -> problems += "api.mir parsed to only ${index.size} symbols, so its format has moved"
+            index.exact("Toybox.Graphics.Dc.drawText") == null ->
+                problems += "api.mir parsed, but Toybox.Graphics.Dc.drawText is not in it"
+
+            else -> println("[self-check] api surface: ${index.size} symbols from bin/api.mir")
+        }
+
+        return problems
     }
 
     /**

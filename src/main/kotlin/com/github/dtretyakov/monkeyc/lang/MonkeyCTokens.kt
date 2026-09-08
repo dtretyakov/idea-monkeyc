@@ -110,3 +110,7 @@ object MssTokens {
     val COMMENTS = TokenSet.create(LINE_COMMENT, BLOCK_COMMENT)
     val STRINGS = TokenSet.create(STRING)
 }
+
+object ApiMirTokens {
+    val FILE = IFileElementType(ApiMirLanguage)
+}

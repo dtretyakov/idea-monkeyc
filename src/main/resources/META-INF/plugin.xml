@@ -53,6 +53,19 @@
         -->
         <fileType name="ARCHIVE" extensions="barrel"/>
 
+        <!--
+          The SDK's API surface, and the IR the compiler writes into bin/. Its own language, not
+          another extension on Monkey C: LSP4IJ sends didOpen for every file mapped to a language
+          the server serves, and handing the server its own api.mir would light the file up red.
+          There is deliberately no languageMapping for it below.
+        -->
+        <fileType
+            name="Connect IQ API"
+            language="ConnectIqApi"
+            extensions="mir"
+            implementationClass="com.github.dtretyakov.monkeyc.lang.ApiMirFileType"
+            fieldName="INSTANCE"/>
+
         <lang.parserDefinition
             language="MonkeyC"
             implementationClass="com.github.dtretyakov.monkeyc.lang.MonkeyCParserDefinition"/>
@@ -62,6 +75,9 @@
         <lang.parserDefinition
             language="MSS"
             implementationClass="com.github.dtretyakov.monkeyc.lang.MssParserDefinition"/>
+        <lang.parserDefinition
+            language="ConnectIqApi"
+            implementationClass="com.github.dtretyakov.monkeyc.lang.ApiMirParserDefinition"/>
 
         <lang.syntaxHighlighterFactory
             language="MonkeyC"
@@ -72,6 +88,10 @@
         <lang.syntaxHighlighterFactory
             language="MSS"
             implementationClass="com.github.dtretyakov.monkeyc.lang.MssSyntaxHighlighterFactory"/>
+        <!-- The IR is Monkey C's syntax with annotations and empty bodies; the same lexer colours it. -->
+        <lang.syntaxHighlighterFactory
+            language="ConnectIqApi"
+            implementationClass="com.github.dtretyakov.monkeyc.lang.MonkeyCSyntaxHighlighterFactory"/>
 
         <lang.commenter language="MonkeyC" implementationClass="com.github.dtretyakov.monkeyc.lang.MonkeyCCommenter"/>
         <lang.commenter language="Jungle" implementationClass="com.github.dtretyakov.monkeyc.lang.JungleCommenter"/>
@@ -120,6 +140,22 @@
         -->
         <additionalLibraryRootsProvider
             implementation="com.github.dtretyakov.monkeyc.library.ConnectIqLibraryProvider"/>
+
+        <!--
+          Going to a Toybox symbol, and finding one by name.
+
+          Garmin's server indexes api.mir and lands Type and Call Hierarchy in it, but its
+          DefinitionContext searches only the workspace's own files, so textDocument/definition on
+          WatchUi.Menu2 comes back empty - here and in VS Code alike. Registered last, so this runs
+          only when LSP4IJ has already declined, which is exactly the SDK's own symbols.
+        -->
+        <gotoDeclarationHandler
+            order="last"
+            implementation="com.github.dtretyakov.monkeyc.navigation.ApiMirGotoDeclarationHandler"/>
+        <gotoSymbolContributor
+            implementation="com.github.dtretyakov.monkeyc.navigation.ApiMirGotoSymbolContributor"/>
+        <gotoClassContributor
+            implementation="com.github.dtretyakov.monkeyc.navigation.ApiMirGotoClassContributor"/>
 
         <appStarter
             id="monkeyCSelfCheck"
@@ -244,6 +280,21 @@
           the run is, and switching it - a round face, then a square one - is most of testing a
           watch app.
         -->
+        <action
+            id="MonkeyC.OpenApiDocumentation"
+            class="com.github.dtretyakov.monkeyc.ui.OpenApiDocumentationAction"
+            text="Connect IQ API Documentation"
+            description="Opens Garmin's own page for the symbol under the caret, from the installed SDK"
+            use-shortcut-of="ExternalJavaDoc">
+            <!--
+              Borrowing the platform's External Documentation shortcut rather than declaring one.
+              Shift+F1 is what a developer already presses for this, and taking the binding by
+              reference means no second action claims it and no keymap conflict is reported: the
+              action is only enabled in a Monkey C or API file, so the two never compete.
+            -->
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+
         <action
             id="MonkeyC.SelectDevice"
             class="com.github.dtretyakov.monkeyc.ui.SelectDeviceAction"
