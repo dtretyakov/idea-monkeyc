@@ -18,9 +18,57 @@ data class ConnectIqDevice(
     val isTouch: Boolean,
     /** Newest Connect IQ version any of this device's part numbers supports. */
     val sdkVersion: SdkVersion?,
-    /** `watch-app`, `widget`, `datafield`, … — what a project may declare for this device. */
-    val appTypes: Set<String>,
-)
+    /**
+     * How much memory this device gives each kind of app, keyed by the catalogue's own names.
+     *
+     * The interesting number on this platform. A watch app gets between 64 KB and 768 KB depending
+     * on the watch, a data field between 16 KB and 256 KB, and an app that fits one device fails
+     * to load on another with a message about a limit it does not name. Developers have been
+     * scraping these values out of `compiler.json` into shared spreadsheets to compare them; the
+     * file is already open here.
+     */
+    val memoryLimits: Map<String, Long>,
+) {
+    /** `watchApp`, `widget`, `datafield`, … — what a project may declare for this device. */
+    val appTypes: Set<String> get() = memoryLimits.keys
+
+    /**
+     * The memory this device allows an app of the kind the manifest declares, or null when it
+     * cannot run one at all.
+     */
+    fun memoryLimitFor(manifestAppType: String?): Long? =
+        AppTypes.catalogueName(manifestAppType)?.let { memoryLimits[it] }
+
+    /** Whether this device can run the kind of app the manifest declares. */
+    fun supports(manifestAppType: String?): Boolean =
+        AppTypes.catalogueName(manifestAppType)?.let { it in memoryLimits } ?: true
+}
+
+/**
+ * The two spellings of an app's kind, and the map between them.
+ *
+ * A manifest says `watch-app`; the device catalogue says `watchApp`. Nothing in the SDK writes the
+ * correspondence down, so it is here, checked against every device SDK 9.2.0 ships.
+ */
+object AppTypes {
+
+    private val CATALOGUE_NAMES = mapOf(
+        "watch-app" to "watchApp",
+        "watchface" to "watchFace",
+        "datafield" to "datafield",
+        "widget" to "widget",
+        "audio-content-provider-app" to "audioContentProvider",
+    )
+
+    /**
+     * What the catalogue calls this manifest app type, or null when the catalogue has no opinion.
+     *
+     * Null for a barrel, which declares no type and runs on nothing of its own, and for anything
+     * a later SDK invents — an unknown kind must not be read as an unsupported one.
+     */
+    fun catalogueName(manifestAppType: String?): String? =
+        manifestAppType?.let { CATALOGUE_NAMES[it] }
+}
 
 @Serializable
 private data class CompilerJson(
@@ -32,7 +80,7 @@ private data class CompilerJson(
     val partNumbers: List<PartNumberJson> = emptyList(),
 ) {
     @Serializable
-    data class AppTypeJson(val type: String? = null)
+    data class AppTypeJson(val type: String? = null, val memoryLimit: Long? = null)
 
     @Serializable
     data class PartNumberJson(val connectIQVersion: String? = null)
@@ -110,7 +158,9 @@ class DeviceCatalog(private val devicesRoot: Path) {
             family = compiler.deviceFamily,
             isTouch = simulator.display.isTouch,
             sdkVersion = compiler.partNumbers.mapNotNull { SdkVersion.parse(it.connectIQVersion) }.maxOrNull(),
-            appTypes = compiler.appTypes.mapNotNull { it.type }.toSet(),
+            memoryLimits = compiler.appTypes
+                .mapNotNull { type -> type.type?.let { it to (type.memoryLimit ?: return@mapNotNull null) } }
+                .toMap(),
         )
     }
 

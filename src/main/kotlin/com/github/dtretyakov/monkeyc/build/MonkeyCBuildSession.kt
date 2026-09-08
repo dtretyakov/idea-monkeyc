@@ -12,6 +12,8 @@ import com.intellij.build.events.impl.OutputBuildEventImpl
 import com.intellij.build.events.impl.ProgressBuildEventImpl
 import com.intellij.build.events.impl.StartBuildEventImpl
 import com.intellij.build.events.impl.SuccessResultImpl
+import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
+import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.intellij.openapi.project.Project
 import java.nio.file.Path
 
@@ -81,6 +83,17 @@ object MonkeyCBuildSession {
 
         result.messages.forEach { view.onEvent(id, event(id, it)) }
 
+        // Said here rather than only on a warning, because the number is the point: knowing an app
+        // sits at 40% of a watch's memory is what stops it reaching 100% on a device the developer
+        // does not own. And said on a failure too when the failure is about the limit — one of the
+        // compiler's two ways of reporting that names the size and the budget, and the other names
+        // neither, which the forums have called obscure for years.
+        if (result.succeeded || result.messages.any { it.isAboutTheLimit() }) {
+            memoryReport(project, spec)?.let {
+                view.onEvent(id, OutputBuildEventImpl(id, "Memory: $it\n", true))
+            }
+        }
+
         view.onEvent(
             id,
             FinishBuildEventImpl(
@@ -93,6 +106,31 @@ object MonkeyCBuildSession {
         )
 
         return result
+    }
+
+    /**
+     * A diagnostic about the memory budget that does not say what the budget was.
+     *
+     * SDK 9.2.0 has two of these. One reads "exceeds the PRG size limit of app type 'x' for device
+     * id 'y': n bytes used out of m available bytes", which needs nothing from us. The other is
+     * "exceeds the memory limit of 'x' applications for device id 'y'", which names no number at
+     * all — and that is the one the forums keep asking about.
+     */
+    private fun CompilerMessage.isAboutTheLimit(): Boolean =
+        text.contains("memory limit") && !text.contains("bytes used out of")
+
+    /**
+     * The built program measured against what the target device allows it, in words.
+     *
+     * Null whenever any part of the question is open — an export builds for many devices, a barrel
+     * for none — and silence is the right answer then.
+     */
+    private fun memoryReport(project: Project, spec: BuildSpec): String? {
+        val device = spec.device?.removeSuffix(SIMULATOR_SUFFIX)
+            ?.let { ConnectIqSdkService.getInstance().device(it) }
+            ?: return null
+        val appType = MonkeyCProject.getInstance(project).manifest(spec.root)?.appType
+        return MemoryBudget.of(spec.output, device, appType)?.let { MemoryBudget.describe(it) }
     }
 
     private fun event(id: Any, message: CompilerMessage): MessageEvent {
@@ -117,4 +155,7 @@ object MonkeyCBuildSession {
             FilePosition(file, (message.line ?: 1) - 1, message.column ?: 0),
         )
     }
+
+    /** A build for the simulator asks for `fenix7_sim`; the catalogue only knows `fenix7`. */
+    private const val SIMULATOR_SUFFIX = "_sim"
 }
