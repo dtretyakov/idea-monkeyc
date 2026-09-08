@@ -22,7 +22,9 @@ class MonkeyCRunConfigurationType : ConfigurationType {
     override fun getDisplayName(): String = "Connect IQ"
 
     override fun getConfigurationTypeDescription(): String =
-        "Builds a Monkey C project, and runs it or its unit tests in the Connect IQ simulator"
+        "Builds a Monkey C project, and runs it or its unit tests in the Connect IQ simulator. " +
+            "An app configuration can also run a complication pair — a second project alongside " +
+            "this one — or start the app in native pairing mode."
 
     override fun getIcon(): Icon = MonkeyCIcons.CONNECT_IQ
 

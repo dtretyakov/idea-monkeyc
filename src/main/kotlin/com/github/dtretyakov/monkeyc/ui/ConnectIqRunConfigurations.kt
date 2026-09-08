@@ -22,7 +22,7 @@ import com.intellij.openapi.project.Project
  */
 object ConnectIqRunConfigurations {
 
-    fun run(project: Project, kind: MonkeyCRunKind) {
+    fun run(project: Project, kind: MonkeyCRunKind, forDevice: Boolean = false) {
         val executor = ExecutorRegistry.getInstance().getExecutorById(DefaultRunExecutor.EXECUTOR_ID)
         if (executor == null) {
             // Should not happen — Run is part of the platform — but a menu item that does nothing
@@ -37,7 +37,7 @@ object ConnectIqRunConfigurations {
                 .notify(project)
             return
         }
-        ProgramRunnerUtil.executeConfiguration(settings(project, kind), executor)
+        ProgramRunnerUtil.executeConfiguration(settings(project, kind, forDevice), executor)
     }
 
     /**
@@ -46,10 +46,22 @@ object ConnectIqRunConfigurations {
      * Making a new one on every invocation would fill the run history with copies of the same
      * thing, and lose whatever the user had set on it.
      */
-    private fun settings(project: Project, kind: MonkeyCRunKind): RunnerAndConfigurationSettings {
+    private fun settings(
+        project: Project,
+        kind: MonkeyCRunKind,
+        forDevice: Boolean,
+    ): RunnerAndConfigurationSettings {
         val manager = RunManager.getInstance(project)
+
+        // Matched on both: a simulator build and a watch build are the same kind and produce
+        // binaries that will not run in each other's place, so reusing one for the other would
+        // quietly hand the user the wrong file.
         manager.allSettings
-            .firstOrNull { !it.isTemporary && (it.configuration as? MonkeyCRunConfiguration)?.options?.kind == kind }
+            .firstOrNull { candidate ->
+                if (candidate.isTemporary) return@firstOrNull false
+                val configuration = candidate.configuration as? MonkeyCRunConfiguration ?: return@firstOrNull false
+                configuration.options.kind == kind && configuration.options.forDevice == forDevice
+            }
             ?.let { return it }
 
         // The registered type, not a fresh instance of it: a configuration built from a factory
@@ -58,9 +70,14 @@ object ConnectIqRunConfigurations {
             .configurationFactories
             .first { it.name == kind.display }
 
-        return manager.createConfiguration(kind.display, factory).also {
-            (it.configuration as MonkeyCRunConfiguration).options.kind = kind
+        return manager.createConfiguration(nameFor(kind, forDevice), factory).also {
+            val configuration = it.configuration as MonkeyCRunConfiguration
+            configuration.options.kind = kind
+            configuration.options.forDevice = forDevice
             manager.addConfiguration(it)
         }
     }
+
+    private fun nameFor(kind: MonkeyCRunKind, forDevice: Boolean): String =
+        if (forDevice) "Build for Watch" else kind.display
 }

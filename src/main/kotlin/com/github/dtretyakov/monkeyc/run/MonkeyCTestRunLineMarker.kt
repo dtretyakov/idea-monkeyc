@@ -60,13 +60,27 @@ class MonkeyCTestConfigurationProducer : LazyRunConfigurationProducer<MonkeyCRun
             .configurationFactories
             .first { it.name == MonkeyCRunKind.TESTS.display }
 
+    /**
+     * A barrel's tests are a different build, and the gutter used to ignore that.
+     *
+     * It always made a `TESTS` configuration, which a barrel project then refused — so the only
+     * route to barrel tests was the Edit Configurations dialog, and the only thing pointing at it
+     * was the text of the refusal.
+     */
+    private fun kindFor(context: ConfigurationContext): MonkeyCRunKind {
+        val project = context.project ?: return MonkeyCRunKind.TESTS
+        val model = MonkeyCProject.getInstance(project)
+        val root = model.primaryRoot() ?: return MonkeyCRunKind.TESTS
+        return if (model.manifest(root)?.isBarrel == true) MonkeyCRunKind.BARREL_TESTS else MonkeyCRunKind.TESTS
+    }
+
     override fun setupConfigurationFromContext(
         configuration: MonkeyCRunConfiguration,
         context: ConfigurationContext,
         source: Ref<PsiElement>,
     ): Boolean {
         val selection = testsAt(context) ?: return false
-        configuration.options.kind = MonkeyCRunKind.TESTS
+        configuration.options.kind = kindFor(context)
         configuration.options.tests = selection.tests.joinToString(" ")
         configuration.name = selection.name
         return true

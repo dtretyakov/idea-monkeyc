@@ -110,6 +110,20 @@
 
     <actions>
         <action
+            id="MonkeyC.BuildApp"
+            class="com.github.dtretyakov.monkeyc.ui.BuildAppAction"
+            text="Build Connect IQ App"
+            description="Compiles the app for the simulator, without starting it">
+            <add-to-group group-id="BuildMenu" anchor="last"/>
+        </action>
+        <action
+            id="MonkeyC.BuildForWatch"
+            class="com.github.dtretyakov.monkeyc.ui.BuildForWatchAction"
+            text="Build Connect IQ App for Watch"
+            description="Compiles a .prg to copy to GARMIN/APPS over USB; a simulator build will not run on the watch">
+            <add-to-group group-id="BuildMenu" anchor="last"/>
+        </action>
+        <action
             id="MonkeyC.EditProducts"
             class="com.github.dtretyakov.monkeyc.ui.EditProductsAction"
             text="Edit Connect IQ Products..."
@@ -156,7 +170,7 @@
                 class="com.github.dtretyakov.monkeyc.ui.StopSimulatorAction"
                 text="Stop Simulator"
                 description="Closes the Connect IQ simulator"/>
-            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <add-to-group group-id="RunMenu" anchor="last"/>
         </group>
     </actions>
 
