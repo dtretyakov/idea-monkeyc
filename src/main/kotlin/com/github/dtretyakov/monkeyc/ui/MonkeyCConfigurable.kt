@@ -171,6 +171,19 @@ class MonkeyCConfigurable(private val project: Project) :
                 }
             }.enabled(sdk != null)
 
+            group("Code intelligence") {
+                row {
+                    checkBox("Analyse the project as it is edited")
+                        .bindSelected(settings::liveAnalysis)
+                        .comment(
+                            "Runs the language server the SDK ships, which is what completion, " +
+                                "diagnostics and navigation come from. It is a second JVM that " +
+                                "compiles the whole project in the background; turning it off " +
+                                "leaves building, running, debugging and highlighting untouched.",
+                        )
+                }
+            }.enabled(sdk != null)
+
             group("Compiler") {
                 row {
                     comment(

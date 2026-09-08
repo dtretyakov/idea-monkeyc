@@ -1,6 +1,8 @@
 package com.github.dtretyakov.monkeyc.lsp
 
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
+import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiFile
 import com.redhat.devtools.lsp4ij.client.features.LSPClientFeatures
 import com.redhat.devtools.lsp4ij.client.features.LSPHoverFeature
@@ -19,6 +21,15 @@ class MonkeyCClientFeatures : LSPClientFeatures() {
         setFileUriSupport(MonkeyCFileUriSupport)
         setHoverFeature(MonkeyCHoverFeature())
     }
+
+    /**
+     * The one gate that keeps the server from starting when live analysis is off.
+     *
+     * Asked per file rather than once, which is what LSP4IJ offers and what the setting needs
+     * anyway: it is per project, and one IDE window can hold several.
+     */
+    override fun isEnabled(file: VirtualFile): Boolean =
+        MonkeyCSettings.getInstance(project).liveAnalysis && super.isEnabled(file)
 }
 
 private class MonkeyCHoverFeature : LSPHoverFeature() {

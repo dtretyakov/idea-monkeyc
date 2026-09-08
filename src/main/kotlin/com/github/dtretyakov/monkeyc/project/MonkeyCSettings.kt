@@ -41,6 +41,19 @@ class MonkeyCSettings : PersistentStateComponent<MonkeyCSettings> {
     /** Pass `-w` to the compiler and ask the language server to publish warnings. */
     var compilerWarnings: Boolean = true
 
+    /**
+     * Whether to run the SDK's language server at all.
+     *
+     * On by default, because with it off there is no completion and no navigation. It can be
+     * turned off because the server is a second JVM that compiles the whole workspace in the
+     * background and does not always survive it: the same switch has been an open request against
+     * Garmin's VS Code extension since January 2025, from people working in containers, on very
+     * large projects, or with a jungle layout the server floods with errors that the compiler is
+     * perfectly happy with. Building, running, debugging and the lexer are unaffected — this is
+     * the analysis, not the plugin.
+     */
+    var liveAnalysis: Boolean = true
+
     /** Extra compiler arguments, split on whitespace. */
     var compilerOptions: String = ""
 

@@ -54,6 +54,9 @@ object ConnectIqEnvironment {
             add(sdkManager(SdkManagerApp.location(), hasSdk = sdk != null))
             add(sdk(sdk))
             if (sdk != null) add(languageServer(sdk))
+            if (project != null && sdk?.hasLanguageServer == true) {
+                add(liveAnalysis(MonkeyCSettings.getInstance(project).liveAnalysis))
+            }
             add(devices(service.devices().size, sdk != null, service.unreadableDevices()))
             add(developerKey(project))
             add(java(service.java()))
@@ -105,6 +108,25 @@ object ConnectIqEnvironment {
                 "It arrived in SDK ${SdkVersion.LANGUAGE_SERVER_MINIMUM}" +
                 (sdk.version?.let { "; this one is $it." } ?: "."),
             Fix.SDK_MANAGER,
+        )
+    }
+
+    /**
+     * Says so when the server has been switched off deliberately.
+     *
+     * Not blocking — it is a choice, and the build does not care. Reported all the same, because
+     * an editor with no completion and no reason on screen is precisely the failure this checklist
+     * exists to prevent, and "I turned it off three weeks ago" is a cause like any other.
+     */
+    internal fun liveAnalysis(enabled: Boolean): Item = if (enabled) {
+        Item("Live analysis", Status.READY, "The language server runs while you edit")
+    } else {
+        Item(
+            "Live analysis",
+            Status.MISSING,
+            "Turned off for this project, so there is no completion, no diagnostics and no " +
+                "navigation. Building, running and debugging are unaffected.",
+            blocking = false,
         )
     }
 

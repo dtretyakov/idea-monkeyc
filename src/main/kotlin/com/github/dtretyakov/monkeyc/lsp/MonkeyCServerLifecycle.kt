@@ -37,11 +37,23 @@ class MonkeyCServerLifecycle : ProjectActivity {
 
     private fun restart(project: Project) {
         if (project.isDisposed) return
+
+        val manager = LanguageServerManager.getInstance(project)
+
+        // Turning live analysis off has to actually stop the second JVM, not merely stop asking it
+        // questions. Someone who turned it off did so because of what it costs while it runs.
+        if (!MonkeyCSettings.getInstance(project).liveAnalysis) {
+            manager.stop(
+                MonkeyCLanguageServerFactory.SERVER_ID,
+                LanguageServerManager.StopOptions().setWillDisable(true),
+            )
+            return
+        }
+
         // Asked here rather than at startup: a manifest can appear after the project is open, and
         // the answer then has to be the current one.
         if (runReadActionBlocking { MonkeyCProject.getInstance(project).roots() }.isEmpty()) return
 
-        val manager = LanguageServerManager.getInstance(project)
         manager.stop(
             MonkeyCLanguageServerFactory.SERVER_ID,
             // The user did not ask for the server to go away, only for it to catch up.

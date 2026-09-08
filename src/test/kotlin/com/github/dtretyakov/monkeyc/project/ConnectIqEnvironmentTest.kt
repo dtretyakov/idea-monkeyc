@@ -102,4 +102,29 @@ class ConnectIqEnvironmentTest {
 
         assertEquals(Status.READY, item.status)
     }
+    @Test
+    fun `live analysis switched off is reported, and does not block`() {
+        val item = ConnectIqEnvironment.liveAnalysis(enabled = false)
+
+        assertEquals(Status.MISSING, item.status)
+        assertFalse(item.blocking, "it is a choice, and the build does not care")
+        assertNull(item.fix, "the fix is the checkbox the user already knows about")
+        assertNull(
+            ConnectIqEnvironment.firstProblem(listOf(item)),
+            "turning it off must not raise the editor banner",
+        )
+        assertTrue(
+            item.detail.contains("completion"),
+            "the point of reporting it is to explain the missing completion",
+        )
+    }
+
+    @Test
+    fun `live analysis switched on is the quiet case`() {
+        val item = ConnectIqEnvironment.liveAnalysis(enabled = true)
+
+        assertEquals(Status.READY, item.status)
+        assertTrue(ConnectIqEnvironment.isReady(listOf(item)))
+    }
+
 }
