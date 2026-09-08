@@ -136,6 +136,35 @@ class MonkeyCProject(private val project: Project) {
         }
     }
 
+    /**
+     * Why this project cannot be built for [device], in words, or null when it can.
+     *
+     * Asked before the compiler is started. Without it the three ways of being wrong about a
+     * device all arrive as the compiler's own complaint, which names the device and not the
+     * reason — and the commonest of the three, a device the manifest declares that the SDK Manager
+     * never downloaded, is one the plugin can see and offer to fix.
+     */
+    fun deviceProblem(root: Path, device: String): String? {
+        val manifest = manifest(root)
+        return DeviceProblems.of(
+            device = device,
+            declared = manifest?.devices.orEmpty(),
+            installed = ConnectIqSdkService.getInstance().device(device),
+            appType = manifest?.appType,
+        )
+    }
+
+    /**
+     * Every device the manifest declares that the SDK Manager has not downloaded.
+     *
+     * Named rather than counted: "get them with the SDK Manager" is a different errand when it is
+     * one device from when it is nine, and knowing which is what makes it doable.
+     */
+    fun undownloadedDevices(root: Path): List<String> {
+        val installed = ConnectIqSdkService.getInstance().devices().map { it.id }.toSet()
+        return manifest(root)?.devices.orEmpty().filter { it !in installed }
+    }
+
     companion object {
         fun getInstance(project: Project): MonkeyCProject = project.service()
     }

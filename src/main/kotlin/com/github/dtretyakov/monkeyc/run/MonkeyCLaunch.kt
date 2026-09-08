@@ -5,6 +5,7 @@ import com.github.dtretyakov.monkeyc.build.BuildSpec
 import com.github.dtretyakov.monkeyc.build.MonkeyCBuildSession
 import com.github.dtretyakov.monkeyc.build.MonkeyCBuilder
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
+import com.github.dtretyakov.monkeyc.project.DeviceProblems
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.project.ProjectLayout
@@ -70,6 +71,11 @@ object MonkeyCLaunch {
 
         val kind = options.kind
         val device = if (kind.buildKind.needsDevice) resolveDevice(project, model, root, options) else ""
+        // Checked here rather than left to the compiler. All three ways of being wrong about a
+        // device reach it as one complaint that names the device and not the reason, and the
+        // commonest of them — declared in the manifest, never downloaded — is one the plugin can
+        // see coming and say plainly.
+        model.deviceProblem(root, device)?.let { throw ExecutionException(it) }
         // A barrel is unsigned, so it is the one kind that can be built without a key at all.
         val key = model.developerKey()
         if (key == null && kind.buildKind.needsDeveloperKey) {
@@ -287,11 +293,19 @@ object MonkeyCLaunch {
         // Nothing chosen yet — usually a project opened before the SDK had finished loading, so
         // the choice made at open time found no devices to make. Pick one now and record it, so
         // that the selector beside the Run button shows what is actually being built.
-        val chosen = model.defaultDevice(root)
-            ?: throw ExecutionException(
-                "None of the devices this project declares is downloaded. Get them with the SDK Manager.",
-            )
+        val chosen = model.defaultDevice(root) ?: throw ExecutionException(noDeviceReason(model, root))
         settings.targetDevice = chosen
         return chosen
     }
+
+    /**
+     * Why there is no device to build for, naming the devices rather than counting them.
+     *
+     * "Get them with the SDK Manager" is a different errand for one device than for nine, and
+     * knowing which ones is what makes it an errand at all.
+     */
+    private fun noDeviceReason(model: MonkeyCProject, root: Path): String = DeviceProblems.noneAvailable(
+        declared = model.manifest(root)?.devices.orEmpty(),
+        undownloaded = model.undownloadedDevices(root),
+    )
 }
