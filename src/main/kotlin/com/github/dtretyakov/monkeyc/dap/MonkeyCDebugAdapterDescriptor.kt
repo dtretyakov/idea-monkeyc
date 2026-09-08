@@ -3,6 +3,7 @@ package com.github.dtretyakov.monkeyc.dap
 import com.github.dtretyakov.monkeyc.lang.MonkeyCFileType
 import com.github.dtretyakov.monkeyc.lsp.SdkServerCommands
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
+import com.github.dtretyakov.monkeyc.run.MonkeyCDeviceTarget
 import com.github.dtretyakov.monkeyc.run.MonkeyCLaunch
 import com.github.dtretyakov.monkeyc.run.MonkeyCRunOptions
 import com.github.dtretyakov.monkeyc.run.PreparedLaunch
@@ -43,7 +44,11 @@ class MonkeyCDebugAdapterDescriptor(
             ?: throw ExecutionException("This debug configuration is not a Connect IQ one.")
 
         val indicator = ProgressManager.getInstance().progressIndicator
-        prepared = MonkeyCLaunch.prepare(environment.project, monkeyCOptions) { step ->
+        prepared = MonkeyCLaunch.prepare(
+            environment.project,
+            monkeyCOptions,
+            MonkeyCDeviceTarget.deviceOf(environment.executionTarget),
+        ) { step ->
             indicator?.text = step
         }
 

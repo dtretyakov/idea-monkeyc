@@ -23,6 +23,10 @@ dependencies {
     intellijPlatform {
         intellijIdea(libs.versions.ideaVersion)
         plugin("com.redhat.devtools.lsp4ij:${libs.versions.lsp4ij.get()}")
+        // The test tree: SMTRunnerConsoleView and the service messages it is driven by. Bundled
+        // with every IDE, but in an implementation-detail plugin, so it has to be asked for.
+        bundledModule("intellij.platform.testRunner")
+        bundledModule("intellij.platform.smRunner")
         pluginVerifier()
         // Gives the tests a real Project, so the parts that only exist inside an IDE — the
         // manifest form editor, for one — can be exercised rather than only compiled.

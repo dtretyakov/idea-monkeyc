@@ -10,21 +10,25 @@ import com.redhat.devtools.lsp4ij.dap.configurations.DAPRunConfigurationOptionsB
  */
 class MonkeyCRunOptions : DAPRunConfigurationOptionsBase() {
 
-    /** Empty means "the project's target device", and failing that, ask. */
+    private val kindOption = string(MonkeyCRunKind.APP.name).provideDelegate(this, "kind")
+
+    /** Empty means "whatever is selected next to the Run button". */
     private val deviceOption = string("").provideDelegate(this, "device")
-    private val runTestsOption = property(false).provideDelegate(this, "runTests")
     private val testNameOption = string("").provideDelegate(this, "testName")
     private val stopAtLaunchOption = property(false).provideDelegate(this, "stopAtLaunch")
     private val nativePairingOption = property(false).provideDelegate(this, "runNativePairing")
+    private val forDeviceOption = property(false).provideDelegate(this, "forDevice")
     private val compilerArgumentsOption = string("").provideDelegate(this, "compilerArguments")
+
+    var kind: MonkeyCRunKind
+        get() = MonkeyCRunKind.of(kindOption.getValue(this))
+        set(value) = kindOption.setValue(this, value.name)
 
     var device: String
         get() = deviceOption.getValue(this).orEmpty()
         set(value) = deviceOption.setValue(this, value)
 
-    var runTests: Boolean
-        get() = runTestsOption.getValue(this)
-        set(value) = runTestsOption.setValue(this, value)
+    val runTests: Boolean get() = kind.isTests
 
     /** A single test to run, rather than all of them. */
     var testName: String
@@ -40,6 +44,17 @@ class MonkeyCRunOptions : DAPRunConfigurationOptionsBase() {
     var runNativePairing: Boolean
         get() = nativePairingOption.getValue(this)
         set(value) = nativePairingOption.setValue(this, value)
+
+    /**
+     * Build for the watch rather than for the simulator.
+     *
+     * The compiler is told `fenix7` instead of `fenix7_sim`, and the two are not interchangeable:
+     * a simulator build refuses to start on the watch. This is the only way to get a `.prg` that
+     * can be copied to `GARMIN/APPS` over USB.
+     */
+    var forDevice: Boolean
+        get() = forDeviceOption.getValue(this)
+        set(value) = forDeviceOption.setValue(this, value)
 
     var compilerArguments: String
         get() = compilerArgumentsOption.getValue(this).orEmpty()

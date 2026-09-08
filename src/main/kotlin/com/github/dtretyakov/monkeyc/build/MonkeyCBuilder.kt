@@ -13,7 +13,12 @@ import com.intellij.util.io.awaitExit
 import kotlinx.coroutines.runBlocking
 import kotlin.io.path.createDirectories
 
-data class BuildResult(val exitCode: Int, val messages: List<CompilerMessage>) {
+data class BuildResult(
+    val exitCode: Int,
+    val messages: List<CompilerMessage>,
+    /** The compiler was not started: the output already matched the sources and the flags. */
+    val upToDate: Boolean = false,
+) {
     val succeeded: Boolean get() = exitCode == 0
     val errors: List<CompilerMessage>
         get() = messages.filter { it.severity == CompilerMessage.Severity.ERROR }
@@ -27,6 +32,23 @@ data class BuildResult(val exitCode: Int, val messages: List<CompilerMessage>) {
  * long enough that silence looks like a hang.
  */
 object MonkeyCBuilder {
+
+    /**
+     * Whether the compiler can be skipped altogether.
+     *
+     * Asked before a build tab is opened rather than inside the build, so that a Run that has
+     * nothing to compile does not flash an empty Build window at the user.
+     */
+    fun isUpToDate(project: Project, spec: BuildSpec): Boolean {
+        val arguments = arguments(project, spec) ?: return false
+        return BuildFingerprint.isUpToDate(spec, arguments)
+    }
+
+    private fun arguments(project: Project, spec: BuildSpec): List<String>? {
+        val sdkService = ConnectIqSdkService.getInstance()
+        val sdk = sdkService.sdk ?: return null
+        return CompilerCommand.arguments(sdk, sdkService.java(), MonkeyCSettings.getInstance(project), spec)
+    }
 
     fun run(
         project: Project,
@@ -44,9 +66,13 @@ object MonkeyCBuilder {
 
         spec.output.parent?.createDirectories()
 
-        val command = GeneralCommandLine(
-            CompilerCommand.arguments(sdk, sdkService.java(), MonkeyCSettings.getInstance(project), spec),
-        ).withWorkingDirectory(spec.root)
+        val arguments = CompilerCommand.arguments(
+            sdk,
+            sdkService.java(),
+            MonkeyCSettings.getInstance(project),
+            spec,
+        )
+        val command = GeneralCommandLine(arguments).withWorkingDirectory(spec.root)
 
         onOutput(command.commandLineString + "\n\n", false)
 
@@ -83,6 +109,10 @@ object MonkeyCBuilder {
         handler.startNotify()
         val exitCode = runBlocking { handler.process.awaitExit() }
         handler.waitFor()
+
+        // Stamped only on success, and cleared otherwise: a failed build can still have replaced
+        // the previous output, and a stale stamp would then let the next run skip the compiler.
+        if (exitCode == 0) BuildFingerprint.record(spec, arguments) else BuildFingerprint.invalidate(spec.output)
 
         return BuildResult(exitCode, messages)
     }

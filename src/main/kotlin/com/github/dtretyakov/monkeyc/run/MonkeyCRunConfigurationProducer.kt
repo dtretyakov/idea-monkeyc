@@ -21,7 +21,7 @@ class MonkeyCRunConfigurationProducer : LazyRunConfigurationProducer<MonkeyCRunC
     override fun getConfigurationFactory(): ConfigurationFactory =
         ConfigurationTypeUtil.findConfigurationType(MonkeyCRunConfigurationType::class.java)
             .configurationFactories
-            .first()
+            .first { (it as MonkeyCRunConfigurationType.Factory).name == MonkeyCRunKind.APP.display }
 
     override fun setupConfigurationFromContext(
         configuration: MonkeyCRunConfiguration,
@@ -37,8 +37,8 @@ class MonkeyCRunConfigurationProducer : LazyRunConfigurationProducer<MonkeyCRunC
         configuration: MonkeyCRunConfiguration,
         context: ConfigurationContext,
     ): Boolean {
-        // One project, one app: any configuration that is not a test run is the one for this file.
-        return projectRoot(context) != null && !configuration.options.runTests
+        // One project, one app: the app configuration is the one for any file in it.
+        return projectRoot(context) != null && configuration.options.kind == MonkeyCRunKind.APP
     }
 
     private fun projectRoot(context: ConfigurationContext) =

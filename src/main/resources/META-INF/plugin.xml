@@ -15,6 +15,12 @@
     <depends>com.intellij.modules.platform</depends>
     <depends>com.redhat.devtools.lsp4ij</depends>
 
+    <dependencies>
+        <!-- The test tree the Connect IQ test runner's output is turned into. -->
+        <module name="intellij.platform.testRunner"/>
+        <module name="intellij.platform.smRunner"/>
+    </dependencies>
+
     <extensions defaultExtensionNs="com.intellij">
         <fileType
             name="Monkey C"
@@ -73,11 +79,18 @@
             implementation="com.github.dtretyakov.monkeyc.run.MonkeyCRunConfigurationType"/>
         <runConfigurationProducer
             implementation="com.github.dtretyakov.monkeyc.run.MonkeyCRunConfigurationProducer"/>
+        <runConfigurationProducer
+            implementation="com.github.dtretyakov.monkeyc.run.MonkeyCTestConfigurationProducer"/>
+        <runLineMarkerContributor
+            language="MonkeyC"
+            implementationClass="com.github.dtretyakov.monkeyc.run.MonkeyCTestRunLineMarkerContributor"/>
 
-        <statusBarWidgetFactory
-            id="MonkeyCDevice"
-            order="first"
-            implementation="com.github.dtretyakov.monkeyc.ui.DeviceStatusBarWidgetFactory"/>
+        <!--
+          The device selector next to the Run button. A Connect IQ executable is built for one
+          watch, so this is not a preference: it is what the run is.
+        -->
+        <executionTargetProvider
+            implementation="com.github.dtretyakov.monkeyc.run.MonkeyCExecutionTargetProvider"/>
 
         <notificationGroup id="Monkey C" displayType="BALLOON"/>
 

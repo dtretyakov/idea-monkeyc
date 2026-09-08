@@ -24,7 +24,19 @@ import java.nio.file.Path
  */
 object MonkeyCBuildSession {
 
-    fun run(project: Project, spec: BuildSpec, title: String): BuildResult {
+    fun run(
+        project: Project,
+        spec: BuildSpec,
+        title: String,
+        /** Off for a rebuild the user asked for by name, where "nothing to do" is the wrong answer. */
+        skipWhenUpToDate: Boolean = true,
+    ): BuildResult {
+        // Checked before the tab is opened: a run with nothing to compile should leave the Build
+        // window exactly as the last real build left it.
+        if (skipWhenUpToDate && MonkeyCBuilder.isUpToDate(project, spec)) {
+            return BuildResult(exitCode = 0, messages = emptyList(), upToDate = true)
+        }
+
         val id = Any()
         val view = project.getService(BuildViewManager::class.java)
         val started = System.currentTimeMillis()

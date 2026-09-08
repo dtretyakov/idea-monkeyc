@@ -9,11 +9,11 @@ import com.intellij.openapi.project.Project
 import javax.swing.Icon
 
 /**
- * Two ways to start a Connect IQ project: the app, and its unit tests.
+ * The ways to start a Connect IQ project: the app, its unit tests, and a build that runs nothing.
  *
- * They are one configuration with a flag rather than two kinds of thing, because everything up to
- * the last argument is identical — same compiler, same simulator, same push. Keeping them apart in
- * the New Configuration list is a matter of discoverability, not of design.
+ * They are one configuration with a [MonkeyCRunKind] rather than several kinds of thing, because
+ * everything up to the last argument is identical. Keeping them apart in the New Configuration
+ * list is a matter of discoverability, not of design.
  */
 class MonkeyCRunConfigurationType : ConfigurationType {
 
@@ -22,32 +22,22 @@ class MonkeyCRunConfigurationType : ConfigurationType {
     override fun getDisplayName(): String = "Connect IQ"
 
     override fun getConfigurationTypeDescription(): String =
-        "Runs a Monkey C app, or its unit tests, in the Connect IQ simulator"
+        "Builds a Monkey C project, and runs it or its unit tests in the Connect IQ simulator"
 
     override fun getIcon(): Icon = MonkeyCIcons.CONNECT_IQ
 
-    override fun getConfigurationFactories(): Array<ConfigurationFactory> = arrayOf(App(this), Tests(this))
+    override fun getConfigurationFactories(): Array<ConfigurationFactory> =
+        MonkeyCRunKind.entries.map { Factory(this, it) }.toTypedArray()
 
-    class App(type: ConfigurationType) : Base(type) {
-        override fun getId(): String = "Connect IQ App"
-        override fun getName(): String = "Connect IQ App"
-    }
+    class Factory(type: ConfigurationType, private val kind: MonkeyCRunKind) : ConfigurationFactory(type) {
 
-    class Tests(type: ConfigurationType) : Base(type) {
-        override fun getId(): String = "Connect IQ Tests"
-        override fun getName(): String = "Connect IQ Tests"
-        override fun configure(configuration: MonkeyCRunConfiguration) {
-            configuration.options.runTests = true
-        }
-    }
+        override fun getId(): String = kind.display
 
-    abstract class Base(type: ConfigurationType) : ConfigurationFactory(type) {
+        override fun getName(): String = kind.display
 
         override fun createTemplateConfiguration(project: Project): RunConfiguration =
-            MonkeyCRunConfiguration(project, this, name).also { configure(it) }
+            MonkeyCRunConfiguration(project, this, name).also { it.options.kind = kind }
 
         override fun getOptionsClass(): Class<out BaseState> = MonkeyCRunOptions::class.java
-
-        protected open fun configure(configuration: MonkeyCRunConfiguration) = Unit
     }
 }

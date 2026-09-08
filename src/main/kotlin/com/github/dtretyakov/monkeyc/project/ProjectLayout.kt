@@ -76,6 +76,16 @@ object ProjectLayout {
     fun appPrg(root: Path, projectName: String): Path =
         root.resolve(OUTPUT_DIRECTORY).resolve("${artifactName(projectName)}.prg")
 
+    /**
+     * A build for the watch itself, which gets its own name.
+     *
+     * A device build and a simulator build of the same project are different binaries that will
+     * not run in each other's place, so they must not share `bin/Name.prg` — and the device in the
+     * name is what tells you which watch the file on your desk belongs to.
+     */
+    fun devicePrg(root: Path, projectName: String, device: String): Path =
+        root.resolve(OUTPUT_DIRECTORY).resolve("${artifactName(projectName)}-$device.prg")
+
     /** Test builds get their own name so a test `.prg` never overwrites the app's. */
     fun testPrg(root: Path, projectName: String, device: String): Path =
         root.resolve(OUTPUT_DIRECTORY).resolve("test_${device}_${artifactName(projectName)}.prg")

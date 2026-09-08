@@ -1,6 +1,7 @@
 package com.github.dtretyakov.monkeyc.run
 
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
+import com.github.dtretyakov.monkeyc.run.test.MonkeyCTestMessages
 import com.intellij.execution.ExecutionException
 import com.intellij.execution.process.OSProcessHandler
 import com.intellij.execution.process.ProcessEvent
@@ -23,7 +24,16 @@ import java.io.OutputStream
 class MonkeyCLaunchProcessHandler(
     private val project: Project,
     private val options: MonkeyCRunOptions,
+    private val target: String?,
 ) : ProcessHandler() {
+
+    /**
+     * Turns the test runner's output into the events the test tree is built from.
+     *
+     * Only for a test run: an app's own output is the app's, and rewriting it would be a way to
+     * lose a line of it to a coincidence.
+     */
+    private val testMessages = if (options.kind.isTests) MonkeyCTestMessages() else null
 
     /** The app in the simulator, once there is one. Until then, there is nothing to kill. */
     @Volatile
@@ -46,27 +56,11 @@ class MonkeyCLaunchProcessHandler(
 
     private fun launch() {
         try {
-            val prepared = MonkeyCLaunch.prepare(project, options) { step ->
-                notifyTextAvailable("$step\n", ProcessOutputTypes.SYSTEM)
+            if (options.kind.launches && !options.forDevice) {
+                runInSimulator()
+            } else {
+                buildOnly()
             }
-            if (stopped) return
-
-            val java = ConnectIqSdkService.getInstance().java().toString()
-            val handler = OSProcessHandler(MonkeyDo.commandLine(prepared, java, options))
-            running = handler
-
-            handler.addProcessListener(
-                object : ProcessListener {
-                    override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) =
-                        notifyTextAvailable(event.text, outputType)
-
-                    override fun processTerminated(event: ProcessEvent) =
-                        notifyProcessTerminated(event.exitCode)
-                },
-            )
-
-            notifyTextAvailable("\nRunning on ${prepared.device}...\n\n", ProcessOutputTypes.SYSTEM)
-            handler.startNotify()
         } catch (e: ProcessCanceledException) {
             throw e
         } catch (e: Throwable) {
@@ -78,6 +72,61 @@ class MonkeyCLaunchProcessHandler(
             notifyProcessTerminated(1)
         }
     }
+
+    /** A configuration that builds and stops: the console reports where the artifact went. */
+    private fun buildOnly() {
+        val built = MonkeyCLaunch.build(project, options, target, ::report)
+        if (stopped) return
+
+        if (built.upToDate) {
+            notifyTextAvailable("\n${built.output} is up to date.\n", ProcessOutputTypes.SYSTEM)
+        } else {
+            notifyTextAvailable("\nBuilt ${built.output}\n", ProcessOutputTypes.SYSTEM)
+        }
+        if (options.forDevice) {
+            notifyTextAvailable(
+                "Copy it to GARMIN/APPS on the watch over USB to install it.\n",
+                ProcessOutputTypes.SYSTEM,
+            )
+        }
+        notifyProcessTerminated(0)
+    }
+
+    private fun runInSimulator() {
+        val prepared = MonkeyCLaunch.prepare(project, options, target, ::report)
+        if (stopped) return
+
+        val java = ConnectIqSdkService.getInstance().java().toString()
+        val handler = OSProcessHandler(MonkeyDo.commandLine(prepared, java, options))
+        running = handler
+
+        handler.addProcessListener(
+            object : ProcessListener {
+                override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
+                    if (testMessages != null && outputType === ProcessOutputTypes.STDOUT) {
+                        val translated = testMessages.translate(event.text)
+                        if (translated.isNotEmpty()) notifyTextAvailable(translated, outputType)
+                    } else {
+                        notifyTextAvailable(event.text, outputType)
+                    }
+                }
+
+                override fun processTerminated(event: ProcessEvent) {
+                    // A test still open here never reported a result, and the tree would show it
+                    // running for ever; this is the last chance to close it.
+                    testMessages?.flush()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?.let { notifyTextAvailable(it, ProcessOutputTypes.STDOUT) }
+                    notifyProcessTerminated(event.exitCode)
+                }
+            },
+        )
+
+        notifyTextAvailable("\nRunning on ${prepared.device}...\n\n", ProcessOutputTypes.SYSTEM)
+        handler.startNotify()
+    }
+
+    private fun report(step: String) = notifyTextAvailable("$step\n", ProcessOutputTypes.SYSTEM)
 
     override fun destroyProcessImpl() {
         stopped = true

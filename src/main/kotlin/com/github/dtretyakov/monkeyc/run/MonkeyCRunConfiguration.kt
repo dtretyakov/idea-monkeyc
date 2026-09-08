@@ -38,14 +38,17 @@ class MonkeyCRunConfiguration(
         if (executor.id == DefaultDebugExecutor.EXECUTOR_ID) {
             super.getState(executor, environment)
         } else {
-            MonkeyCRunState(project, options)
+            MonkeyCRunState(this, MonkeyCDeviceTarget.deviceOf(environment.executionTarget))
         }
 
     /**
      * Only Debug is claimed here. LSP4IJ's DAP runner takes every configuration that says yes, and
      * for Run the platform's own runner and [MonkeyCRunState] are the right pair.
+     *
+     * A configuration that builds and stops has nothing to debug, so it does not offer to.
      */
-    override fun canRun(executorId: String): Boolean = executorId == DefaultDebugExecutor.EXECUTOR_ID
+    override fun canRun(executorId: String): Boolean =
+        executorId == DefaultDebugExecutor.EXECUTOR_ID && options.kind.launches && !options.forDevice
 
     override fun getDebugAdapterServer(): DebugAdapterServerDefinition? =
         DebugAdapterManager.getInstance().getDebugAdapterServerById(MonkeyCDebugAdapterFactory.SERVER_ID)
