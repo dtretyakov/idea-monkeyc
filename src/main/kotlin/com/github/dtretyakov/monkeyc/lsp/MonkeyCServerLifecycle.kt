@@ -39,6 +39,12 @@ class MonkeyCServerLifecycle : ProjectActivity {
         if (project.isDisposed) return
 
         val manager = LanguageServerManager.getInstance(project)
+        val health = MonkeyCServerHealth.getInstance(project)
+
+        // Every stop from here is one we asked for. Without saying so, our own restarts — and the
+        // server restarts on every settings change, because it reads them once at initialize —
+        // would be counted as crashes and reported to the user as the server falling over.
+        health.expectStop()
 
         // Turning live analysis off has to actually stop the second JVM, not merely stop asking it
         // questions. Someone who turned it off did so because of what it costs while it runs.
@@ -53,6 +59,10 @@ class MonkeyCServerLifecycle : ProjectActivity {
         // Asked here rather than at startup: a manifest can appear after the project is open, and
         // the answer then has to be the current one.
         if (runReadActionBlocking { MonkeyCProject.getInstance(project).roots() }.isEmpty()) return
+
+        // A restart the user set in motion is a fresh start, not a continuation of whatever was
+        // wrong before it.
+        health.forget()
 
         manager.stop(
             MonkeyCLanguageServerFactory.SERVER_ID,

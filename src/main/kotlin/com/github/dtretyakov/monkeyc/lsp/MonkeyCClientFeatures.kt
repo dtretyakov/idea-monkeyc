@@ -4,6 +4,7 @@ import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiFile
+import com.redhat.devtools.lsp4ij.ServerStatus
 import com.redhat.devtools.lsp4ij.client.features.LSPClientFeatures
 import com.redhat.devtools.lsp4ij.client.features.LSPHoverFeature
 import org.eclipse.lsp4j.MarkupContent
@@ -30,6 +31,20 @@ class MonkeyCClientFeatures : LSPClientFeatures() {
      */
     override fun isEnabled(file: VirtualFile): Boolean =
         MonkeyCSettings.getInstance(project).liveAnalysis && super.isEnabled(file)
+
+    /**
+     * Notices the server going away, so that it can be said rather than merely happen.
+     *
+     * The whole value is in the sentence at the end of it. An editor whose completion has silently
+     * stopped is indistinguishable from an editor that never had any, and that confusion is most
+     * of what people report about Garmin's own extension.
+     */
+    override fun handleServerStatusChanged(status: ServerStatus) {
+        super.handleServerStatusChanged(status)
+        MonkeyCServerHealth.getInstance(project).statusChanged(status)?.let {
+            MonkeyCServerNotice.announce(project, it)
+        }
+    }
 }
 
 private class MonkeyCHoverFeature : LSPHoverFeature() {
