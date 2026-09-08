@@ -21,19 +21,21 @@ object DeviceProblems {
         declared: List<String>,
         installed: ConnectIqDevice?,
         appType: String?,
+        /** The manifest actually in play; a jungle can name one other than `manifest.xml`. */
+        manifestName: String = ManifestFile.FILE_NAME,
     ): String? {
         if (device.isEmpty()) return null
         if (declared.isNotEmpty() && device !in declared) {
-            return "$device is not one of the products ${ManifestFile.FILE_NAME} declares. " +
+            return "$device is not one of the products $manifestName declares. " +
                 "Add it there, or choose another device."
         }
         if (installed == null) {
-            return "$device is declared in ${ManifestFile.FILE_NAME} but has not been downloaded. " +
+            return "$device is declared in $manifestName but has not been downloaded. " +
                 "Get it with the SDK Manager."
         }
         if (!installed.supports(appType)) {
             return "${installed.displayName} does not run a $appType. " +
-                "Remove it from ${ManifestFile.FILE_NAME}, or change the application type."
+                "Remove it from $manifestName, or change the application type."
         }
         return null
     }
@@ -44,19 +46,23 @@ object DeviceProblems {
      * "Get them with the SDK Manager" is a different errand for one device than for nine, and
      * knowing which ones is what makes it an errand rather than a search.
      */
-    fun noneAvailable(declared: List<String>, undownloaded: List<String>): String = when {
+    fun noneAvailable(
+        declared: List<String>,
+        undownloaded: List<String>,
+        manifestName: String = ManifestFile.FILE_NAME,
+    ): String = when {
         declared.isEmpty() ->
-            "${ManifestFile.FILE_NAME} declares no products, so there is no device to build for."
+            "$manifestName declares no products, so there is no device to build for."
 
         undownloaded.size == declared.size ->
-            "None of the devices ${ManifestFile.FILE_NAME} declares has been downloaded " +
+            "None of the devices $manifestName declares has been downloaded " +
                 "(${list(undownloaded)}). Get them with the SDK Manager."
 
         undownloaded.isNotEmpty() ->
             "The devices this project can be built for are not downloaded: " +
                 "${list(undownloaded)}. Get them with the SDK Manager."
 
-        else -> "None of the devices ${ManifestFile.FILE_NAME} declares can run this kind of app."
+        else -> "None of the devices $manifestName declares can run this kind of app."
     }
 
     private fun list(devices: List<String>): String =

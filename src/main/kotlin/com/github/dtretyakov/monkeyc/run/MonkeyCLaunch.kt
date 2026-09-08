@@ -308,5 +308,6 @@ object MonkeyCLaunch {
     private fun noDeviceReason(model: MonkeyCProject, root: Path): String = DeviceProblems.noneAvailable(
         declared = model.manifest(root)?.devices.orEmpty(),
         undownloaded = model.undownloadedDevices(root),
+        manifestName = model.manifestPath(root).fileName.toString(),
     )
 }

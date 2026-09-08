@@ -44,6 +44,26 @@ class ManifestFormEditorTest : IdeTestCase() {
         assertFalse(provider.accept(project, other.virtualFile))
     }
 
+    fun testClaimsAManifestUnderAnotherName() {
+        // A jungle names its own manifest, so a project building two variants has one that is not
+        // called `manifest.xml`. It used to get the text editor and nothing else, while the rest of
+        // the plugin treated it as the manifest.
+        val provider = ManifestEditorProvider()
+        myFixture.addFileToProject("monkey-api51.jungle", "project.manifest = manifest-api51.xml")
+        val variant = myFixture.addFileToProject("manifest-api51.xml", manifestXml)
+
+        assertTrue(provider.accept(project, variant.virtualFile))
+    }
+
+    fun testDeclinesXmlThatIsNotAManifest() {
+        // The namespace decides, not the extension — otherwise every XML file in the project would
+        // grow a Connect IQ form.
+        val provider = ManifestEditorProvider()
+        val strings = myFixture.addFileToProject("resources/strings.xml", "<strings><string id=\"a\">A</string></strings>")
+
+        assertFalse(provider.accept(project, strings.virtualFile))
+    }
+
     fun testBuildsTheForm() {
         myFixture.addFileToProject("monkey.jungle", "project.manifest = manifest.xml")
         val manifest = myFixture.addFileToProject(ManifestFile.FILE_NAME, manifestXml)

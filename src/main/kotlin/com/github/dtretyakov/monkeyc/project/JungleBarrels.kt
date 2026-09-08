@@ -6,7 +6,6 @@ import kotlin.io.path.extension
 import kotlin.io.path.isDirectory
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.listDirectoryEntries
-import kotlin.io.path.readText
 
 /**
  * The barrels a project depends on, read out of its jungle files.
@@ -37,44 +36,14 @@ object JungleBarrels {
             .distinct()
 
     /** The raw right-hand sides of every `barrelPath` assignment in one jungle. */
-    fun entries(jungle: Path): List<String> {
-        val text = jungle.runCatching { readText() }.getOrNull() ?: return emptyList()
-
-        return joinContinuations(text.lineSequence())
-            .mapNotNull { line ->
-                val statement = line.substringBefore('#').trim()
-                val separator = statement.indexOf('=')
-                if (separator < 0) return@mapNotNull null
-
-                val key = statement.take(separator).trim()
-                if (key != "barrelPath" && !key.endsWith(".barrelPath")) return@mapNotNull null
-
-                statement.drop(separator + 1)
-            }
-            .flatMap { value -> value.split(';').map { it.trim().trim('[', ']').trim() } }
+    fun entries(jungle: Path): List<String> =
+        JungleFile.assignments(jungle)
+            .filter { (key, _) -> key == "barrelPath" || key.endsWith(".barrelPath") }
+            .flatMap { (_, value) -> value.split(';').map { it.trim().trim('[', ']').trim() } }
             .filter { it.isNotEmpty() }
             // A `$(...)` reference to another entry needs the whole jungle resolved to mean
             // anything, which is exactly what this does not do.
             .filterNot { it.contains("$(") }
-            .toList()
-    }
-
-    /**
-     * A jungle assignment can be continued on the next line with a trailing backslash, and a value
-     * split over three lines is common enough in a real barrels jungle to matter.
-     */
-    private fun joinContinuations(lines: Sequence<String>): Sequence<String> = sequence {
-        val pending = StringBuilder()
-        lines.forEach { line ->
-            if (line.endsWith('\\')) {
-                pending.append(line.dropLast(1))
-            } else {
-                yield(pending.append(line).toString())
-                pending.setLength(0)
-            }
-        }
-        if (pending.isNotEmpty()) yield(pending.toString())
-    }
 
     private fun resolve(base: Path?, entry: String): List<Path> {
         val path = Path.of(entry).let { if (it.isAbsolute) it else base?.resolve(it) ?: return emptyList() }

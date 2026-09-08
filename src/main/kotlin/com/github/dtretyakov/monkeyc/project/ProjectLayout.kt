@@ -66,6 +66,16 @@ object ProjectLayout {
     }
 
     /**
+     * The manifest a build will read, given the jungles it will be given.
+     *
+     * The first jungle that names one wins, matching the compiler, which takes the jungles in the
+     * order it is given them. A jungle that names none — the common case — means `manifest.xml`
+     * beside the project.
+     */
+    fun manifestPath(root: Path, jungles: List<Path>): Path =
+        jungles.firstNotNullOfOrNull { JungleFile.manifest(it) } ?: root.resolve(ManifestFile.FILE_NAME)
+
+    /**
      * The base name of the built artifact.
      *
      * Garmin strips everything but letters, digits and underscores from the project directory's

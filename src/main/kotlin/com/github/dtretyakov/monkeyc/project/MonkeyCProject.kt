@@ -48,7 +48,22 @@ class MonkeyCProject(private val project: Project) {
     /** The single root when there is one, so commands that need "the project" have an answer. */
     fun primaryRoot(): Path? = roots().firstOrNull()
 
-    fun manifest(root: Path): ManifestFile? = ManifestFile.parse(root.resolve(ManifestFile.FILE_NAME))
+    fun manifest(root: Path): ManifestFile? = ManifestFile.parse(manifestPath(root))
+
+    /**
+     * The manifest the build will actually read.
+     *
+     * A jungle names its own with `project.manifest`, and that is how a project builds more than
+     * one variant from one source tree — a real one in the wild has `monkey.jungle` naming
+     * `manifest.xml` and `monkey-api51.jungle` naming `manifest-api51.xml`, with different products
+     * and different minimum API levels. Reading `manifest.xml` regardless, which is what this used
+     * to do, makes every device-derived answer here about the wrong file: the device selector, the
+     * memory budget's target, the app-type filter and the missing-device diagnostics.
+     *
+     * The first jungle that names one wins, matching the compiler, which takes the jungles in the
+     * order it is given them. A jungle that names none — the common case — means the default.
+     */
+    fun manifestPath(root: Path): Path = ProjectLayout.manifestPath(root, jungleFiles(root))
 
     /**
      * Why the manifest cannot be read, in words, or null when it can.
@@ -59,8 +74,17 @@ class MonkeyCProject(private val project: Project) {
      * complaint, which is exactly what those checks exist to prevent.
      */
     fun manifestProblem(root: Path): String? {
-        val path = root.resolve(ManifestFile.FILE_NAME)
-        if (!path.exists()) return "${path.fileName} is missing, so this is not a Connect IQ project."
+        val path = manifestPath(root)
+        if (!path.exists()) {
+            // Named by a jungle and absent is a different mistake from simply not being a Connect
+            // IQ project, and only one of the two is a typo the user can fix in a second.
+            val named = path.fileName != Path.of(ManifestFile.FILE_NAME)
+            return if (named) {
+                "${path.fileName} is named by a jungle file but does not exist."
+            } else {
+                "${path.fileName} is missing, so this is not a Connect IQ project."
+            }
+        }
         if (manifest(root) != null) return null
         return "${path.fileName} could not be read. Fix it in the editor: until then the plugin " +
             "cannot tell an app from a barrel, or find the devices to build for."
@@ -151,6 +175,7 @@ class MonkeyCProject(private val project: Project) {
             declared = manifest?.devices.orEmpty(),
             installed = ConnectIqSdkService.getInstance().device(device),
             appType = manifest?.appType,
+            manifestName = manifestPath(root).fileName.toString(),
         )
     }
 

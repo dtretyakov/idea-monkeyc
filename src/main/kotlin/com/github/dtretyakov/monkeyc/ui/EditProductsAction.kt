@@ -45,7 +45,9 @@ class EditProductsAction : AnAction() {
         val project = event.project ?: return
         val model = MonkeyCProject.getInstance(project)
         val root = model.primaryRoot() ?: return
-        val manifest = root.resolve(ManifestFile.FILE_NAME)
+        // The manifest the build reads, which a jungle can name: writing products into
+        // `manifest.xml` while the build uses `manifest-api51.xml` edits a file nobody compiles.
+        val manifest = model.manifestPath(root)
 
         val installed = ConnectIqSdkService.getInstance().devices()
         val minimum = model.manifest(root)?.minSdkVersion
