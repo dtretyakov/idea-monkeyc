@@ -1,7 +1,9 @@
 package com.github.dtretyakov.monkeyc.lsp
 
+import com.github.dtretyakov.monkeyc.project.ConnectIqEnvironment
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.ui.MonkeyCConfigurable
+import com.github.dtretyakov.monkeyc.ui.OpenSdkManager
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -26,6 +28,30 @@ object MonkeyCServerNotice {
                 MonkeyCServerHealth.Verdict.Crashed -> crashed(project)
                 is MonkeyCServerHealth.Verdict.KeepsCrashing -> keepsCrashing(project, verdict.times)
             }
+        }
+    }
+
+    /**
+     * Reports a cause the plugin worked out from a message that named none.
+     *
+     * Separate from the crash notices because the server is usually still running when this
+     * happens: it has started, failed to read something it needed, and will now answer every
+     * question with nothing. That looks exactly like a working server with nothing to say.
+     */
+    fun explain(project: Project, cause: ServerFailures.Cause) {
+        ApplicationManager.getApplication().invokeLater {
+            if (project.isDisposed) return@invokeLater
+            val actions = buildList {
+                if (cause.fix == ConnectIqEnvironment.Fix.SDK_MANAGER) {
+                    add(NotificationAction.createSimple(OpenSdkManager.label()) { OpenSdkManager.invoke(project) })
+                }
+                add(
+                    NotificationAction.createSimple("Settings") {
+                        ShowSettingsUtil.getInstance().showSettingsDialog(project, MonkeyCConfigurable::class.java)
+                    },
+                )
+            }
+            notify(project, cause.headline, cause.detail, NotificationType.WARNING, *actions.toTypedArray())
         }
     }
 

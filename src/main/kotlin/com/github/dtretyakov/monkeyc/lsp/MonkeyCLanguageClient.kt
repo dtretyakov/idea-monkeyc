@@ -1,5 +1,6 @@
 package com.github.dtretyakov.monkeyc.lsp
 
+import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.progress.ProgressIndicator
@@ -26,6 +27,9 @@ class MonkeyCLanguageClient(project: Project) : LanguageClientImpl(project) {
     private val indexed = CompletableFuture<Unit>()
     private val indicatorShown = AtomicBoolean(false)
 
+    /** One explanation per server. It repeats the failure for every file it is asked about. */
+    private val failureExplained = AtomicBoolean(false)
+
     /**
      * Turns the server's quietest sentence into the one thing the user needs to see.
      *
@@ -44,7 +48,36 @@ class MonkeyCLanguageClient(project: Project) : LanguageClientImpl(project) {
             indexed.complete(Unit)
             return
         }
+        explainFailure(params.message)
         if (indicatorShown.compareAndSet(false, true)) showIndexingProgress()
+    }
+
+    /**
+     * Answers the question the server's own message declines to.
+     *
+     * Its worst failures are reported by printing an exception message that is `null`, and the
+     * plugin can see what the server will not say — how many devices are downloaded, which of
+     * their folders cannot be read. Once per server, because a server that cannot read the devices
+     * says so about every file it is handed.
+     */
+    private fun explainFailure(message: String) {
+        if (failureExplained.get()) return
+        val cause = ServerFailures.explain(message, environment()) ?: return
+        if (!failureExplained.compareAndSet(false, true)) return
+        MonkeyCServerNotice.explain(project, cause)
+    }
+
+    private fun environment(): ServerFailures.Environment {
+        val service = ConnectIqSdkService.getInstance()
+        val paths = listOfNotNull(
+            service.sdk?.root?.toString(),
+            project.basePath,
+        ).filter { ServerFailures.isAwkward(it) }
+        return ServerFailures.Environment(
+            devicesDownloaded = service.devices().size,
+            unreadableDevices = service.unreadableDevices(),
+            awkwardPaths = paths,
+        )
     }
 
     private fun showIndexingProgress() {
