@@ -5,6 +5,7 @@ import com.github.dtretyakov.monkeyc.run.MonkeyCRunKind
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.application.runReadActionBlocking
 
 /**
  * Builds the `.iq` file the Connect IQ Store takes, or the `.barrel` a library project produces.
@@ -20,7 +21,9 @@ class ExportAction : AnAction() {
 
     override fun update(event: AnActionEvent) {
         val project = event.project
-        val root = project?.let { MonkeyCProject.getInstance(it).primaryRoot() }
+        // A read action because `update` runs on a background thread and the content roots are
+        // project model state.
+        val root = project?.let { runReadActionBlocking { MonkeyCProject.getInstance(it).primaryRoot() } }
         event.presentation.isEnabledAndVisible = root != null
         if (project != null && root != null) {
             val barrel = MonkeyCProject.getInstance(project).manifest(root)?.isBarrel == true
@@ -31,7 +34,7 @@ class ExportAction : AnAction() {
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
         val model = MonkeyCProject.getInstance(project)
-        val root = model.primaryRoot() ?: return
+        val root = runReadActionBlocking { model.primaryRoot() } ?: return
         val kind = if (model.manifest(root)?.isBarrel == true) MonkeyCRunKind.BARREL else MonkeyCRunKind.EXPORT
 
         ConnectIqRunConfigurations.run(project, kind)

@@ -58,13 +58,21 @@ object Simulator {
         if (processes.isEmpty()) return true
 
         processes.forEach { it.destroy() }
+        if (awaitGone(processes, timeoutMillis)) return true
+
+        // Asking harder, and then waiting again: destroyForcibly only delivers the signal, so
+        // reading isAlive straight afterwards reports "still running" for a process that is about
+        // to be gone — and the user would be told the simulator did not stop when it did.
+        processes.filter { it.isAlive }.forEach { it.destroyForcibly() }
+        return awaitGone(processes, FORCED_TIMEOUT_MILLIS)
+    }
+
+    private fun awaitGone(processes: List<ProcessHandle>, timeoutMillis: Long): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMillis
         while (System.currentTimeMillis() < deadline) {
             if (processes.none { it.isAlive }) return true
             Thread.sleep(POLL_MILLIS)
         }
-
-        processes.filter { it.isAlive }.forEach { it.destroyForcibly() }
         return processes.none { it.isAlive }
     }
 
@@ -121,5 +129,8 @@ object Simulator {
         }.getOrDefault(false)
 
     private const val POLL_MILLIS = 200L
+
+    /** How long a process gets after SIGKILL before the answer is "it is still there". */
+    private const val FORCED_TIMEOUT_MILLIS = 3_000L
     private const val CONNECT_TIMEOUT_MILLIS = 200
 }

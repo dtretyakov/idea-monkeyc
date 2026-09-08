@@ -10,6 +10,7 @@ import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.project.ProjectLayout
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
 import com.intellij.execution.ExecutionException
+import com.intellij.openapi.application.runReadActionBlocking
 import com.intellij.openapi.project.Project
 import java.nio.file.Path
 import kotlin.io.path.exists
@@ -60,7 +61,9 @@ object MonkeyCLaunch {
             )
 
         val model = MonkeyCProject.getInstance(project)
-        val root = model.primaryRoot()
+        // A read action: this runs on a pooled thread, and the content roots behind primaryRoot()
+        // may not be read without one.
+        val root = runReadActionBlocking { model.primaryRoot() }
             ?: throw ExecutionException("No Connect IQ project here: none of the content roots holds a manifest.xml.")
 
         checkKindSuitsProject(model, root, options.kind)

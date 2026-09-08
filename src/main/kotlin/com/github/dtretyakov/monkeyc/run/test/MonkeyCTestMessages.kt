@@ -29,7 +29,14 @@ class MonkeyCTestMessages {
     private var test: String? = null
     private val captured = StringBuilder()
 
-    /** Translates a chunk of output, which may end mid-line. */
+    /**
+     * Translates a chunk of output, which may end mid-line.
+     *
+     * Synchronized with [flush] because they arrive on different threads: the process's output
+     * reader and whichever one reports its exit. The state between them is a half-read line and a
+     * half-open test, and losing that race would close a test twice or not at all.
+     */
+    @Synchronized
     fun translate(chunk: String): String {
         val out = StringBuilder()
         incomplete.append(chunk)
@@ -49,6 +56,7 @@ class MonkeyCTestMessages {
      * A test still open here never reported a result, which happens when the app crashes partway
      * through. Left open, the tree would show it spinning forever.
      */
+    @Synchronized
     fun flush(): String {
         val out = StringBuilder()
         if (incomplete.isNotEmpty()) {

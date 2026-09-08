@@ -21,6 +21,7 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.util.Key
+import java.util.concurrent.atomic.AtomicBoolean
 import com.intellij.openapi.progress.ProgressManager
 import com.redhat.devtools.lsp4ij.dap.definitions.DebugAdapterServerDefinition
 import com.redhat.devtools.lsp4ij.dap.descriptors.DebugAdapterDescriptor
@@ -83,8 +84,13 @@ class MonkeyCDebugAdapterDescriptor(
     private fun watchForAWedgedSimulator(handler: ProcessHandler) {
         handler.addProcessListener(
             object : ProcessListener {
+                private val told = AtomicBoolean(false)
+
                 override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
                     if (!event.text.contains(CANNOT_CONNECT)) return
+                    // Once per session: the adapter repeats itself while it retries, and the same
+                    // balloon three times is three times as easy to dismiss without reading.
+                    if (!told.compareAndSet(false, true)) return
                     NotificationGroupManager.getInstance()
                         .getNotificationGroup("Monkey C")
                         .createNotification(

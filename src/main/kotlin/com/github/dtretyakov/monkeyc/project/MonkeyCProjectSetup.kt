@@ -13,6 +13,7 @@ import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
+import java.nio.file.Path
 import org.jetbrains.jps.model.java.JavaResourceRootType
 import org.jetbrains.jps.model.java.JavaSourceRootType
 import org.jetbrains.jps.model.module.JpsModuleSourceRootType
@@ -54,7 +55,7 @@ class MonkeyCProjectSetup : ProjectActivity {
         val roots = readAction { MonkeyCProject.getInstance(project).roots() }
         if (work.isEmpty() && roots.isEmpty()) return
 
-        chooseDeviceIfUnset(project, settings)
+        chooseDeviceIfUnset(project, settings, roots.firstOrNull())
 
         edtWriteAction {
             if (project.isDisposed) return@edtWriteAction
@@ -73,11 +74,11 @@ class MonkeyCProjectSetup : ProjectActivity {
      * including a choice the user made and then a device they later removed from the manifest —
      * that is a mismatch worth showing rather than silently correcting.
      */
-    private fun chooseDeviceIfUnset(project: Project, settings: MonkeyCSettings) {
-        if (settings.targetDevice.isNotEmpty()) return
-        val model = MonkeyCProject.getInstance(project)
-        val root = model.primaryRoot() ?: return
-        settings.targetDevice = model.defaultDevice(root) ?: return
+    private fun chooseDeviceIfUnset(project: Project, settings: MonkeyCSettings, root: Path?) {
+        if (settings.targetDevice.isNotEmpty() || root == null) return
+        // The root arrives already resolved under a read action; what is left reads the manifest
+        // and the SDK's device catalogue off disk, which wants to be outside one.
+        settings.targetDevice = MonkeyCProject.getInstance(project).defaultDevice(root) ?: return
     }
 
     /**

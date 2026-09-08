@@ -11,6 +11,7 @@ import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.Presentation
 import com.intellij.openapi.actionSystem.ex.CustomComponentAction
 import com.intellij.openapi.actionSystem.impl.ActionButtonWithText
+import com.intellij.openapi.application.runReadActionBlocking
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.util.ui.JBInsets
@@ -41,28 +42,30 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
 
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
-    override fun update(event: AnActionEvent) {
-        super.update(event)
-        val project = event.project
-        val presentation = event.presentation
+    override fun update(e: AnActionEvent) {
+        super.update(e)
+        val project = e.project
+        val presentation = e.presentation
 
         // Deliberately cheap: this runs on every toolbar update, and reading the manifest and the
         // device catalogue here would put a file read on the IDE's pulse. The list is built only
         // when the popup is actually opened.
-        val visible = project != null && MonkeyCProject.getInstance(project).primaryRoot() != null
+        // Under a read action: `update` runs on a background thread, and the content roots this
+        // walks are project model state, which may not be read without one.
+        val visible = project != null && runReadActionBlocking { MonkeyCProject.getInstance(project).primaryRoot() != null }
         presentation.isEnabledAndVisible = visible
         if (!visible) return
 
-        val device = MonkeyCSettings.getInstance(project!!).targetDevice
+        val device = MonkeyCSettings.getInstance(project).targetDevice
         presentation.setText(device.ifEmpty { "No device" }, false)
         presentation.icon = MonkeyCIcons.CONNECT_IQ
         presentation.description = "The watch that Build, Run and Debug target"
     }
 
-    override fun getActionGroup(event: AnActionEvent): ActionGroup? {
-        val project = event.project ?: return null
+    override fun getActionGroup(e: AnActionEvent): ActionGroup? {
+        val project = e.project ?: return null
         val model = MonkeyCProject.getInstance(project)
-        val root = model.primaryRoot() ?: return null
+        val root = runReadActionBlocking { model.primaryRoot() } ?: return null
 
         val devices = model.buildableDevices(root)
         if (devices.isEmpty()) {
