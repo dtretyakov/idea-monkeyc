@@ -9,11 +9,13 @@ import com.github.dtretyakov.monkeyc.sdk.ProjectGenerator
 import com.github.dtretyakov.monkeyc.sdk.ProjectInfo
 import com.github.dtretyakov.monkeyc.sdk.ProjectTemplate
 import com.github.dtretyakov.monkeyc.sdk.SdkVersion
+import com.github.dtretyakov.monkeyc.ui.OpenSdkManager
 import com.intellij.ide.wizard.AbstractNewProjectWizardStep
 import com.intellij.ide.wizard.NewProjectWizardBaseData.Companion.baseData
 import com.intellij.ide.wizard.NewProjectWizardStep
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.ui.components.ActionLink
 import com.intellij.ui.dsl.builder.Panel
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
@@ -61,9 +63,21 @@ class ConnectIqWizardStep(parent: NewProjectWizardStep) : AbstractNewProjectWiza
         if (info == null || choices.isEmpty()) {
             builder.row {
                 text(
-                    "No Connect IQ SDK was found. Install one with Garmin's SDK Manager, then set " +
-                        "its location in Settings | Languages &amp; Frameworks | Monkey C.",
+                    "No Connect IQ SDK was found. The templates, the API levels and the devices all " +
+                        "come from it, so there is nothing to create a project from yet.",
                 )
+            }
+            builder.row {
+                // A button rather than an instruction: the SDK is only obtainable through Garmin's
+                // own application, and telling someone to go and find it is most of the way to
+                // losing them.
+                cell(ActionLink(OpenSdkManager.label()) { OpenSdkManager.invoke(null) })
+                    // Without this the Create button stays enabled and makes an empty directory:
+                    // setupProject gives up quietly, and every later message then complains about
+                    // a project the plugin itself just created.
+                    .validationOnApply {
+                        error("Install the Connect IQ SDK before creating a project.")
+                    }
             }
             return
         }
@@ -89,11 +103,14 @@ class ConnectIqWizardStep(parent: NewProjectWizardStep) : AbstractNewProjectWiza
                 .enabled(devices.isNotEmpty())
                 .comment(
                     if (devices.isEmpty()) {
-                        "No devices are downloaded. Get some with the SDK Manager."
+                        "No devices are downloaded, so the project will declare none."
                     } else {
                         "More can be added to <code>manifest.xml</code> later."
                     },
                 )
+            if (devices.isEmpty()) {
+                cell(ActionLink(OpenSdkManager.label()) { OpenSdkManager.invoke(null) })
+            }
         }
 
         builder.row("") {

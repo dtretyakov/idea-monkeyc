@@ -84,11 +84,38 @@ class MonkeyCProject(private val project: Project) {
      */
     fun defaultDevice(root: Path): String? = buildableDevices(root).firstOrNull()?.id
 
-    /** The developer key to sign with: the project's, else the one the SDK Manager generated. */
+    /**
+     * The developer key to sign with: the project's, else the one the SDK Manager generated.
+     *
+     * The configured path is checked for existence rather than trusted. These settings live in
+     * `.idea/monkeyc.xml` and are committed, so a path is as likely to have come from a teammate's
+     * machine as from this one — and an unchecked path passes the "no key" gate and fails later,
+     * inside the compiler, in words that are about signing rather than about a missing file.
+     */
     fun developerKey(): Path? {
         val configured = MonkeyCSettings.getInstance(project).developerKeyPath.trim()
-        if (configured.isNotEmpty()) return Path.of(configured)
+        if (configured.isNotEmpty()) return Path.of(configured).takeIf { it.exists() }
         return ConnectIqSdkService.getInstance().sdk?.defaultDeveloperKey?.takeIf { it.exists() }
+    }
+
+    /**
+     * Why there is no key to sign with, in words, or null when there is one.
+     *
+     * A configured path that is not there is a different problem from having chosen nothing, and
+     * the two want different sentences: one is a file to find, the other is a key to make.
+     */
+    fun developerKeyProblem(): String? {
+        if (developerKey() != null) return null
+
+        val configured = MonkeyCSettings.getInstance(project).developerKeyPath.trim()
+        return if (configured.isNotEmpty()) {
+            "The developer key at $configured does not exist. The project's settings are committed, " +
+                "so the path may have come from another machine. Choose or generate one in " +
+                "Settings | Languages & Frameworks | Monkey C."
+        } else {
+            "No developer key. Set one in Settings | Languages & Frameworks | Monkey C, " +
+                "or let the SDK Manager generate one."
+        }
     }
 
     companion object {

@@ -73,10 +73,7 @@ object MonkeyCLaunch {
         // A barrel is unsigned, so it is the one kind that can be built without a key at all.
         val key = model.developerKey()
         if (key == null && kind.buildKind.needsDeveloperKey) {
-            throw ExecutionException(
-                "No developer key. Set one in Settings | Languages & Frameworks | Monkey C, " +
-                    "or let the SDK Manager generate one.",
-            )
+            throw ExecutionException(model.developerKeyProblem())
         }
 
         val simulator = !options.forDevice

@@ -10,7 +10,6 @@ import com.github.dtretyakov.monkeyc.project.ProjectLayout
 import com.github.dtretyakov.monkeyc.project.TypeCheckLevel
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
 import com.github.dtretyakov.monkeyc.sdk.DeveloperKey
-import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.fileChooser.FileSaverDescriptor
@@ -28,9 +27,6 @@ import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.builder.toNullableProperty
 import java.nio.file.Path
-import javax.swing.Icon
-import javax.swing.JEditorPane
-import javax.swing.JLabel
 import kotlin.io.path.exists
 
 /**
@@ -50,29 +46,33 @@ class MonkeyCConfigurable(private val project: Project) :
         val sdkService = ConnectIqSdkService.getInstance()
 
         val sdk = sdkService.sdk
-        val devices = model.primaryRoot()?.let { model.buildableDevices(it) }.orEmpty()
+        // Kept apart on purpose: an empty device list means one thing when there is a project to
+        // read the manifest from and quite another when there is not, and the page used to give
+        // the same advice — go and download devices — for both.
+        val root = model.primaryRoot()
+        val devices = root?.let { model.buildableDevices(it) }.orEmpty()
         val target = DeviceChoices(devices)
 
-        lateinit var summary: JLabel
-        lateinit var location: JEditorPane
+        lateinit var environment: EnvironmentPanel
 
         return panel {
-            group("SDK (this computer)") {
+            group("Setup") {
                 row {
-                    // Not one long line: the path alone is a hundred characters, and a label that
-                    // wide sets the width of the whole dialog and is still cut off at the end.
-                    summary = label(sdkSummary()).applyToComponent { icon = sdkIcon() }.component
+                    // The whole checklist rather than a one-line summary: the six things that have
+                    // to be in place are met one at a time by a newcomer, and meeting them one at a
+                    // time is exactly what makes a first run feel like a series of refusals.
+                    environment = EnvironmentPanel(project) { generateDeveloperKey(project) }
+                    cell(environment)
+                }
+                row {
                     button("Reload") {
                         sdkService.refresh()
-                        summary.text = sdkSummary()
-                        summary.icon = sdkIcon()
-                        location.text = sdkLocation()
+                        environment.refresh()
                     }
                 }
-                row {
-                    location = comment(sdkLocation()).component
-                }
+            }
 
+            group("SDK (this computer)") {
                 row("Location:") {
                     textFieldWithBrowseButton(
                         FileChooserDescriptorFactory.createSingleFolderDescriptor()
@@ -85,6 +85,18 @@ class MonkeyCConfigurable(private val project: Project) :
                             "Leave empty to follow the SDK Manager's own choice, which it records " +
                                 "in <code>current-sdk.cfg</code>.",
                         )
+                        // Without this a typo is indistinguishable from having no SDK at all: every
+                        // surface says "No Connect IQ SDK found" and none of them says where it looked.
+                        .validationOnApply { field ->
+                            val given = field.text.trim().takeIf { it.isNotEmpty() }
+                            given?.let { path ->
+                                if (!Path.of(path).resolve("bin").exists()) {
+                                    error("No bin directory here, so this is not a Connect IQ SDK.")
+                                } else {
+                                    null
+                                }
+                            }
+                        }
                 }
                 row("Java:") {
                     textFieldWithBrowseButton(
@@ -109,11 +121,17 @@ class MonkeyCConfigurable(private val project: Project) :
                         )
                         .enabled(devices.isNotEmpty())
                         .comment(
-                            if (devices.isEmpty()) {
-                                "None of the devices this project declares is downloaded. " +
-                                    "Get them with the SDK Manager."
-                            } else {
-                                "What Build and Run target. A run configuration can name a different one."
+                            when {
+                                root == null ->
+                                    "No Connect IQ project is open, so there is no manifest to read " +
+                                        "the devices from."
+
+                                devices.isEmpty() ->
+                                    "None of the devices this project declares is downloaded. " +
+                                        "Get them with the SDK Manager."
+
+                                else ->
+                                    "What Build and Run target. A run configuration can name a different one."
                             },
                         )
                 }
@@ -222,32 +240,6 @@ class MonkeyCConfigurable(private val project: Project) :
         val root = model.primaryRoot() ?: return null
         val missing = ProjectLayout.jungleFiles(root, configured).firstOrNull { !it.exists() } ?: return null
         return "No such file: ${FileUtil.getLocationRelativeToUserHome(missing.toString())}"
-    }
-
-    /** The headline: which SDK, and how much of it is usable. */
-    private fun sdkSummary(): String {
-        val service = ConnectIqSdkService.getInstance()
-        val sdk = service.sdk ?: return "No Connect IQ SDK found"
-        val version = sdk.version?.let { "SDK $it" } ?: "SDK of unknown version"
-        return "$version, ${service.devices().size} devices downloaded"
-    }
-
-    private fun sdkIcon(): Icon? = if (ConnectIqSdkService.getInstance().sdk == null) AllIcons.General.Warning else null
-
-    /**
-     * The second line: where it is, or what to do about it not being there.
-     *
-     * A path shortened to `~/…` and set as a comment rather than a label, because the full one runs
-     * to a hundred characters and a label that wide decides the width of the settings dialog.
-     */
-    private fun sdkLocation(): String {
-        val sdk = ConnectIqSdkService.getInstance().sdk
-            ?: return "Install one with Garmin's SDK Manager, or point at it above."
-        val where = FileUtil.getLocationRelativeToUserHome(sdk.root.toString())
-        if (!sdk.hasLanguageServer) {
-            return "$where — this one has no language server, so there is no code intelligence."
-        }
-        return where
     }
 
     /**
