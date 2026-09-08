@@ -66,7 +66,12 @@
         <lang.commenter language="MSS" implementationClass="com.github.dtretyakov.monkeyc.lang.MssCommenter"/>
 
         <lang.braceMatcher language="MonkeyC" implementationClass="com.github.dtretyakov.monkeyc.lang.MonkeyCBraceMatcher"/>
+        <lang.braceMatcher language="Jungle" implementationClass="com.github.dtretyakov.monkeyc.lang.JungleBraceMatcher"/>
         <lang.braceMatcher language="MSS" implementationClass="com.github.dtretyakov.monkeyc.lang.MssBraceMatcher"/>
+
+        <lang.quoteHandler language="MonkeyC" implementationClass="com.github.dtretyakov.monkeyc.lang.MonkeyCQuoteHandler"/>
+        <lang.quoteHandler language="Jungle" implementationClass="com.github.dtretyakov.monkeyc.lang.JungleQuoteHandler"/>
+        <lang.quoteHandler language="MSS" implementationClass="com.github.dtretyakov.monkeyc.lang.MssQuoteHandler"/>
 
         <annotator language="MonkeyC" implementationClass="com.github.dtretyakov.monkeyc.lang.MonkeyCAnnotator"/>
 
@@ -106,6 +111,64 @@
             id="settings.monkeyc"
             displayName="Monkey C"
             instance="com.github.dtretyakov.monkeyc.ui.MonkeyCConfigurable"/>
+
+        <!--
+          Six features the SDK's language server already answers, and LSP4IJ already implements,
+          that were reaching nobody.
+
+          LSP4IJ registers these six extension points only for `language="TEXT"` and
+          `language="textmate"` - the two languages it can name statically for an abstract file
+          type. A plugin with a Language of its own gets the rest of LSP4IJ for free, because
+          those registrations are language-agnostic, and gets nothing from these six unless it
+          names its own language itself. That is what the block below does; the classes are
+          LSP4IJ's own, and public.
+
+          Everything here is gated at run time by LSP4IJ on the server's dynamic registrations, so
+          a language the server declines to answer for simply produces nothing.
+        -->
+        <lang.psiStructureViewFactory
+            language="MonkeyC"
+            implementationClass="com.redhat.devtools.lsp4ij.features.documentSymbol.LSPDocumentSymbolStructureViewFactory"/>
+        <lang.psiStructureViewFactory
+            language="Jungle"
+            implementationClass="com.redhat.devtools.lsp4ij.features.documentSymbol.LSPDocumentSymbolStructureViewFactory"/>
+        <lang.psiStructureViewFactory
+            language="MSS"
+            implementationClass="com.redhat.devtools.lsp4ij.features.documentSymbol.LSPDocumentSymbolStructureViewFactory"/>
+
+        <!-- The client already declares `foldingRange.lineFoldingOnly`; the server registers the
+             request. Only the IDE side was missing. -->
+        <lang.foldingBuilder
+            language="MonkeyC"
+            order="first"
+            implementationClass="com.redhat.devtools.lsp4ij.features.foldingRange.LSPFoldingRangeBuilder"/>
+        <lang.foldingBuilder
+            language="Jungle"
+            order="first"
+            implementationClass="com.redhat.devtools.lsp4ij.features.foldingRange.LSPFoldingRangeBuilder"/>
+        <lang.foldingBuilder
+            language="MSS"
+            order="first"
+            implementationClass="com.redhat.devtools.lsp4ij.features.foldingRange.LSPFoldingRangeBuilder"/>
+
+        <!-- Ctrl+P over a Toybox call. RequiredFieldsFilter has been repairing this request on the
+             wire for some time; until now nothing in the editor ever sent it. -->
+        <codeInsight.parameterInfo
+            language="MonkeyC"
+            implementationClass="com.redhat.devtools.lsp4ij.features.signatureHelp.LSPParameterInfoHandler"/>
+
+        <!-- Ctrl+[ and Ctrl+], off the same folding ranges. -->
+        <codeBlockProvider
+            language="MonkeyC"
+            order="first"
+            implementationClass="com.redhat.devtools.lsp4ij.features.codeBlockProvider.LSPCodeBlockProvider"/>
+
+        <typeHierarchyProvider
+            language="MonkeyC"
+            implementationClass="com.redhat.devtools.lsp4ij.features.typeHierarchy.LSPTypeHierarchyProvider"/>
+        <callHierarchyProvider
+            language="MonkeyC"
+            implementationClass="com.redhat.devtools.lsp4ij.features.callHierarchy.LSPCallHierarchyProvider"/>
     </extensions>
 
     <actions>

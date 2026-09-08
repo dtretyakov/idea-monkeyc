@@ -46,6 +46,7 @@ object MonkeyCColors {
     val JUNGLE_VARIABLE = key("JUNGLE_VARIABLE", Default.INSTANCE_FIELD)
     val JUNGLE_STRING = key("JUNGLE_STRING", Default.STRING)
     val JUNGLE_OPERATOR = key("JUNGLE_OPERATOR", Default.OPERATION_SIGN)
+    val JUNGLE_BRACKETS = key("JUNGLE_BRACKETS", Default.BRACKETS)
 
     val MSS_COMMENT = key("MSS_COMMENT", Default.LINE_COMMENT)
     val MSS_PROPERTY = key("MSS_PROPERTY", Default.INSTANCE_FIELD)
@@ -93,6 +94,7 @@ class JungleSyntaxHighlighter : SyntaxHighlighterBase() {
             JungleTokens.VARIABLE -> MonkeyCColors.JUNGLE_VARIABLE
             JungleTokens.STRING -> MonkeyCColors.JUNGLE_STRING
             JungleTokens.OPERATOR, JungleTokens.SEPARATOR -> MonkeyCColors.JUNGLE_OPERATOR
+            JungleTokens.LBRACKET, JungleTokens.RBRACKET -> MonkeyCColors.JUNGLE_BRACKETS
             else -> null
         },
     )

@@ -78,9 +78,20 @@ object JungleTokens {
     val IDENTIFIER = JungleTokenType("IDENTIFIER")
     val OPERATOR = JungleTokenType("OPERATOR")
     val SEPARATOR = JungleTokenType("SEPARATOR")
+
+    /**
+     * `[` and `]` around a group of qualified entries.
+     *
+     * `base.barrelPath = a.barrel;[b/round.jungle;b/rect.jungle]` — the brackets are the only
+     * nesting jungle has, and until now they were swallowed into the path text beside them.
+     */
+    val LBRACKET = JungleTokenType("LBRACKET")
+    val RBRACKET = JungleTokenType("RBRACKET")
+
     val TEXT = JungleTokenType("TEXT")
 
     val COMMENTS = TokenSet.create(COMMENT)
+    val STRINGS = TokenSet.create(STRING)
 }
 
 object MssTokens {
@@ -97,4 +108,5 @@ object MssTokens {
     val RBRACE = MssTokenType("RBRACE")
 
     val COMMENTS = TokenSet.create(LINE_COMMENT, BLOCK_COMMENT)
+    val STRINGS = TokenSet.create(STRING)
 }

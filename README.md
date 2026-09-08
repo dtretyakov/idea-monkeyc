@@ -40,8 +40,9 @@ before it can answer `initialize`.
   remembers: devices, permissions, language codes. It edits the file as text rather than through a
   DOM, so the comments and the formatting of a file being edited by hand in the next tab survive.
 * **Editing** — completion over the whole Toybox API, diagnostics, go-to-definition, hover with
-  documentation, rename, find usages, document and workspace symbols, folding, type and call
-  hierarchies. Syntax highlighting, commenting and bracket matching for `.mc`, `.jungle` and `.mss`.
+  documentation, parameter info, rename, find usages, document and workspace symbols, the file
+  structure popup, breadcrumbs, folding, type and call hierarchies. Syntax highlighting,
+  commenting, bracket matching and self-closing quotes for `.mc`, `.jungle` and `.mss`.
 * **Building** — in the Build tool window, with the compiler's errors as something to click, and
   the compiler skipped entirely when the output already matches the sources and the flags.
 * **Running** — six run configurations: the app, its unit tests, a build that runs nothing, an

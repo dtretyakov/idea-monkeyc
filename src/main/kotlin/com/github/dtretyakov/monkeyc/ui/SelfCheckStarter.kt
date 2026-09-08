@@ -11,6 +11,8 @@ import com.intellij.execution.configurations.ConfigurationTypeUtil
 import com.intellij.ide.wizard.GeneratorNewProjectWizard
 import com.intellij.openapi.application.ModernApplicationStarter
 import com.intellij.openapi.fileEditor.FileEditorProvider
+import com.intellij.lang.LanguageExtensionPoint
+import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.redhat.devtools.lsp4ij.dap.DebugAdapterManager
 import com.redhat.devtools.lsp4ij.LanguageServersRegistry
@@ -69,6 +71,8 @@ class SelfCheckStarter : ModernApplicationStarter() {
             println("[self-check] new project wizard: ${wizard.name}")
         }
 
+        problems += editorFeatureProblems()
+
         val debugAdapter = DebugAdapterManager.getInstance()
             .getDebugAdapterServerById(MonkeyCDebugAdapterFactory.SERVER_ID)
         if (debugAdapter == null) {
@@ -91,5 +95,51 @@ class SelfCheckStarter : ModernApplicationStarter() {
         problems.forEach { println("[self-check] PROBLEM: $it") }
         println(if (problems.isEmpty()) "[self-check] OK" else "[self-check] FAILED")
         exitProcess(if (problems.isEmpty()) 0 else 1)
+    }
+
+    /**
+     * The editor features that are wired by naming somebody else's class in `plugin.xml`.
+     *
+     * Six of them are LSP4IJ's own implementations, which LSP4IJ registers only for `TEXT` and
+     * `textmate`; naming them for our languages is the whole of the wiring. That makes two silent
+     * failures possible at once — a registration that never took, and a class LSP4IJ renamed in a
+     * version bump — and neither produces an error. The editor is simply quieter than it was, in
+     * a way nobody notices until they reach for Ctrl+P.
+     *
+     * So this loads each instance rather than only counting the registrations.
+     */
+    private fun editorFeatureProblems(): List<String> {
+        val problems = mutableListOf<String>()
+
+        EXPECTED.forEach { (endpoint, languages) ->
+            val point = ExtensionPointName<LanguageExtensionPoint<Any>>(endpoint)
+            languages.forEach { language ->
+                val bean = point.extensionList.firstOrNull { it.language == language }
+                when {
+                    bean == null -> problems += "$endpoint is not registered for $language"
+                    runCatching { bean.instance }.isFailure ->
+                        problems += "$endpoint for $language names ${bean.implementationClass}, which will not load"
+
+                    else -> println("[self-check] $endpoint: $language -> ${bean.implementationClass}")
+                }
+            }
+        }
+
+        return problems
+    }
+
+    private companion object {
+        val ALL = listOf("MonkeyC", "Jungle", "MSS")
+
+        val EXPECTED = mapOf(
+            "com.intellij.lang.psiStructureViewFactory" to ALL,
+            "com.intellij.lang.foldingBuilder" to ALL,
+            "com.intellij.lang.quoteHandler" to ALL,
+            "com.intellij.lang.braceMatcher" to ALL,
+            "com.intellij.codeInsight.parameterInfo" to listOf("MonkeyC"),
+            "com.intellij.codeBlockProvider" to listOf("MonkeyC"),
+            "com.intellij.typeHierarchyProvider" to listOf("MonkeyC"),
+            "com.intellij.callHierarchyProvider" to listOf("MonkeyC"),
+        )
     }
 }

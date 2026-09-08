@@ -61,7 +61,7 @@ class MonkeyCParserDefinition : FlatParserDefinition(
 class JungleParserDefinition : FlatParserDefinition(
     JungleTokens.FILE,
     JungleTokens.COMMENTS,
-    TokenSet.create(JungleTokens.STRING),
+    JungleTokens.STRINGS,
 ) {
     override fun createLexer(project: Project?): Lexer = JungleLexer()
     override fun createFile(viewProvider: FileViewProvider): PsiFile =
@@ -71,7 +71,7 @@ class JungleParserDefinition : FlatParserDefinition(
 class MssParserDefinition : FlatParserDefinition(
     MssTokens.FILE,
     MssTokens.COMMENTS,
-    TokenSet.create(MssTokens.STRING),
+    MssTokens.STRINGS,
 ) {
     override fun createLexer(project: Project?): Lexer = MssLexer()
     override fun createFile(viewProvider: FileViewProvider): PsiFile =

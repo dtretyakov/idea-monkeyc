@@ -6,11 +6,13 @@ First release.
 
 ### Language
 
-- Monkey C, jungle and MSS file types, with syntax highlighting, commenting, brace matching and a
-  colour settings page.
+- Monkey C, jungle and MSS file types, with syntax highlighting, commenting, brace matching,
+  quotes that close themselves and a colour settings page.
 - Code intelligence from the language server Garmin ships in the Connect IQ SDK: completion,
   diagnostics, go to definition, hover, rename, symbols, folding, and type and call hierarchies.
   No language model of the plugin's own, so it stays in step with the installed SDK.
+- Parameter info, the file structure popup, breadcrumbs, and moving the caret to the start or end
+  of a block.
 - Source, resource and output directories marked in the project tree; file-type icons.
 
 ### Building and running

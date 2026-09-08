@@ -48,6 +48,16 @@ class JungleLexer : ScanningLexer() {
                 JungleTokens.SEPARATOR
             }
 
+            c == '[' -> {
+                position++
+                JungleTokens.LBRACKET
+            }
+
+            c == ']' -> {
+                position++
+                JungleTokens.RBRACKET
+            }
+
             isIdentifierStart(c) -> {
                 skipWhile { isIdentifierPart(it) || it == '.' || it == '-' }
                 JungleTokens.IDENTIFIER
@@ -55,7 +65,7 @@ class JungleLexer : ScanningLexer() {
 
             else -> {
                 // A path fragment: everything up to whatever would start another token.
-                skipWhile { !isSpace(it) && it !in "#=;,\"$" }
+                skipWhile { !isSpace(it) && it !in "#=;,[]\"$" }
                 JungleTokens.TEXT
             }
         }
