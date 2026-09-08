@@ -64,15 +64,37 @@ class DeviceCatalog(private val devicesRoot: Path) {
 
     fun byId(id: String): ConnectIqDevice? = devices().firstOrNull { it.id == id }
 
+    /**
+     * Device directories that are there but could not be read.
+     *
+     * Worth keeping rather than discarding: to the user a device downloaded through the SDK
+     * Manager and a device whose `compiler.json` is truncated look the same — both are simply
+     * absent from every list — and the second is something they can act on.
+     */
+    @Volatile
+    var unreadable: List<String> = emptyList()
+        private set
+
     private fun load(): List<ConnectIqDevice> {
-        if (!devicesRoot.isDirectory()) return emptyList()
-        return Files.list(devicesRoot).use { entries ->
+        if (!devicesRoot.isDirectory()) {
+            unreadable = emptyList()
+            return emptyList()
+        }
+
+        val failed = mutableListOf<String>()
+        val devices = Files.list(devicesRoot).use { entries ->
             entries.filter { it.isDirectory() }
-                .map { runCatching { read(it) }.getOrNull() }
+                .map { directory ->
+                    runCatching { read(directory) }
+                        .onFailure { failed += directory.fileName.toString() }
+                        .getOrNull()
+                }
                 .filter { it != null }
                 .map { it!! }
                 .toList()
-        }.sortedWith(compareBy(DISPLAY_NAME_ORDER) { it.displayName })
+        }
+        unreadable = failed.sorted()
+        return devices.sortedWith(compareBy(DISPLAY_NAME_ORDER) { it.displayName })
     }
 
     private fun read(directory: Path): ConnectIqDevice {

@@ -141,8 +141,15 @@ class MonkeyCLaunchProcessHandler(
         stopped = true
         val handler = running
         if (handler == null) {
-            // Stopped during the build. The compiler finishes on its own, but `stopped` keeps the
-            // app from being pushed to the simulator once it does.
+            // Stopped during the build. The compiler is not ours to kill — it runs under the Build
+            // tool window — so it finishes on its own; `stopped` only keeps the app from being
+            // pushed to the simulator afterwards. Said out loud, because a Run window that goes
+            // red while the Build window keeps working otherwise looks like two contradictions.
+            notifyTextAvailable(
+                "\nStopped. The compiler was already running and finishes in the Build window; " +
+                    "nothing will be started when it does.\n",
+                ProcessOutputTypes.SYSTEM,
+            )
             notifyProcessTerminated(1)
         } else {
             handler.destroyProcess()

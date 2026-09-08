@@ -54,7 +54,7 @@ object ConnectIqEnvironment {
             add(sdkManager(SdkManagerApp.location(), hasSdk = sdk != null))
             add(sdk(sdk))
             if (sdk != null) add(languageServer(sdk))
-            add(devices(service.devices().size, sdk != null))
+            add(devices(service.devices().size, sdk != null, service.unreadableDevices()))
             add(developerKey(project))
             add(java(service.java()))
         }
@@ -108,7 +108,19 @@ object ConnectIqEnvironment {
         )
     }
 
-    internal fun devices(count: Int, hasSdk: Boolean): Item = when {
+    internal fun devices(count: Int, hasSdk: Boolean, unreadable: List<String> = emptyList()): Item = when {
+        // Reported rather than hidden: a device that is downloaded but unreadable is indis-
+        // tinguishable from one that was never downloaded, and only one of the two is fixable
+        // by downloading it again.
+        count > 0 && unreadable.isNotEmpty() -> Item(
+            "Devices",
+            Status.MISSING,
+            "$count downloaded, and ${unreadable.size} that could not be read " +
+                "(${unreadable.take(3).joinToString()}). Downloading them again usually settles it.",
+            Fix.SDK_MANAGER,
+            blocking = false,
+        )
+
         count > 0 -> Item("Devices", Status.READY, "$count downloaded")
         !hasSdk -> Item("Devices", Status.MISSING, "None, and no SDK to hold them.", Fix.SDK_MANAGER)
         else -> Item(

@@ -215,7 +215,8 @@ object MonkeyCLaunch {
      * missing entry class; saying so here is the difference between a sentence and an hour.
      */
     private fun checkKindSuitsProject(model: MonkeyCProject, root: Path, kind: MonkeyCRunKind) {
-        val isBarrel = model.manifest(root)?.isBarrel ?: return
+        val isBarrel = model.manifest(root)?.isBarrel
+            ?: throw ExecutionException(model.manifestProblem(root))
         if (isBarrel && !kind.barrel) {
             throw ExecutionException(
                 "${root.name} is a barrel, not an app: it has no entry class and nothing to run. " +

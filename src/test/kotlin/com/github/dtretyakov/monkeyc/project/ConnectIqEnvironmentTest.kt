@@ -83,4 +83,23 @@ class ConnectIqEnvironmentTest {
 
         assertTrue(ConnectIqEnvironment.isReady(items))
     }
+
+    @Test
+    fun `a device that cannot be read is reported, not hidden`() {
+        // Downloaded-but-broken and never-downloaded look identical to the user, and only one of
+        // them is fixed by downloading it again.
+        val item = ConnectIqEnvironment.devices(count = 164, hasSdk = true, unreadable = listOf("fenix7", "venu2"))
+
+        assertEquals(Status.MISSING, item.status)
+        assertFalse(item.blocking, "164 usable devices are enough to build with")
+        assertTrue(item.detail.contains("fenix7"), item.detail)
+        assertEquals(Fix.SDK_MANAGER, item.fix)
+    }
+
+    @Test
+    fun `all devices readable is the quiet case`() {
+        val item = ConnectIqEnvironment.devices(count = 166, hasSdk = true, unreadable = emptyList())
+
+        assertEquals(Status.READY, item.status)
+    }
 }

@@ -50,6 +50,22 @@ class MonkeyCProject(private val project: Project) {
 
     fun manifest(root: Path): ManifestFile? = ManifestFile.parse(root.resolve(ManifestFile.FILE_NAME))
 
+    /**
+     * Why the manifest cannot be read, in words, or null when it can.
+     *
+     * `ManifestFile.parse` answers null for a file that is absent and for one that is malformed,
+     * and callers guard with `?: return` — so a broken manifest used to switch the checks off
+     * rather than report itself, and the run then failed on the compiler's own unreadable
+     * complaint, which is exactly what those checks exist to prevent.
+     */
+    fun manifestProblem(root: Path): String? {
+        val path = root.resolve(ManifestFile.FILE_NAME)
+        if (!path.exists()) return "${path.fileName} is missing, so this is not a Connect IQ project."
+        if (manifest(root) != null) return null
+        return "${path.fileName} could not be read. Fix it in the editor: until then the plugin " +
+            "cannot tell an app from a barrel, or find the devices to build for."
+    }
+
     fun jungleFiles(root: Path): List<Path> =
         ProjectLayout.jungleFiles(root, MonkeyCSettings.getInstance(project).jungleFiles)
 

@@ -6,7 +6,7 @@ import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettingsListener
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.readAction
+import com.intellij.openapi.application.runReadActionBlocking
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import com.redhat.devtools.lsp4ij.LanguageServerManager
@@ -22,9 +22,10 @@ import com.redhat.devtools.lsp4ij.LanguageServerManager
 class MonkeyCServerLifecycle : ProjectActivity {
 
     override suspend fun execute(project: Project) {
-        // Content roots are part of the module model, which may only be read under a read action.
-        if (readAction { MonkeyCProject.getInstance(project).roots() }.isEmpty()) return
-
+        // Subscribed unconditionally. This used to give up when the project had no manifest at
+        // open time, and then nothing could bring the server back for the rest of the session —
+        // not adding a manifest, not changing a setting, only restarting the IDE. Whether there is
+        // anything to restart is a question for the moment of restarting, not for startup.
         val connection = project.messageBus.connect()
         connection.subscribe(
             MonkeyCSettings.TOPIC,
@@ -36,6 +37,10 @@ class MonkeyCServerLifecycle : ProjectActivity {
 
     private fun restart(project: Project) {
         if (project.isDisposed) return
+        // Asked here rather than at startup: a manifest can appear after the project is open, and
+        // the answer then has to be the current one.
+        if (runReadActionBlocking { MonkeyCProject.getInstance(project).roots() }.isEmpty()) return
+
         val manager = LanguageServerManager.getInstance(project)
         manager.stop(
             MonkeyCLanguageServerFactory.SERVER_ID,

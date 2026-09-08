@@ -96,7 +96,8 @@ class MonkeyCRunConfiguration(
     private fun checkKindSuitsProject(model: MonkeyCProject, root: java.nio.file.Path) {
         // Caught here as well as at launch, so the dialog can say it before the Run button is
         // pressed: the compiler's own complaint about a barrel run as an app is unreadable.
-        val isBarrel = model.manifest(root)?.isBarrel ?: return
+        val isBarrel = model.manifest(root)?.isBarrel
+            ?: throw RuntimeConfigurationError(model.manifestProblem(root))
         if (isBarrel && !options.kind.barrel) {
             throw RuntimeConfigurationError(
                 "This project is a barrel, not an app. Build it with a Connect IQ Barrel " +

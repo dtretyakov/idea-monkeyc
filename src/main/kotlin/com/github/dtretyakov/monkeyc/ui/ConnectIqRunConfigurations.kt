@@ -9,6 +9,8 @@ import com.intellij.execution.RunManager
 import com.intellij.execution.RunnerAndConfigurationSettings
 import com.intellij.execution.configurations.ConfigurationTypeUtil
 import com.intellij.execution.executors.DefaultRunExecutor
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.project.Project
 
 /**
@@ -21,7 +23,20 @@ import com.intellij.openapi.project.Project
 object ConnectIqRunConfigurations {
 
     fun run(project: Project, kind: MonkeyCRunKind) {
-        val executor = ExecutorRegistry.getInstance().getExecutorById(DefaultRunExecutor.EXECUTOR_ID) ?: return
+        val executor = ExecutorRegistry.getInstance().getExecutorById(DefaultRunExecutor.EXECUTOR_ID)
+        if (executor == null) {
+            // Should not happen — Run is part of the platform — but a menu item that does nothing
+            // and leaves no trace is the worst way to find out that it did.
+            NotificationGroupManager.getInstance()
+                .getNotificationGroup("Monkey C")
+                .createNotification(
+                    "Could not start ${kind.display}",
+                    "The IDE has no Run executor, so there is nothing to run the configuration with.",
+                    NotificationType.ERROR,
+                )
+                .notify(project)
+            return
+        }
         ProgramRunnerUtil.executeConfiguration(settings(project, kind), executor)
     }
 

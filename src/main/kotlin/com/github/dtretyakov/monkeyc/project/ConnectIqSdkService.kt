@@ -36,6 +36,12 @@ class ConnectIqSdkService {
 
     fun device(id: String): ConnectIqDevice? = current().catalog?.byId(id)
 
+    /** Device directories that are present but unreadable; empty is the normal answer. */
+    fun unreadableDevices(): List<String> = current().catalog?.let {
+        it.devices()
+        it.unreadable
+    }.orEmpty()
+
     /** The `java` that runs the SDK's jars. */
     fun java(): Path = JavaLocator.resolve(MonkeyCAppSettings.getInstance().javaPath)
 
