@@ -5,6 +5,7 @@ import com.github.dtretyakov.monkeyc.project.ManifestFile
 import com.github.dtretyakov.monkeyc.project.ManifestText
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
+import com.github.dtretyakov.monkeyc.sdk.SdkVersion
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -51,7 +52,12 @@ class EditProductsAction : AnAction() {
         val eligible = installed.filter { minimum == null || it.sdkVersion == null || it.sdkVersion >= minimum }
         val selected = model.manifest(root)?.devices.orEmpty().toSet()
 
-        val dialog = ProductsDialog(project, eligible.map { it.id to it.displayName }, selected)
+        val dialog = ProductsDialog(
+            project,
+            eligible.map { it.id to it.displayName },
+            selected,
+            EmptyReason.of(installed.size, eligible.size, minimum),
+        )
         if (!dialog.showAndGet()) return
 
         // Nothing else happens unless the file actually changed. The settings below follow the
@@ -113,10 +119,34 @@ class EditProductsAction : AnAction() {
     }
 }
 
+/**
+ * Why there is nothing to tick, when there is nothing to tick.
+ *
+ * Garmin's own VS Code extension has this bug on file: a user who had downloaded their watch found
+ * "Edit Products" empty, because the app's minimum API level was above what that watch supports and
+ * the device was filtered out silently. An empty list has to say which of the two things happened,
+ * because the two have different remedies.
+ */
+private sealed interface EmptyReason {
+    object None : EmptyReason
+    object NothingDownloaded : EmptyReason
+    data class AllBelowMinimum(val installed: Int, val minimum: SdkVersion) : EmptyReason
+
+    companion object {
+        fun of(installed: Int, eligible: Int, minimum: SdkVersion?): EmptyReason = when {
+            eligible > 0 -> None
+            installed == 0 -> NothingDownloaded
+            minimum != null -> AllBelowMinimum(installed, minimum)
+            else -> NothingDownloaded
+        }
+    }
+}
+
 private class ProductsDialog(
-    project: Project,
+    private val project: Project,
     private val devices: List<Pair<String, String>>,
     selected: Set<String>,
+    private val empty: EmptyReason,
 ) : DialogWrapper(project) {
 
     private val list = CheckBoxList<String>().apply {
@@ -130,14 +160,37 @@ private class ProductsDialog(
     }
 
     override fun createCenterPanel(): JComponent = panel {
-        row {
-            cell(JBScrollPane(list)).resizableColumn()
-        }.resizableRow()
-        row {
-            comment(
-                "Only devices downloaded with the SDK Manager that support the manifest's " +
-                    "minimum API level are listed.",
-            )
+        when (empty) {
+            EmptyReason.None -> {
+                row {
+                    cell(JBScrollPane(list)).resizableColumn()
+                }.resizableRow()
+                row {
+                    comment(
+                        "Only devices downloaded with the SDK Manager that support the manifest's " +
+                            "minimum API level are listed.",
+                    )
+                }
+            }
+
+            EmptyReason.NothingDownloaded -> {
+                row { label("No devices are downloaded.") }
+                row {
+                    comment("A Connect IQ app is built for a device, so there is nothing to choose from yet.")
+                }
+                row { link(OpenSdkManager.label()) { OpenSdkManager.invoke(project) } }
+            }
+
+            is EmptyReason.AllBelowMinimum -> {
+                row { label("None of the ${empty.installed} downloaded devices supports API level ${empty.minimum}.") }
+                row {
+                    comment(
+                        "That is the minimum this manifest asks for. Lower it in the Manifest tab, " +
+                            "or download a newer device.",
+                    )
+                }
+                row { link(OpenSdkManager.label()) { OpenSdkManager.invoke(project) } }
+            }
         }
     }.also { it.preferredSize = java.awt.Dimension(420, 480) }
 

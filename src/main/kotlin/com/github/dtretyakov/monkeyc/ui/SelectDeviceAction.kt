@@ -8,6 +8,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.actionSystem.Presentation
 import com.intellij.openapi.actionSystem.ex.CustomComponentAction
 import com.intellij.openapi.actionSystem.impl.ActionButtonWithText
@@ -68,13 +69,23 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
         val root = runReadActionBlocking { model.primaryRoot() } ?: return null
 
         val devices = model.buildableDevices(root)
+
+        // The popup is also where a device is acquired, not only where one is picked — the same
+        // shape Flutter's device selector uses, where "Open iOS Simulator" sits below the list.
+        // Without it the empty state is a dead end at exactly the moment the user is looking.
+        val acquire = Acquire(project)
+
         if (devices.isEmpty()) {
             return DefaultActionGroup(
-                Unavailable("None of the devices this project declares is downloaded"),
+                Unavailable("No devices are downloaded"),
+                Separator.getInstance(),
+                acquire,
             )
         }
+
         return DefaultActionGroup(
-            devices.map { Select(project, it.id, "${it.displayName}  (${it.id})") },
+            devices.map { Select(project, it.id, "${it.displayName}  (${it.id})") } +
+                listOf(Separator.getInstance(), acquire),
         )
     }
 
@@ -95,6 +106,12 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
             // told again; everything else reads the setting at the moment it runs.
             project.messageBus.syncPublisher(MonkeyCSettings.TOPIC).settingsChanged(project)
         }
+    }
+
+    /** The way out of an empty list: the application that downloads devices. */
+    private class Acquire(private val project: Project) : AnAction(OpenSdkManager.label()) {
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+        override fun actionPerformed(event: AnActionEvent) = OpenSdkManager.invoke(project)
     }
 
     private class Unavailable(text: String) : AnAction(text) {

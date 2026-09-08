@@ -1,7 +1,6 @@
 package com.github.dtretyakov.monkeyc.ui
 
 import com.github.dtretyakov.monkeyc.project.ConnectIqEnvironment
-import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.fileEditor.FileEditor
@@ -43,26 +42,23 @@ class MissingSdkNotification : EditorNotificationProvider {
             ?: return null
 
         return Function { _ ->
-            EditorNotificationPanel(EditorNotificationPanel.Status.Warning).apply {
+            // Error rather than Warning: the platform reserves Error for what has to be resolved
+            // before the user can get on, and every problem that reaches here blocks a build.
+            EditorNotificationPanel(EditorNotificationPanel.Status.Error).apply {
                 text = "${problem.name}: ${problem.detail}"
 
-                when (problem.fix) {
-                    ConnectIqEnvironment.Fix.SDK_MANAGER -> createActionLabel(OpenSdkManager.label()) {
-                        OpenSdkManager.invoke(project)
-                    }
-
-                    ConnectIqEnvironment.Fix.GENERATE_KEY, null -> Unit
+                // Two actions at most, which is the guideline and also the honest number: one that
+                // fetches the missing thing and one that opens the page where it is configured.
+                if (problem.fix == ConnectIqEnvironment.Fix.SDK_MANAGER) {
+                    createActionLabel(OpenSdkManager.label()) { OpenSdkManager.invoke(project) }
                 }
-
                 createActionLabel("Settings") {
                     ShowSettingsUtil.getInstance().showSettingsDialog(project, MonkeyCConfigurable::class.java)
                     reconsider(project)
                 }
-                createActionLabel("Reload") {
-                    ConnectIqSdkService.getInstance().refresh()
-                    reconsider(project)
-                }
 
+                // The built-in close, remembered: a banner about a prerequisite someone has
+                // deliberately not met is worse than no banner if it cannot be got rid of.
                 setCloseAction {
                     PropertiesComponent.getInstance(project).setValue(DISMISSED, true)
                     reconsider(project)
