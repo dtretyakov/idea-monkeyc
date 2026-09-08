@@ -364,6 +364,11 @@
                 class="com.github.dtretyakov.monkeyc.ui.StopSimulatorAction"
                 text="Stop Simulator"
                 description="Closes the Connect IQ simulator"/>
+            <action
+                id="MonkeyC.ClearSimulatorData"
+                class="com.github.dtretyakov.monkeyc.ui.ClearSimulatorDataAction"
+                text="Clear Stored App Data"
+                description="Removes the settings and storage the simulator kept, so the defaults in properties.xml apply again"/>
             <add-to-group group-id="RunMenu" anchor="last"/>
         </group>
     </actions>

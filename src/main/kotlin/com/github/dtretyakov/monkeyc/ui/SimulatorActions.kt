@@ -2,6 +2,7 @@ package com.github.dtretyakov.monkeyc.ui
 
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.run.Simulator
+import com.github.dtretyakov.monkeyc.run.SimulatorStorage
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -80,4 +81,39 @@ class RestartSimulatorAction : SimulatorAction() {
             "The Connect IQ simulator did not come back. Start it from the SDK's bin directory." to
                 NotificationType.ERROR
         }
+}
+
+/**
+ * Throws away what the simulator remembers about the apps it has run.
+ *
+ * The reason this earns a menu entry is a confusion nobody has written down properly. A value in
+ * `properties.xml` is a *default*, used when the property does not yet exist — and once the app
+ * has run once, it exists. So editing the default and running again shows the old value, the
+ * developer concludes the edit did not take, and there is nothing on screen to suggest otherwise.
+ *
+ * The folklore remedy on the forums is to delete the simulator's whole temporary directory, which
+ * also throws away the installed programs. This removes only the stored settings and the persisted
+ * `Application.Storage`, which is what actually stands in the way.
+ */
+class ClearSimulatorDataAction : SimulatorAction() {
+
+    override val progressTitle: String = "Clearing the Connect IQ simulator's stored data"
+
+    override fun act(sdk: ConnectIqSdk): Pair<String, NotificationType> {
+        if (SimulatorStorage.deviceRoot() == null) {
+            return "The simulator has stored nothing yet on this machine." to NotificationType.INFORMATION
+        }
+        if (!SimulatorStorage.hasPersistedData()) {
+            return "The simulator has no stored app data to clear." to NotificationType.INFORMATION
+        }
+
+        // Stopped first: the simulator holds this directory open, and clearing it underneath a
+        // running app leaves the app writing into files that are no longer there.
+        val wasRunning = Simulator.running(sdk.dataRoot).isNotEmpty()
+        if (wasRunning) Simulator.stop(sdk)
+
+        val removed = SimulatorStorage.clearPersistedData()
+        return "Cleared $removed stored file${if (removed == 1) "" else "s"}. " +
+            "The defaults in properties.xml apply again on the next run." to NotificationType.INFORMATION
+    }
 }

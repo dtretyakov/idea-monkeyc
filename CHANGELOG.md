@@ -74,4 +74,6 @@ First release.
 - A project can pin the SDK it builds with, instead of following whichever the SDK Manager has
   made current. A pin the machine cannot honour falls back rather than failing, and says so.
 - A form editor for `manifest.xml`, with products, permissions and languages.
-- Stopping and restarting the Connect IQ simulator.
+- Stopping and restarting the Connect IQ simulator, and clearing the app data it keeps between
+  runs — which is what makes an edited default in `properties.xml` take effect, since a value there
+  applies only while the property does not yet exist.
