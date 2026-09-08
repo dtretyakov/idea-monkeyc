@@ -55,7 +55,7 @@ object MonkeyCLaunch {
         options: MonkeyCRunOptions,
         onProgress: (String) -> Unit,
     ): BuiltArtifact {
-        val sdk = ConnectIqSdkService.getInstance().sdk
+        val sdk = ConnectIqSdkService.getInstance().sdkFor(project)
             ?: throw ExecutionException(
                 "No Connect IQ SDK found. Install one with Garmin's SDK Manager, " +
                     "or set its location in Settings | Languages & Frameworks | Monkey C.",
@@ -126,7 +126,8 @@ object MonkeyCLaunch {
             throw ExecutionException("The paired app at $root has no manifest.xml, so it is not a Connect IQ project.")
         }
 
-        val sdk = ConnectIqSdkService.getInstance().sdk ?: throw ExecutionException("No Connect IQ SDK found.")
+        val sdk = ConnectIqSdkService.getInstance().sdkFor(project)
+            ?: throw ExecutionException("No Connect IQ SDK found.")
         val model = MonkeyCProject.getInstance(project)
         val output = ProjectLayout.appPrg(root, root.name)
 

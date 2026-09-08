@@ -113,7 +113,7 @@ class MonkeyCProject(private val project: Project) {
     fun developerKey(): Path? {
         val configured = MonkeyCSettings.getInstance(project).developerKeyPath.trim()
         if (configured.isNotEmpty()) return Path.of(configured).takeIf { it.exists() }
-        return ConnectIqSdkService.getInstance().sdk?.defaultDeveloperKey?.takeIf { it.exists() }
+        return ConnectIqSdkService.getInstance().sdkFor(project)?.defaultDeveloperKey?.takeIf { it.exists() }
     }
 
     /**

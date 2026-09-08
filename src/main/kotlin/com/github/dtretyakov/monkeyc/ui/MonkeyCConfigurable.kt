@@ -1,6 +1,7 @@
 package com.github.dtretyakov.monkeyc.ui
 
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
+import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
 import com.github.dtretyakov.monkeyc.project.DebugLogLevel
 import com.github.dtretyakov.monkeyc.project.MonkeyCAppSettings
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
@@ -27,6 +28,7 @@ import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.builder.toNullableProperty
 import java.nio.file.Path
+import kotlin.io.path.name
 import kotlin.io.path.exists
 
 /**
@@ -52,6 +54,7 @@ class MonkeyCConfigurable(private val project: Project) :
         val root = model.primaryRoot()
         val devices = root?.let { model.buildableDevices(it) }.orEmpty()
         val target = DeviceChoices(devices)
+        val sdkChoices = SdkChoices(ConnectIqSdk.installed(), settings.sdkPath)
 
         lateinit var environment: EnvironmentPanel
 
@@ -112,6 +115,19 @@ class MonkeyCConfigurable(private val project: Project) :
             group("Project") {
                 row {
                     comment("Stored with the project, in <code>.idea/monkeyc.xml</code>.")
+                }
+                row("SDK:") {
+                    comboBox(sdkChoices.labels)
+                        .bindItem(
+                            { sdkChoices.labelFor(settings.sdkPath) },
+                            { settings.sdkPath = sdkChoices.pathFor(it) },
+                        )
+                        .comment(
+                            "Which SDK this project builds with. <b>${SdkChoices.FOLLOW}</b> means " +
+                                "whichever the SDK Manager has made current, which changes under you " +
+                                "when it updates. Pinning one keeps a shipped app building the way it " +
+                                "shipped.",
+                        )
                 }
                 row("Target device:") {
                     comboBox(target.labels)
@@ -253,6 +269,35 @@ class MonkeyCConfigurable(private val project: Project) :
         val root = model.primaryRoot() ?: return null
         val missing = ProjectLayout.jungleFiles(root, configured).firstOrNull { !it.exists() } ?: return null
         return "No such file: ${FileUtil.getLocationRelativeToUserHome(missing.toString())}"
+    }
+
+    /**
+     * The SDKs on this machine, and the choice to follow the SDK Manager instead.
+     *
+     * A pin the machine cannot honour is kept in the list rather than dropped from it. These
+     * settings are committed, so the path may be a colleague's; silently showing "Follow the SDK
+     * Manager" would make it look as though nobody had pinned anything, and the next save would
+     * throw their choice away.
+     */
+    internal class SdkChoices(installed: List<Path>, pinned: String) {
+        private val byLabel = installed.associateBy { it.name } +
+            (
+                pinned.trim()
+                    .takeIf { it.isNotEmpty() && installed.none { sdk -> sdk.toString() == it } }
+                    ?.let { mapOf("$it  (not on this machine)" to Path.of(it)) }
+                    ?: emptyMap()
+                )
+
+        val labels: List<String> = listOf(FOLLOW) + byLabel.keys
+
+        fun labelFor(path: String): String =
+            byLabel.entries.firstOrNull { it.value.toString() == path.trim() }?.key ?: FOLLOW
+
+        fun pathFor(label: String?): String = byLabel[label]?.toString().orEmpty()
+
+        companion object {
+            const val FOLLOW = "Follow the SDK Manager"
+        }
     }
 
     /**

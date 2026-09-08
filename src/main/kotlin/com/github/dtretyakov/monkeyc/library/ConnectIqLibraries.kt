@@ -99,14 +99,14 @@ class ConnectIqLibraries(private val project: Project) {
     }
 
     private fun refreshSdkIntoVfs() {
-        val bin = ConnectIqSdkService.getInstance().sdk?.root?.resolve("bin") ?: return
+        val bin = ConnectIqSdkService.getInstance().sdkFor(project)?.root?.resolve("bin") ?: return
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(bin)
     }
 
     private fun compute(): List<ConnectIqLibrary> {
         val libraries = mutableListOf<ConnectIqLibrary>()
 
-        ConnectIqSdkService.getInstance().sdk?.let { sdk ->
+        ConnectIqSdkService.getInstance().sdkFor(project)?.let { sdk ->
             apiSurface(sdk)?.let { root ->
                 libraries += ConnectIqLibrary(
                     id = "connect-iq-sdk",

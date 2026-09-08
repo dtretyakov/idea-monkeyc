@@ -66,8 +66,10 @@ class MonkeyCDebugAdapterDescriptor(
             )
         }
 
-        val sdk = ConnectIqSdkService.getInstance().sdk
-            ?: throw ExecutionException("No Connect IQ SDK found.")
+        // The SDK the build actually used, not whichever is current now. Asking again could
+        // answer differently — a project can pin one — and an adapter from one SDK driving a
+        // `.prg` from another fails in ways that read as a broken debugger.
+        val sdk = prepared.sdk
 
         return startServer(
             GeneralCommandLine(SdkServerCommands.debugAdapter(sdk, ConnectIqSdkService.getInstance().java()))
@@ -104,7 +106,9 @@ class MonkeyCDebugAdapterDescriptor(
                         .addAction(
                             NotificationAction.createSimpleExpiring("Restart Simulator") {
                                 ApplicationManager.getApplication().executeOnPooledThread {
-                                    ConnectIqSdkService.getInstance().sdk?.let { Simulator.restart(it) }
+                                    ConnectIqSdkService.getInstance()
+                                        .sdkFor(environment.project)
+                                        ?.let { Simulator.restart(it) }
                                 }
                             },
                         )

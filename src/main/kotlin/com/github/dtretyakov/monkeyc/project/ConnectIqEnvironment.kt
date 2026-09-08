@@ -48,11 +48,11 @@ object ConnectIqEnvironment {
 
     fun check(project: Project?): List<Item> {
         val service = ConnectIqSdkService.getInstance()
-        val sdk = service.sdk
+        val sdk = service.sdkFor(project)
 
         return buildList {
             add(sdkManager(SdkManagerApp.location(), hasSdk = sdk != null))
-            add(sdk(sdk))
+            add(sdk(sdk, service.pinnedButMissing(project)))
             if (sdk != null) add(languageServer(sdk))
             if (project != null && sdk?.hasLanguageServer == true) {
                 add(liveAnalysis(MonkeyCSettings.getInstance(project).liveAnalysis))
@@ -88,10 +88,29 @@ object ConnectIqEnvironment {
             )
         }
 
-    private fun sdk(sdk: ConnectIqSdk?): Item = if (sdk == null) {
-        Item("Connect IQ SDK", Status.MISSING, "Not found. Install one with the SDK Manager.", Fix.SDK_MANAGER)
-    } else {
-        Item("Connect IQ SDK", Status.READY, "${sdk.version ?: "unknown version"} at ${shorten(sdk.root)}")
+    /**
+     * The SDK in use, and — when the project asked for one it did not get — which one that was.
+     *
+     * A pin that is not on this machine falls back to the current SDK rather than failing, because
+     * these settings are committed and the path may be a colleague's. That fallback has to be
+     * visible: a project silently built with an SDK other than the one it names is the exact
+     * problem pinning exists to prevent.
+     */
+    internal fun sdk(sdk: ConnectIqSdk?, pinnedButMissing: String? = null): Item = when {
+        sdk == null ->
+            Item("Connect IQ SDK", Status.MISSING, "Not found. Install one with the SDK Manager.", Fix.SDK_MANAGER)
+
+        pinnedButMissing != null -> Item(
+            "Connect IQ SDK",
+            Status.MISSING,
+            "${sdk.version ?: "unknown version"} at ${shorten(sdk.root)}, but this project asks for " +
+                "$pinnedButMissing, which is not on this machine. Install it, or change the SDK " +
+                "for this project.",
+            Fix.SDK_MANAGER,
+            blocking = false,
+        )
+
+        else -> Item("Connect IQ SDK", Status.READY, "${sdk.version ?: "unknown version"} at ${shorten(sdk.root)}")
     }
 
     /**

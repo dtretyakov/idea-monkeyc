@@ -69,5 +69,7 @@ First release.
   performance variable on this platform, and nothing anywhere suggests looking at it.
 - A new project wizard built on the SDK's own templates.
 - Developer key generation, without needing openssl.
+- A project can pin the SDK it builds with, instead of following whichever the SDK Manager has
+  made current. A pin the machine cannot honour falls back rather than failing, and says so.
 - A form editor for `manifest.xml`, with products, permissions and languages.
 - Stopping and restarting the Connect IQ simulator.

@@ -24,7 +24,7 @@ class MonkeyCConnectionProvider(private val project: Project) : OSProcessStreamC
     private var output: OutputStream? = null
 
     override fun start() {
-        val sdk = ConnectIqSdkService.getInstance().sdk
+        val sdk = ConnectIqSdkService.getInstance().sdkFor(project)
             ?: throw CannotStartProcessException(
                 "No Connect IQ SDK found. Install one with Garmin's SDK Manager, " +
                     "or set its location in Settings | Languages & Frameworks | Monkey C.",

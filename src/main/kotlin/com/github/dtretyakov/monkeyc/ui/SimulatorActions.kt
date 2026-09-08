@@ -31,7 +31,9 @@ abstract class SimulatorAction : AnAction() {
 
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
-        val sdk = ConnectIqSdkService.getInstance().sdk ?: return
+        // The project's SDK: stopping and starting the simulator has to act on the one the runs
+        // from this project use, which a pinned project can make a different one.
+        val sdk = ConnectIqSdkService.getInstance().sdkFor(project) ?: return
 
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, progressTitle, false) {

@@ -41,7 +41,7 @@ class ApiMirGotoDeclarationHandler : GotoDeclarationHandler {
         val file = sourceElement?.containingFile ?: return null
         if (file.fileType != MonkeyCFileType && file.fileType != ApiMirFileType) return null
 
-        val index = ApiMirService.getInstance().index()
+        val index = ApiMirService.getInstance().index(file.project)
 
         index?.let { ToyboxReference.byName(it, file.viewProvider.contents, offset) }
             ?.takeIf { it.isNotEmpty() }
@@ -78,7 +78,7 @@ class ApiMirGotoDeclarationHandler : GotoDeclarationHandler {
     }
 
     private fun inApiMir(file: PsiFile, offsets: List<Int>): Array<PsiElement>? {
-        val apiMir = ApiMirService.getInstance().file() ?: return null
+        val apiMir = ApiMirService.getInstance().file(file.project) ?: return null
         val psi = PsiManager.getInstance(file.project).findFile(apiMir) ?: return null
 
         return offsets

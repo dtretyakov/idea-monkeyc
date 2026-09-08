@@ -34,6 +34,23 @@ class MonkeyCSettings : PersistentStateComponent<MonkeyCSettings> {
     /** `;`-separated jungle files, relative to the project root. Empty means `monkey.jungle`. */
     var jungleFiles: String = ""
 
+    /**
+     * The SDK this project builds with, pinned. Empty means "whichever the SDK Manager has current".
+     *
+     * Following the SDK Manager is the right default and a poor guarantee. It is a separate
+     * application, it updates itself, and the moment it makes a new SDK current every open project
+     * quietly changes what it compiles with. That is fine for one developer working on one app,
+     * and not fine for a team with an app that has shipped: what the forums ask for is exactly
+     * this, the ability to say which SDK a project is built with and have that survive somebody
+     * else's upgrade.
+     *
+     * Stored with the project rather than the machine, so a team shares the decision — with the
+     * same caveat as the developer key path, which is that a path from a colleague's machine is a
+     * path this one may not have. An SDK that is not there falls back to the current one rather
+     * than failing, and the setup checklist says so.
+     */
+    var sdkPath: String = ""
+
     var typeCheckLevel: String = TypeCheckLevel.DEFAULT.display
     var optimizationLevel: String = OptimizationLevel.DEFAULT.display
     var debugLogLevel: String = DebugLogLevel.DEFAULT.display

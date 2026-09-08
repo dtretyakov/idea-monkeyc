@@ -99,7 +99,8 @@ class ManifestFormEditor(
         builtFrom = document.modificationStamp
     }
 
-    private fun sdkInfo(): ProjectInfo? = ConnectIqSdkService.getInstance().sdk?.let { ProjectInfo.read(it) }
+    private fun sdkInfo(): ProjectInfo? =
+        ConnectIqSdkService.getInstance().sdkFor(project)?.let { ProjectInfo.read(it) }
 
     override fun getComponent(): JComponent = root
 

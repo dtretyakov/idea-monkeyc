@@ -38,7 +38,7 @@ class ApiMirInlineDocumentationProvider : InlineDocumentationProvider {
     /** Declarations of this file that have a comment, or null when this is not the API file. */
     private fun documented(file: PsiFile?): List<Declaration>? {
         if (file == null || file.fileType != ApiMirFileType) return null
-        val index = ApiMirService.getInstance().index() ?: return null
+        val index = ApiMirService.getInstance().index(file.project) ?: return null
 
         // The index is built from the file on disk. A document longer or shorter than it belongs
         // to something else, and ranges taken from one would land anywhere in the other.

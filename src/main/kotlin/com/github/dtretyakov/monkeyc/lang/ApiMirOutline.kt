@@ -40,7 +40,7 @@ class ApiMirStructureViewFactory : PsiStructureViewFactory {
 
     override fun getStructureViewBuilder(psiFile: PsiFile): StructureViewBuilder? {
         if (psiFile.fileType != ApiMirFileType) return null
-        val index = ApiMirService.getInstance().index() ?: return null
+        val index = ApiMirService.getInstance().index(psiFile.project) ?: return null
 
         return object : TreeBasedStructureViewBuilder() {
             override fun createStructureViewModel(editor: com.intellij.openapi.editor.Editor?): StructureViewModel =
@@ -130,7 +130,7 @@ class ApiMirFoldingBuilder : FoldingBuilderEx() {
 
     override fun buildFoldRegions(root: PsiElement, document: Document, quick: Boolean): Array<FoldingDescriptor> {
         if (root.containingFile?.fileType != ApiMirFileType) return FoldingDescriptor.EMPTY_ARRAY
-        val index = ApiMirService.getInstance().index() ?: return FoldingDescriptor.EMPTY_ARRAY
+        val index = ApiMirService.getInstance().index(root.project) ?: return FoldingDescriptor.EMPTY_ARRAY
 
         val node = root.node ?: return FoldingDescriptor.EMPTY_ARRAY
         val length = document.textLength

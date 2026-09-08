@@ -7,6 +7,7 @@ import com.github.dtretyakov.monkeyc.sdk.JavaLocator
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.project.Project
 import com.intellij.util.messages.Topic
 import java.nio.file.Path
 import kotlin.io.path.exists
@@ -28,8 +29,36 @@ class ConnectIqSdkService {
     @Volatile
     private var snapshot: Snapshot? = null
 
+    /**
+     * The SDK, for callers with no project in hand — the wizard, the self-check, stopping every
+     * simulator on the machine.
+     */
     val sdk: ConnectIqSdk?
         get() = current().sdk
+
+    /**
+     * The SDK this project builds with: its own pin if it has one, otherwise the machine's.
+     *
+     * Every caller that compiles, analyses, runs or debugs *something* has a project, and should
+     * ask this. The device catalogue does not need it — devices live in the shared data root, not
+     * inside an SDK, so they are the same whichever one is current.
+     */
+    fun sdkFor(project: Project?): ConnectIqSdk? {
+        val pinned = project?.let { MonkeyCSettings.getInstance(it).sdkPath.trim() }.orEmpty()
+        if (pinned.isEmpty()) return sdk
+        // A pin that is not there falls back rather than failing. These settings are committed, so
+        // the path is as likely to have come from a colleague's machine as from this one, and a
+        // project that refuses to build until the path is fixed would be a worse answer than one
+        // that builds with the current SDK and says so on the checklist.
+        return Path.of(pinned).takeIf { it.resolve("bin").exists() }?.let { ConnectIqSdk.at(it) } ?: sdk
+    }
+
+    /** Whether this project asked for an SDK that is not on this machine. */
+    fun pinnedButMissing(project: Project?): String? {
+        val pinned = project?.let { MonkeyCSettings.getInstance(it).sdkPath.trim() }.orEmpty()
+        if (pinned.isEmpty()) return null
+        return pinned.takeIf { !Path.of(it).resolve("bin").exists() }
+    }
 
     /** Devices the SDK Manager has downloaded. Empty when there is no SDK, or none downloaded yet. */
     fun devices(): List<ConnectIqDevice> = current().catalog?.devices().orEmpty()

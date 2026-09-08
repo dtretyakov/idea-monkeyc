@@ -115,7 +115,7 @@ class MonkeyCRunConfiguration(
     private fun checkEnvironment(model: MonkeyCProject, root: java.nio.file.Path) {
         val openSdkManager = Runnable { OpenSdkManager.invoke(project) }
 
-        if (ConnectIqSdkService.getInstance().sdk == null) {
+        if (ConnectIqSdkService.getInstance().sdkFor(project) == null) {
             throw RuntimeConfigurationError(
                 "No Connect IQ SDK found. The compiler, the simulator and the devices all come " +
                     "from it.",

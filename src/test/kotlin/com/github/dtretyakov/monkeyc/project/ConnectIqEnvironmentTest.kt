@@ -1,5 +1,6 @@
 package com.github.dtretyakov.monkeyc.project
 
+import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
 import com.github.dtretyakov.monkeyc.project.ConnectIqEnvironment.Fix
 import com.github.dtretyakov.monkeyc.project.ConnectIqEnvironment.Item
 import com.github.dtretyakov.monkeyc.project.ConnectIqEnvironment.Status
@@ -125,6 +126,27 @@ class ConnectIqEnvironmentTest {
 
         assertEquals(Status.READY, item.status)
         assertTrue(ConnectIqEnvironment.isReady(listOf(item)))
+    }
+
+    @Test
+    fun `an SDK the project pinned but the machine lacks is reported, not hidden`() {
+        // The pin falls back to the current SDK rather than failing, because these settings are
+        // committed and the path may be a colleague's. A silent fallback would be the exact
+        // problem pinning exists to prevent.
+        val sdk = ConnectIqSdk.at(Path.of("/Sdks/connectiq-sdk-mac-9.2.0"))
+
+        val item = ConnectIqEnvironment.sdk(sdk, pinnedButMissing = "/Sdks/connectiq-sdk-mac-7.4.3")
+
+        assertEquals(Status.MISSING, item.status)
+        assertFalse(item.blocking, "it built with something; it is wrong, not stuck")
+        assertTrue(item.detail.contains("7.4.3"), item.detail)
+    }
+
+    @Test
+    fun `an SDK with no pin to disappoint is simply reported`() {
+        val item = ConnectIqEnvironment.sdk(ConnectIqSdk.at(Path.of("/Sdks/connectiq-sdk-mac-9.2.0")))
+
+        assertEquals(Status.READY, item.status)
     }
 
 }

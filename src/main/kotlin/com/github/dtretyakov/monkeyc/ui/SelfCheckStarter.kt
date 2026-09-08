@@ -231,7 +231,7 @@ class SelfCheckStarter : ModernApplicationStarter() {
             return problems
         }
 
-        val index = ApiMirService.getInstance().index()
+        val index = ApiMirService.getInstance().index(null)
         when {
             index == null -> problems += "the SDK at ${sdk.root} has no readable bin/api.mir"
             index.size < 2_000 -> problems += "api.mir parsed to only ${index.size} symbols, so its format has moved"

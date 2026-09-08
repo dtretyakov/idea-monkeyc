@@ -29,7 +29,7 @@ abstract class ApiMirContributor : ChooseByNameContributorEx {
     protected abstract fun accepts(kind: Kind): Boolean
 
     override fun processNames(processor: Processor<in String>, scope: GlobalSearchScope, filter: IdFilter?) {
-        val index = ApiMirService.getInstance().index() ?: return
+        val index = ApiMirService.getInstance().index(scope.project) ?: return
         // Distinct: `initialize` is declared on most classes in the API, and the chooser asks for
         // each name once.
         index.all().asSequence()
@@ -44,8 +44,8 @@ abstract class ApiMirContributor : ChooseByNameContributorEx {
         processor: Processor<in NavigationItem>,
         parameters: FindSymbolParameters,
     ) {
-        val index = ApiMirService.getInstance().index() ?: return
-        val file = ApiMirService.getInstance().file() ?: return
+        val index = ApiMirService.getInstance().index(parameters.project) ?: return
+        val file = ApiMirService.getInstance().file(parameters.project) ?: return
 
         index.all().forEach { declaration ->
             if (declaration.simpleName != name || !accepts(declaration.kind)) return@forEach

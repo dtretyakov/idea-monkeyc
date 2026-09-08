@@ -52,7 +52,8 @@ private class MonkeyCHoverFeature : LSPHoverFeature() {
     override fun getContent(content: MarkupContent, file: PsiFile): String? {
         val rewritten = MarkupContent(
             content.kind,
-            ApiDocumentationLinks.rewrite(content.value, ConnectIqSdkService.getInstance().sdk),
+            // The file's project, so a project pinned to an older SDK links into that SDK's docs.
+            ApiDocumentationLinks.rewrite(content.value, ConnectIqSdkService.getInstance().sdkFor(file.project)),
         )
         return super.getContent(rewritten, file)
     }

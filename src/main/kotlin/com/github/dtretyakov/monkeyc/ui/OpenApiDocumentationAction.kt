@@ -62,13 +62,13 @@ class OpenApiDocumentationAction : AnAction() {
      * and only one of the three is worth doing anything about.
      */
     private fun resolve(editor: Editor, file: PsiFile): Outcome {
-        val sdk = ConnectIqSdkService.getInstance().sdk
+        val sdk = ConnectIqSdkService.getInstance().sdkFor(file.project)
             ?: return Outcome.Problem("No Connect IQ SDK, so there is no documentation to open.")
 
         val chain = DottedChain.at(file.viewProvider.contents, editor.caretModel.offset)
             ?: return Outcome.Problem("Put the caret on a name first.")
 
-        val index = ApiMirService.getInstance().index()
+        val index = ApiMirService.getInstance().index(file.project)
             ?: return Outcome.Problem("The SDK at ${sdk.root} has no bin/api.mir to look $chain up in.")
 
         val found: ApiMirIndex.Declaration =
