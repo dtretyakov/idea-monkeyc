@@ -234,7 +234,19 @@ internal class ManifestForm(
         // whether a device belongs in the manifest — the screen a layout has to fit, the colour
         // depth artwork has to survive, whether there is a touchscreen, and the memory the code
         // has to fit — are otherwise looked up one device at a time on Garmin's website.
-        val products = ProductTable(devices, manifest.devices.toSet(), manifest.appType)
+        // Only devices that can run this kind of app, which is four fewer than everything for a
+        // watch app: an Edge 130 runs data fields and nothing else, and offering it here means the
+        // Memory column is blank for a reason nobody can read. Anything the manifest already
+        // declares stays, whether it fits or not — the table must be able to save what it was
+        // given.
+        val declared = manifest.devices.toSet()
+        val runnable = devices.filter { it.supports(manifest.appType) || it.id in declared }
+        val products = ProductTable(
+            devices = runnable,
+            selected = declared,
+            appType = manifest.appType,
+            undownloaded = manifest.devices.filterNot { id -> devices.any { it.id == id } },
+        )
         val productSummary = ComponentPanelBuilder.createCommentComponent(" ", true)
         products.onChanged = {
             val ids = products.selected()

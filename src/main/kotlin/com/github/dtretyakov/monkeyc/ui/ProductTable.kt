@@ -30,17 +30,30 @@ import java.util.Locale
  * that will actually constrain the app at the top, which is not something a name-ordered list can
  * ever show.
  */
-class ProductTable(devices: List<ConnectIqDevice>, selected: Set<String>, appType: String?) {
+class ProductTable(
+    devices: List<ConnectIqDevice>,
+    selected: Set<String>,
+    appType: String?,
+    /**
+     * Ids the manifest declares that the SDK Manager has not downloaded.
+     *
+     * They have to be rows, ticked, or the first edit would write them out of the manifest — the
+     * table can only save what it can see. A preview device, or one downloaded on a colleague's
+     * machine, is a perfectly ordinary thing to find in a manifest.
+     */
+    undownloaded: List<String> = emptyList(),
+) {
 
     /** One row: a device and whether it is declared. */
-    class Row(val device: ConnectIqDevice, var selected: Boolean)
+    class Row(val device: ConnectIqDevice, var selected: Boolean, val downloaded: Boolean = true)
 
-    private val rows = devices.map { Row(it, it.id in selected) }
+    private val rows = devices.map { Row(it, it.id in selected) } +
+        undownloaded.map { Row(placeholder(it), selected = true, downloaded = false) }
 
     val model: ListTableModel<Row> = ListTableModel(
         arrayOf(
             checkbox(),
-            text("Device", 220) { "${it.displayName}  (${it.id})" },
+            device(),
             text("Screen", 150) { it.screen },
             text("Colours", 80) { it.bitsPerPixel?.let { bits -> "$bits-bit" }.orEmpty() },
             text("Panel", 80) { it.displayType.orEmpty() },
@@ -103,6 +116,17 @@ class ProductTable(devices: List<ConnectIqDevice>, selected: Set<String>, appTyp
 
         override fun getColumnClass(): Class<*> = java.lang.Boolean::class.java
         override fun getWidth(table: javax.swing.JTable): Int = CHECKBOX_WIDTH
+    }
+
+    /** The name, and for a device this machine does not have, the fact that it does not. */
+    private fun device() = object : ColumnInfo<Row, String>("Device") {
+        override fun valueOf(item: Row): String = if (item.downloaded) {
+            "${item.device.displayName}  (${item.device.id})"
+        } else {
+            "${item.device.id}  (not downloaded)"
+        }
+
+        override fun getWidth(table: javax.swing.JTable): Int = DEVICE_WIDTH
     }
 
     private fun text(title: String, width: Int, value: (ConnectIqDevice) -> String) =
@@ -175,6 +199,18 @@ class ProductTable(devices: List<ConnectIqDevice>, selected: Set<String>, appTyp
         }
 
     private companion object {
+        /** A row for an id with no profile behind it: every column but the name is blank. */
+        fun placeholder(id: String) = ConnectIqDevice(
+            id = id,
+            displayName = id,
+            group = null,
+            family = null,
+            isTouch = false,
+            sdkVersion = null,
+            memoryLimits = emptyMap(),
+        )
+
+        const val DEVICE_WIDTH = 220
         const val CHECKBOX_WIDTH = 28
         const val MEMORY_WIDTH = 90
         const val NAME_COLUMN = 1

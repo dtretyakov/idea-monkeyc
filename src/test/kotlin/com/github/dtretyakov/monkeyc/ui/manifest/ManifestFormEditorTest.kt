@@ -214,6 +214,32 @@ class ManifestFormEditorTest : IdeTestCase() {
         }
     }
 
+    fun testKeepsADeclaredDeviceThatIsNotDownloaded() {
+        // The table can only save what it can see, so a device the manifest names and this machine
+        // does not have has to be a row, ticked. Otherwise the first edit writes it out — and a
+        // preview device, or one a colleague downloaded, is an ordinary thing to find in a
+        // manifest.
+        val xml = manifestXml.replace(
+            "<iq:product id=\"fenix7\"/>",
+            "<iq:product id=\"fenix7\"/><iq:product id=\"nosuchdevice\"/>",
+        )
+        myFixture.addFileToProject("monkey.jungle", "project.manifest = manifest.xml")
+        val manifest = myFixture.addFileToProject(ManifestFile.FILE_NAME, xml)
+        val editor = ManifestFormEditor(project, manifest.virtualFile)
+
+        try {
+            val table = editor.component.descendants().filterIsInstance<javax.swing.JTable>().first()
+            val names = (0 until table.rowCount).map { table.getValueAt(it, 1)?.toString().orEmpty() }
+
+            val row = names.firstOrNull { it.contains("nosuchdevice") }
+            assertNotNull("the declared device is missing from the table: $names", row)
+            assertTrue("and it should say why it looks bare: $row", row!!.contains("not downloaded"))
+            assertEquals("it must be ticked, or saving would drop it", true, table.getValueAt(names.indexOf(row), 0))
+        } finally {
+            com.intellij.openapi.util.Disposer.dispose(editor)
+        }
+    }
+
     private fun java.awt.Container.descendants(): List<java.awt.Component> =
         components.flatMap { listOf(it) + if (it is java.awt.Container) it.descendants() else emptyList() }
 
