@@ -49,14 +49,19 @@ class EditProductsAction : AnAction() {
 
         val installed = ConnectIqSdkService.getInstance().devices()
         val minimum = model.manifest(root)?.minSdkVersion
-        val eligible = installed.filter { minimum == null || it.sdkVersion == null || it.sdkVersion >= minimum }
+        val appType = model.manifest(root)?.appType
+        val newEnough = installed.filter { minimum == null || it.sdkVersion == null || it.sdkVersion >= minimum }
+        // A watch that only runs watch faces has no business in a data field's product list. Offering
+        // it is the reported behaviour of Garmin's own wizard, and the manifest it writes then fails
+        // to build for a device the developer was invited to tick.
+        val eligible = newEnough.filter { it.supports(appType) }
         val selected = model.manifest(root)?.devices.orEmpty().toSet()
 
         val dialog = ProductsDialog(
             project,
             eligible.map { it.id to it.displayName },
             selected,
-            EmptyReason.of(installed.size, eligible.size, minimum),
+            EmptyReason.of(installed.size, newEnough.size, eligible.size, minimum, appType),
         )
         if (!dialog.showAndGet()) return
 
@@ -127,22 +132,35 @@ class EditProductsAction : AnAction() {
  * the device was filtered out silently. An empty list has to say which of the two things happened,
  * because the two have different remedies.
  */
-private sealed interface EmptyReason {
+internal sealed interface EmptyReason {
     object None : EmptyReason
     object NothingDownloaded : EmptyReason
     data class AllBelowMinimum(val installed: Int, val minimum: SdkVersion) : EmptyReason
+    data class NoneRunsThisKind(val installed: Int, val appType: String) : EmptyReason
 
     companion object {
-        fun of(installed: Int, eligible: Int, minimum: SdkVersion?): EmptyReason = when {
+        /**
+         * Asked in the order the filters run, so the reason given is the one that actually emptied
+         * the list rather than whichever is checked first.
+         */
+        fun of(
+            installed: Int,
+            newEnough: Int,
+            eligible: Int,
+            minimum: SdkVersion?,
+            appType: String?,
+        ): EmptyReason = when {
             eligible > 0 -> None
             installed == 0 -> NothingDownloaded
-            minimum != null -> AllBelowMinimum(installed, minimum)
+            newEnough == 0 && minimum != null -> AllBelowMinimum(installed, minimum)
+            newEnough == 0 -> NothingDownloaded
+            appType != null -> NoneRunsThisKind(newEnough, appType)
             else -> NothingDownloaded
         }
     }
 }
 
-private class ProductsDialog(
+internal class ProductsDialog(
     private val project: Project,
     private val devices: List<Pair<String, String>>,
     selected: Set<String>,
@@ -168,7 +186,7 @@ private class ProductsDialog(
                 row {
                     comment(
                         "Only devices downloaded with the SDK Manager that support the manifest's " +
-                            "minimum API level are listed.",
+                            "minimum API level and can run this kind of app are listed.",
                     )
                 }
             }
@@ -177,6 +195,17 @@ private class ProductsDialog(
                 row { label("No devices are downloaded.") }
                 row {
                     comment("A Connect IQ app is built for a device, so there is nothing to choose from yet.")
+                }
+                row { link(OpenSdkManager.label()) { OpenSdkManager.invoke(project) } }
+            }
+
+            is EmptyReason.NoneRunsThisKind -> {
+                row { label("None of the ${empty.installed} downloaded devices runs a ${empty.appType}.") }
+                row {
+                    comment(
+                        "Every device declares which kinds of app it can run. Change the type in " +
+                            "the Manifest tab, or download a device that runs this one.",
+                    )
                 }
                 row { link(OpenSdkManager.label()) { OpenSdkManager.invoke(project) } }
             }

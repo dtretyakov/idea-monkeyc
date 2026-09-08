@@ -78,12 +78,14 @@ class MonkeyCProject(private val project: Project) {
      */
     fun buildableDevices(root: Path): List<ConnectIqDevice> {
         val installed = ConnectIqSdkService.getInstance().devices()
-        val declared = manifest(root)?.devices.orEmpty()
+        val manifest = manifest(root)
+        val declared = manifest?.devices.orEmpty()
         if (declared.isEmpty()) {
             // A barrel declares no products; it builds for anything new enough.
-            val minimum = manifest(root)?.minSdkVersion
+            val minimum = manifest?.minSdkVersion
             return installed.filter { device ->
-                minimum == null || device.sdkVersion == null || device.sdkVersion >= minimum
+                (minimum == null || device.sdkVersion == null || device.sdkVersion >= minimum) &&
+                    device.supports(manifest?.appType)
             }
         }
         // In the manifest's order, not the catalogue's: the first product a developer lists is

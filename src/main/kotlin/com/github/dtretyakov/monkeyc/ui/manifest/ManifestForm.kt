@@ -66,10 +66,22 @@ internal class ManifestForm(
         inManifest = manifest.languages,
     )
 
-    /** Downloaded devices new enough for the minimum API level the manifest declares. */
-    private val compatibleDevices: Set<String> = manifest.minSdkVersion?.let { minimum ->
-        devices.filter { it.sdkVersion == null || it.sdkVersion >= minimum }.map { it.id }.toSet()
-    } ?: devices.map { it.id }.toSet()
+    /**
+     * Downloaded devices this app could actually be built for: new enough for the minimum API
+     * level the manifest declares, and able to run the kind of app it is.
+     *
+     * Both halves matter and they fail differently. A device below the minimum is a choice the
+     * developer can revisit; a device that runs no data fields will never run this one, and
+     * ticking it produces a manifest that cannot build.
+     */
+    private val compatibleDevices: Set<String> = devices
+        .filter { device ->
+            val minimum = manifest.minSdkVersion
+            (minimum == null || device.sdkVersion == null || device.sdkVersion >= minimum) &&
+                device.supports(manifest.appType)
+        }
+        .map { it.id }
+        .toSet()
 
     var preferredFocusedComponent: JComponent? = null
         private set
