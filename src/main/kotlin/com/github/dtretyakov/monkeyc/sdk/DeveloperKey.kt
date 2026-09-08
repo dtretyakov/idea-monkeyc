@@ -3,7 +3,10 @@ package com.github.dtretyakov.monkeyc.sdk
 import java.nio.file.Path
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
+import java.security.MessageDigest
+import java.security.interfaces.RSAPrivateCrtKey
 import java.security.spec.PKCS8EncodedKeySpec
+import java.security.spec.RSAPublicKeySpec
 import kotlin.io.path.createParentDirectories
 import kotlin.io.path.exists
 import kotlin.io.path.isRegularFile
@@ -25,6 +28,9 @@ object DeveloperKey {
 
     private const val BITS = 4096
 
+    /** Enough to distinguish keys by eye without becoming a wall of hex. */
+    private const val FINGERPRINT_BYTES = 8
+
     /**
      * What is wrong with a key, said in the settings dialog rather than at the end of a build.
      *
@@ -43,6 +49,39 @@ object DeveloperKey {
             "Not a PKCS#8 RSA private key. Generate one, or export the one the SDK Manager made."
         }
     }
+
+    /**
+     * A short, stable identifier for the key — safe to write down, show and commit.
+     *
+     * Which key an app was signed with is the most consequential fact in this whole workflow and
+     * the only one nothing records. Garmin: "You will need to use the same key to sign updates to
+     * an existing app on the store", "If you lose your original signing key you will not be able to
+     * update your app", and "Your upload will be rejected If the developer key has changed since
+     * your last upload." There is no recovery — a different key means republishing as a new listing
+     * and abandoning the ratings, the download count and every installed user.
+     *
+     * So the point of this is to notice *before* the upload does. It is a SHA-256 of the **public**
+     * key, derived from the private one's modulus and exponent, so it identifies the key pair
+     * without being any part of the secret: two people can compare fingerprints in a chat window
+     * safely.
+     *
+     * Null when the file is not a key this can read, which [problemWith] is the place to say.
+     */
+    fun fingerprint(path: Path): String? = runCatching {
+        val bytes = path.readBytes()
+        val private = KeyFactory.getInstance("RSA").generatePrivate(PKCS8EncodedKeySpec(bytes))
+        val crt = private as? RSAPrivateCrtKey ?: return null
+        val public = KeyFactory.getInstance("RSA")
+            .generatePublic(RSAPublicKeySpec(crt.modulus, crt.publicExponent))
+
+        MessageDigest.getInstance("SHA-256")
+            .digest(public.encoded)
+            // Grouped in pairs, and only the first few: this is read aloud and compared by eye, and
+            // sixty-four hex characters is not. Eight bytes is far more than enough to tell two of
+            // somebody's keys apart.
+            .take(FINGERPRINT_BYTES)
+            .joinToString(":") { "%02x".format(it) }
+    }.getOrNull()
 
     fun generate(destination: Path): Path {
         val generator = KeyPairGenerator.getInstance("RSA").apply { initialize(BITS) }

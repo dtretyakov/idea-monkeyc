@@ -28,6 +28,17 @@ class MonkeyCSettings : PersistentStateComponent<MonkeyCSettings> {
     /** Path to the developer key (`.der`). Empty means the one the SDK Manager generated. */
     var developerKeyPath: String = ""
 
+    /**
+     * The fingerprint of the key this project last exported with. Empty until it has exported once.
+     *
+     * Committed with the rest of these settings, deliberately: it is a digest of the public key and
+     * no part of the secret, and its whole value is that a teammate, a new machine or a restored
+     * backup can be checked against it. Garmin rejects an update signed with a different key and
+     * keeps no copy of yours, so the alternative to noticing here is noticing when the store
+     * refuses the upload and the listing is already unrecoverable.
+     */
+    var exportedWithKey: String = ""
+
     /** Device the run configurations build for; empty means "ask, then remember". */
     var targetDevice: String = ""
 

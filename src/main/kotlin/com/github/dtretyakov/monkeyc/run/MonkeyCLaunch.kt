@@ -6,10 +6,12 @@ import com.github.dtretyakov.monkeyc.build.MonkeyCBuildSession
 import com.github.dtretyakov.monkeyc.build.MonkeyCBuilder
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.project.DeviceProblems
+import com.github.dtretyakov.monkeyc.project.SigningIdentity
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.project.ProjectLayout
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
+import com.github.dtretyakov.monkeyc.sdk.DeveloperKey
 import com.intellij.execution.ExecutionException
 import com.intellij.openapi.application.runReadActionBlocking
 import com.intellij.openapi.project.Project
@@ -81,6 +83,10 @@ object MonkeyCLaunch {
         if (key == null && kind.buildKind.needsDeveloperKey) {
             throw ExecutionException(model.developerKeyProblem())
         }
+        // Only an export: a `.prg` for the simulator or a watch is signed with whatever key is to
+        // hand and nothing downstream cares. An `.iq` is the artifact the store checks the key of,
+        // and the check has no second chance.
+        if (kind.buildKind == BuildKind.EXPORT && key != null) checkSigningKey(project, key, onProgress)
 
         val simulator = !options.forDevice
         val output = outputFor(options, root, device)
@@ -305,6 +311,29 @@ object MonkeyCLaunch {
      * "Get them with the SDK Manager" is a different errand for one device than for nine, and
      * knowing which ones is what makes it an errand at all.
      */
+    /**
+     * Stops an export that would be signed with a key other than the one this project shipped with.
+     *
+     * Thrown rather than warned, because the mistake is unrecoverable and silent: the store rejects
+     * the upload, and by then the only way forward is a new listing. Recording the first one costs
+     * nothing and is what makes every later export checkable.
+     */
+    private fun checkSigningKey(project: Project, key: Path, onProgress: (String) -> Unit) {
+        val settings = MonkeyCSettings.getInstance(project)
+        val fingerprint = DeveloperKey.fingerprint(key)
+
+        when (val verdict = SigningIdentity.check(settings.exportedWithKey, fingerprint)) {
+            is SigningIdentity.Verdict.Changed -> throw ExecutionException(SigningIdentity.describe(verdict))
+
+            is SigningIdentity.Verdict.FirstExport -> {
+                settings.exportedWithKey = verdict.fingerprint
+                onProgress("Signing with developer key ${verdict.fingerprint}, recorded for this project.")
+            }
+
+            SigningIdentity.Verdict.Fine -> fingerprint?.let { onProgress("Signing with developer key $it.") }
+        }
+    }
+
     private fun noDeviceReason(model: MonkeyCProject, root: Path): String = DeviceProblems.noneAvailable(
         declared = model.manifest(root)?.devices.orEmpty(),
         undownloaded = model.undownloadedDevices(root),
