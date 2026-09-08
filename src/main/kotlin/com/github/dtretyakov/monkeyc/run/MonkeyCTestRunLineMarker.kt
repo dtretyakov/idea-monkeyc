@@ -63,16 +63,32 @@ class MonkeyCTestConfigurationProducer : LazyRunConfigurationProducer<MonkeyCRun
 
     /** A single test beats "run the whole app" whenever the caret is actually on one. */
     override fun isPreferredConfiguration(self: ConfigurationFromContext?, other: ConfigurationFromContext?): Boolean =
-        true
+        runsTheWholeApp(other)
 
     override fun shouldReplace(self: ConfigurationFromContext, other: ConfigurationFromContext): Boolean =
-        other.configuration is MonkeyCRunConfiguration
+        runsTheWholeApp(other)
 
+    /** Only the app configuration is displaced; another test configuration is left to stand. */
+    private fun runsTheWholeApp(other: ConfigurationFromContext?): Boolean =
+        (other?.configuration as? MonkeyCRunConfiguration)?.options?.kind == MonkeyCRunKind.APP
+
+    /**
+     * The test the caret is on, if it is on one.
+     *
+     * Deliberately narrow: the name itself, or the `function` keyword and annotation in front of
+     * it. There is no grammar here, so "the test this line is inside" cannot be answered without
+     * guessing, and a guess would offer to run the previous test from inside the next one.
+     */
     private fun testAt(context: ConfigurationContext): String? {
         val element = context.psiLocation ?: return null
         MonkeyCTestFunctions.nameOf(element)?.let { return it }
-        // Run invoked from anywhere inside the declaration, not only from its name.
-        return PsiTreeUtil.getDeepestFirst(element)
-            .let { MonkeyCTestFunctions.nameOf(it) }
+        return generateSequence(element) { PsiTreeUtil.nextLeaf(it) }
+            .take(DECLARATION_HEAD_TOKENS)
+            .firstNotNullOfOrNull { MonkeyCTestFunctions.nameOf(it) }
+    }
+
+    private companion object {
+        /** `(`, `:test`, `)`, newline, `function`, space, and the name: seven leaves at most. */
+        const val DECLARATION_HEAD_TOKENS = 7
     }
 }

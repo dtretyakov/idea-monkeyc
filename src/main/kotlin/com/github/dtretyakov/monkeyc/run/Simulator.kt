@@ -31,9 +31,19 @@ object Simulator {
      * SDK Manager makes easy to have — is left alone.
      */
     fun running(sdk: ConnectIqSdk): List<ProcessHandle> {
-        val inside = sdk.root.resolve("bin").toString()
+        val bin = sdk.root.resolve("bin")
+        // Both spellings: the SDK is often reached through a symlink, and a process reports the
+        // path it was actually started from.
+        val prefixes = listOfNotNull(
+            bin.toString(),
+            runCatching { bin.toRealPath().toString() }.getOrNull(),
+        ).distinct()
+
         return ProcessHandle.allProcesses()
-            .filter { it.info().command().orElse("").startsWith(inside) }
+            .filter { handle ->
+                val command = handle.info().command().orElse("")
+                command.isNotEmpty() && prefixes.any { command.startsWith(it) }
+            }
             .toList()
     }
 

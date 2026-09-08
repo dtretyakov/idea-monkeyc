@@ -102,6 +102,20 @@ class BuildFingerprintTest {
         assertFalse(BuildFingerprint.isUpToDate(spec, arguments), "a new signing key is a new binary")
     }
 
+    @Test
+    fun `a project in a hidden directory still notices its own sources`(@TempDir temp: Path) {
+        // The walk skips hidden directories, and the root is one: entering it anyway is the whole
+        // difference between this project rebuilding and never rebuilding again.
+        val spec = project(temp.resolve(".watch"))
+        val source = spec.root.resolve("source/App.mc")
+        write(source, "class App {}")
+        write(spec.output, "prg")
+        BuildFingerprint.record(spec, arguments)
+        source.setLastModifiedTime(FileTime.fromMillis(System.currentTimeMillis() + 10_000))
+
+        assertFalse(BuildFingerprint.isUpToDate(spec, arguments))
+    }
+
     private fun project(root: Path, key: Path? = null) = BuildSpec(
         kind = BuildKind.APP,
         root = root,

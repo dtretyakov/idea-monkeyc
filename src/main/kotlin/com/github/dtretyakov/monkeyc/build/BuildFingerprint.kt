@@ -62,8 +62,12 @@ object BuildFingerprint {
     private fun newestInput(spec: BuildSpec): Long {
         var newest = 0L
 
-        spec.root.toFile().walkTopDown()
-            .onEnter { directory -> directory.name !in IGNORED && !directory.name.startsWith(".") }
+        val root = spec.root.toFile()
+        root.walkTopDown()
+            // The root itself is always entered: a project living in `~/.config/watch` or in a
+            // directory called `bin` is still a project, and skipping it here would leave no
+            // inputs at all — which reads as "up to date" for ever.
+            .onEnter { directory -> directory == root || (directory.name !in IGNORED && !directory.name.startsWith(".")) }
             .filter { it.isFile }
             .forEach { newest = maxOf(newest, it.lastModified()) }
 

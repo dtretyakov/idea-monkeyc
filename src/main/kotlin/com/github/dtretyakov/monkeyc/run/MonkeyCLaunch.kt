@@ -153,15 +153,17 @@ object MonkeyCLaunch {
         target: String?,
         onProgress: (String) -> Unit,
     ): PreparedLaunch {
-        val built = build(project, options, target, onProgress)
-        val paired = buildPaired(project, options, built.device, onProgress)
-
+        // Before the build, not after it: compiling for a minute and then refusing to run the
+        // result would be the worst of both.
         if (options.forDevice) {
             throw ExecutionException(
                 "This configuration builds for the watch, not for the simulator, so there is " +
-                    "nothing to run here. Copy ${built.output.fileName} to GARMIN/APPS over USB.",
+                    "nothing to run here. Copy the .prg to GARMIN/APPS over USB.",
             )
         }
+
+        val built = build(project, options, target, onProgress)
+        val paired = buildPaired(project, options, built.device, onProgress)
 
         onProgress("Starting the Connect IQ simulator...")
         if (!Simulator.start(built.sdk)) {
