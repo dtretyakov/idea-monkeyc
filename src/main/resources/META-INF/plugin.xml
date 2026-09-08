@@ -191,6 +191,18 @@
             language="MSS"
             implementationClass="com.redhat.devtools.lsp4ij.features.documentSymbol.LSPDocumentSymbolStructureViewFactory"/>
 
+        <!--
+          The API file gets its outline and its folding from the index instead of from the server,
+          which never sees it. Twenty-seven thousand lines in one file are unreadable as text and
+          browsable as a tree.
+        -->
+        <lang.psiStructureViewFactory
+            language="ConnectIqApi"
+            implementationClass="com.github.dtretyakov.monkeyc.lang.ApiMirStructureViewFactory"/>
+        <lang.foldingBuilder
+            language="ConnectIqApi"
+            implementationClass="com.github.dtretyakov.monkeyc.lang.ApiMirFoldingBuilder"/>
+
         <!-- The client already declares `foldingRange.lineFoldingOnly`; the server registers the
              request. Only the IDE side was missing. -->
         <lang.foldingBuilder

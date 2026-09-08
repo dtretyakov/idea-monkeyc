@@ -34,6 +34,12 @@ class ApiMirIndex private constructor(
         /** Character offset of the declared name itself, so navigation puts the caret on it. */
         val offset: Int,
         val line: Int,
+        /**
+         * Where this declaration's body ends, for the things that need a range rather than a
+         * point: folding, and highlighting the region a structure-view row stands for. A
+         * declaration that holds nothing ends at its own line.
+         */
+        val endOffset: Int = offset,
     ) {
         val simpleName: String get() = qualifiedName.substringAfterLast('.')
 
@@ -117,20 +123,52 @@ class ApiMirIndex private constructor(
 
             // What is open at each level of indentation; index i holds the name opened at depth i.
             val scope = ArrayList<String>()
+
+            // The qualified name opened at each level, so its end can be filled in when it closes.
+            // Parallel to `scope` because an enum occupies a level without contributing a name.
+            val openedAt = ArrayList<String?>()
+
+            fun close(downTo: Int, end: Int) {
+                while (scope.size > downTo) {
+                    scope.removeLast()
+                    openedAt.removeLast()?.let { name ->
+                        declarations[name]?.let { declarations[name] = it.copy(endOffset = end) }
+                    }
+                }
+            }
             var offset = 0
             var line = 0
+
+            // Where the most recent closing brace ended. A scope's end is that, not the start of
+            // whatever declaration comes next — between the two sit the next declaration's own
+            // documentation comments, and folding the previous scope over them looks broken.
+            // Every scope in this file closes with a `}` alone on its line; in 9.2.0 there are
+            // 1127 of them, exactly one per module, class, enum and `<init>` block.
+            var lastBraceEnd = 0
 
             text.lineSequence().forEach { raw ->
                 line++
                 val start = offset
                 offset += raw.length + 1
 
+                // A scope closes on its own brace, at the indentation of whatever opened it.
+                // Waiting for the next declaration instead would give every scope that ends here
+                // the same end, and a module would fold over its siblings.
+                //
+                // `<init> {` opens a brace that is not a scope in this model; its closing brace
+                // sits at the depth of the scope around it, so the pop below finds nothing to do
+                // and it costs nothing to ignore.
+                if (raw.trim() == "}") {
+                    lastBraceEnd = start + raw.length
+                    close((raw.length - raw.trimStart().length) / INDENT, lastBraceEnd)
+                }
+
                 DECLARATION.find(raw)?.let { match ->
                     val depth = match.groupValues[1].length / INDENT
                     val keyword = match.groupValues[2]
                     val name = match.groupValues[3]
 
-                    while (scope.size > depth) scope.removeLast()
+                    close(depth, lastBraceEnd)
 
                     if (keyword != "enum") {
                         val qualified = (visible(scope) + name).joinToString(".")
@@ -145,13 +183,14 @@ class ApiMirIndex private constructor(
                     // Only these hold anything; a function or a variable never opens a scope.
                     if (keyword in CONTAINERS) {
                         scope.add(if (keyword == "enum") ENUM_LEVEL else name)
+                        openedAt.add(if (keyword == "enum") null else (visible(scope.dropLast(1)) + name).joinToString("."))
                     }
                     return@forEach
                 }
 
                 ENUM_MEMBER.find(raw)?.let { match ->
                     val depth = match.groupValues[1].length / INDENT
-                    while (scope.size > depth) scope.removeLast()
+                    close(depth, lastBraceEnd)
                     if (scope.isEmpty()) return@forEach
 
                     val name = match.groupValues[2]
@@ -167,6 +206,8 @@ class ApiMirIndex private constructor(
                     )
                 }
             }
+
+            close(0, maxOf(lastBraceEnd, maxOf(offset - 1, 0)))
 
             return ApiMirIndex(
                 byQualifiedName = declarations,

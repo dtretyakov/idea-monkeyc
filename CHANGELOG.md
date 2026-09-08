@@ -13,6 +13,10 @@ First release.
   No language model of the plugin's own, so it stays in step with the installed SDK.
 - Parameter info, the file structure popup, breadcrumbs, and moving the caret to the start or end
   of a block.
+- The Connect IQ SDK and the project's barrels under External Libraries, searchable and openable.
+- Go to definition, Go to Symbol and Go to Class reach the whole Toybox API, which the SDK's own
+  language server declines to resolve.
+- Shift+F1 opens Garmin's page for the symbol under the caret, from the installed SDK, offline.
 - Source, resource and output directories marked in the project tree; file-type icons.
 
 ### Building and running

@@ -242,9 +242,12 @@ class SelfCheckStarter : ModernApplicationStarter() {
     private companion object {
         val ALL = listOf("MonkeyC", "Jungle", "MSS")
 
+        /** The SDK's API surface, whose outline and folding come from the index, not the server. */
+        val API = listOf("ConnectIqApi")
+
         val EXPECTED = mapOf(
-            "com.intellij.lang.psiStructureViewFactory" to ALL,
-            "com.intellij.lang.foldingBuilder" to ALL,
+            "com.intellij.lang.psiStructureViewFactory" to ALL + API,
+            "com.intellij.lang.foldingBuilder" to ALL + API,
             "com.intellij.lang.quoteHandler" to ALL,
             "com.intellij.lang.braceMatcher" to ALL,
             "com.intellij.codeInsight.parameterInfo" to listOf("MonkeyC"),

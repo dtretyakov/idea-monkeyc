@@ -43,6 +43,9 @@ before it can answer `initialize`.
   documentation, parameter info, rename, find usages, document and workspace symbols, the file
   structure popup, breadcrumbs, folding, type and call hierarchies. Syntax highlighting,
   commenting, bracket matching and self-closing quotes for `.mc`, `.jungle` and `.mss`.
+* **The SDK, as a library** — the Connect IQ SDK and the project's barrels appear under External
+  Libraries. Go to definition and Go to Symbol reach the whole Toybox API, which Garmin's own
+  language server cannot resolve, and Shift+F1 opens its documentation from the SDK on disk.
 * **Building** — in the Build tool window, with the compiler's errors as something to click, and
   the compiler skipped entirely when the output already matches the sources and the flags.
 * **Running** — six run configurations: the app, its unit tests, a build that runs nothing, an

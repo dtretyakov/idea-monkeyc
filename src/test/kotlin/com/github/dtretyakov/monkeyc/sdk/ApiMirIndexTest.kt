@@ -138,4 +138,45 @@ class ApiMirIndexTest {
     fun `nothing at all is a valid file`() {
         assertEquals(0, ApiMirIndex.parse("").size)
     }
+
+    @Test
+    fun `a scope ends at its closing brace, not at the next declaration`() {
+        // The gap between the two holds the next declaration's documentation comment. Folding
+        // Graphics over Toybox's next module, comment and all, is the visible symptom.
+        val text = """
+            module Toybox {
+                module Graphics {
+                    class Dc {
+                    }
+                }
+                //! The user interface toolkit.
+                //! @since 1.0.0
+                module WatchUi {
+                }
+            }
+        """.trimIndent()
+        val parsed = ApiMirIndex.parse(text)
+
+        val graphics = requireNotNull(parsed.exact("Toybox.Graphics"))
+        val comment = text.indexOf("//! The user interface")
+
+        assertTrue(graphics.endOffset <= comment, "Graphics swallows the comment that follows it")
+        assertTrue(graphics.endOffset > text.indexOf("class Dc"), "Graphics ends before its own body")
+        assertEquals("}", text.substring(graphics.endOffset - 1, graphics.endOffset))
+    }
+
+    @Test
+    fun `a declaration that holds nothing is a point, not a range`() {
+        val drawText = requireNotNull(index.exact("Toybox.Graphics.Dc.drawText"))
+
+        assertEquals(drawText.offset, drawText.endOffset)
+    }
+
+    @Test
+    fun `the outermost module closes at the end of the file`() {
+        val parsed = ApiMirIndex.parse("module Toybox {\n    class A {\n    }\n}\n")
+        val toybox = requireNotNull(parsed.exact("Toybox"))
+
+        assertTrue(toybox.endOffset > parsed.exact("Toybox.A")!!.endOffset)
+    }
 }
