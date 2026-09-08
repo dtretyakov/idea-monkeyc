@@ -30,6 +30,17 @@ class MonkeyCAppSettings : PersistentStateComponent<MonkeyCAppSettings> {
     /** A JDK home or a `java` executable. Empty means the IDE's own JVM. */
     var javaPath: String = ""
 
+    /**
+     * Path to `mtp-rs`, which is how a build reaches a watch that is not a disk. Empty means
+     * "look for it".
+     *
+     * Needed because current Garmin devices speak MTP, and only older ones mount as storage. The
+     * tool installs with `cargo install mtp-rs-cli`, so it lands in `~/.cargo/bin` — a directory
+     * on the `PATH` of a shell but not necessarily of an IDE launched from the desktop, which is
+     * why looking for it is worth doing rather than trusting the environment.
+     */
+    var mtpToolPath: String = ""
+
     override fun getState(): MonkeyCAppSettings = this
 
     override fun loadState(state: MonkeyCAppSettings) = XmlSerializerUtil.copyBean(state, this)

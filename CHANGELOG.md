@@ -32,9 +32,13 @@ First release.
 
 - Run configurations for the app, its unit tests, a build that runs nothing, an export to `.iq`,
   a barrel, and a barrel's tests.
-- A build for the watch rather than the simulator. When a Garmin device is plugged in, the plugin
-  offers to install the `.prg` on it, with the settings the simulator wrote — and says that the
-  file vanishing from the folder afterwards is the install working, not failing.
+- A build for the watch rather than the simulator. When a Garmin device is attached, the plugin
+  offers to install the `.prg` on it — over MTP for current devices, which appear under no volume
+  at all, and as a file copy for older ones that mount as a disk. It says which watch is attached,
+  warns when the build was made for a different one, and says that the file vanishing from the
+  folder afterwards is the install working, not failing.
+- MTP needs `mtp-rs`, which is looked for rather than required: a watch that mounts as a disk needs
+  none of it, and its absence is only mentioned when no device could be found at all.
 - Builds are skipped when the output already matches the sources and the compiler flags — except
   an export, which is always built fresh, because a stale `.iq` is found out after it is published.
 - Every build reports what it takes of the target device's memory, and what is left. The limits

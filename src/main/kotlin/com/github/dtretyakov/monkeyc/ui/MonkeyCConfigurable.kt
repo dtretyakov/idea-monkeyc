@@ -101,6 +101,20 @@ class MonkeyCConfigurable(private val project: Project) :
                             }
                         }
                 }
+                row("MTP tool:") {
+                    textFieldWithBrowseButton(
+                        FileChooserDescriptorFactory.createSingleFileOrFolderDescriptor()
+                            .withTitle("mtp-rs"),
+                    )
+                        .columns(COLUMNS_LARGE)
+                        .bindText(app::mtpToolPath)
+                        .comment(
+                            "<code>mtp-rs</code>, used to install a build on a watch that speaks " +
+                                "MTP — which current Garmin devices do, appearing under no volume " +
+                                "at all. Leave empty to look for it. Older watches mount as a disk " +
+                                "and need none of this.",
+                        )
+                }
                 row("Java:") {
                     textFieldWithBrowseButton(
                         FileChooserDescriptorFactory.createSingleFileOrFolderDescriptor()

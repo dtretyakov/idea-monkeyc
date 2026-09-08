@@ -102,20 +102,24 @@ class MonkeyCLaunchProcessHandler(
      * they connected it is not necessarily the moment they meant to install anything.
      */
     private fun offerToInstall(built: BuiltArtifact) {
-        val volumes = GarminVolume.mounted()
-        if (volumes.isEmpty()) {
+        val targets = GarminTarget.attached()
+        if (targets.isEmpty()) {
             notifyTextAvailable(
                 "Copy it to GARMIN/APPS on the watch over USB to install it.\n",
                 ProcessOutputTypes.SYSTEM,
             )
+            // Only said when there is no device: a current watch speaks MTP and appears under no
+            // volume, so "no device" and "no tool to see it with" look identical from here, and
+            // the second is fixable. Not said when a watch was found, because then nothing is
+            // missing.
+            if (GarminTarget.mtpToolMissing()) {
+                notifyTextAvailable("\n${MtpLocator.INSTALL_HINT}\n", ProcessOutputTypes.SYSTEM)
+            }
             return
         }
 
-        notifyTextAvailable(
-            "Connected: ${volumes.joinToString { it.name }}.\n",
-            ProcessOutputTypes.SYSTEM,
-        )
-        MonkeyCInstallNotice.offer(project, built, volumes)
+        notifyTextAvailable("Connected: ${targets.joinToString { it.name }}.\n", ProcessOutputTypes.SYSTEM)
+        MonkeyCInstallNotice.offer(project, built, targets)
     }
 
     private fun runInSimulator() {
