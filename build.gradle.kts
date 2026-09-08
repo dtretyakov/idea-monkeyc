@@ -68,13 +68,21 @@ intellijPlatform {
         )
 
         ides {
-            // By default the verifier downloads the IDEs JetBrains recommends, which is another
-            // gigabyte and a half on top of the one the build already has. Point it at an IDE that
-            // is already unpacked when that download is not worth waiting for:
+            // The IDEs JetBrains recommends are the thorough answer and cost several gigabytes:
+            // one download each, on top of the one the build already has, which is more than a CI
+            // runner's disk. So the default is the version this plugin is compiled against, which
+            // is the check that has to pass, and the sweep is opt-in:
             //
-            //     ./gradlew verifyPlugin -PverifyAgainst=/path/to/idea-2026.2.2
+            //     ./gradlew verifyPlugin -PverifyRecommended
+            //     ./gradlew verifyPlugin -PverifyAgainst=/path/to/idea-2026.2.2   (already unpacked)
             val unpacked = providers.gradleProperty("verifyAgainst").orNull?.takeIf { it.isNotBlank() }
-            if (unpacked != null) local(file(unpacked)) else recommended()
+            when {
+                unpacked != null -> local(file(unpacked))
+                providers.gradleProperty("verifyRecommended").isPresent -> recommended()
+                // The IDE the plugin is already compiled against: nothing extra to download, so it
+                // fits on a runner's disk and reuses what the build step has cached.
+                else -> current()
+            }
         }
     }
 

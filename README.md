@@ -96,7 +96,9 @@ Garmin fixes it:
 ./gradlew build          # compile and run the unit tests
 ./gradlew runSelfCheck   # headless IDE: is the plugin whole and are its extensions registered?
 ./gradlew runIde         # sandbox IDE
-./gradlew verifyPlugin   # compatibility check (add -PverifyAgainst=<unpacked IDE> to skip its download)
+./gradlew verifyPlugin   # compatibility check against the IDE the plugin is built on
+./gradlew verifyPlugin -PverifyRecommended        # ...and against every IDE JetBrains recommends
+./gradlew verifyPlugin -PverifyAgainst=<unpacked> # ...against an IDE already on disk
 ./gradlew buildPlugin    # distributable zip
 ```
 
