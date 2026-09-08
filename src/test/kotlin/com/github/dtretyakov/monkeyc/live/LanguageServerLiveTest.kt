@@ -10,6 +10,8 @@ import com.github.dtretyakov.monkeyc.project.ProjectLayout
 import com.github.dtretyakov.monkeyc.sdk.JavaLocator
 import org.eclipse.lsp4j.ApplyWorkspaceEditParams
 import org.eclipse.lsp4j.ApplyWorkspaceEditResponse
+import org.eclipse.lsp4j.CallHierarchyCapabilities
+import org.eclipse.lsp4j.CallHierarchyPrepareParams
 import org.eclipse.lsp4j.ClientCapabilities
 import org.eclipse.lsp4j.ConfigurationParams
 import org.eclipse.lsp4j.CompletionCapabilities
@@ -41,6 +43,8 @@ import org.eclipse.lsp4j.TextDocumentClientCapabilities
 import org.eclipse.lsp4j.TextDocumentIdentifier
 import org.eclipse.lsp4j.TextDocumentItem
 import org.eclipse.lsp4j.TypeDefinitionCapabilities
+import org.eclipse.lsp4j.TypeHierarchyCapabilities
+import org.eclipse.lsp4j.TypeHierarchyPrepareParams
 import org.eclipse.lsp4j.SymbolCapabilities
 import org.eclipse.lsp4j.UnregistrationParams
 import org.eclipse.lsp4j.WorkDoneProgressCreateParams
@@ -120,6 +124,7 @@ class LanguageServerLiveTest {
             assertTrue(labels.contains("setColor"), "expected Dc members, got ${labels.take(10)}")
 
             assertMalformedDefinitionUri(server, document, after(text, "new FixtureView", 6), source)
+            assertOnlyHierarchyReachesTheApi(server, document, after(text, "dc.setColor", 5), sdk.root)
             assertSignatureHelpNeedsTheFilter(server, document, after(text, "dc.drawText(", 12))
         } catch (e: Throwable) {
             // The server reports its own failures on stderr, and they say far more than
@@ -159,6 +164,57 @@ class LanguageServerLiveTest {
         assertTrue(
             Path.of(java.net.URI(MonkeyCFileUriSupport.repair(uri))).toRealPath() == source.toRealPath(),
             "the repaired URI must point at the source file, but was $uri",
+        )
+    }
+
+    /**
+     * How a call on an instance is resolved, which is not through `definition`.
+     *
+     * `dc.setColor` is the shape most Monkey C code is made of, and the two requests an IDE would
+     * reach for both come back empty: `DefinitionContext` and `TypeDefinitionContext` resolve the
+     * symbol perfectly well — that is the same inference completion runs on — and then look the
+     * location up through `WorkspaceContext`, which only knows the project's own files.
+     *
+     * The hierarchy requests do not go through that path. They answer with a location inside the
+     * SDK's `api.mir`, and `detail` carries the fully qualified name. That is why go-to-definition
+     * in this plugin asks the server for a hierarchy rather than for a definition, and it is worth
+     * a test: if Garmin ever teaches `definition` about the API, the first two assertions here go
+     * red and a whole layer of the plugin can go with them.
+     */
+    private fun assertOnlyHierarchyReachesTheApi(
+        server: LanguageServer,
+        document: TextDocumentIdentifier,
+        position: Position,
+        sdkRoot: Path,
+    ) {
+        val definition = server.textDocumentService
+            .definition(DefinitionParams(document, position))
+            .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        assertTrue(
+            definition.left.orEmpty().isEmpty() && definition.right.orEmpty().isEmpty(),
+            "the server now answers definition for an API member; the hierarchy detour can go",
+        )
+
+        val call = eventually("prepareCallHierarchy on dc.setColor") {
+            server.textDocumentService
+                .prepareCallHierarchy(CallHierarchyPrepareParams(document, position))
+                .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                ?.takeIf { it.isNotEmpty() }
+        }
+        val member = call.first()
+        assertTrue(member.uri.contains("api.mir"), "expected api.mir, got ${member.uri}")
+        assertTrue(member.uri.contains(sdkRoot.fileName.toString()), "expected this SDK, got ${member.uri}")
+        assertTrue(
+            member.detail == "\$.Toybox.Graphics.Dc.setColor",
+            "expected the qualified name in detail, got ${member.detail}",
+        )
+
+        val type = server.textDocumentService
+            .prepareTypeHierarchy(TypeHierarchyPrepareParams(document, position))
+            .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        assertTrue(
+            type.orEmpty().any { it.uri.contains("api.mir") },
+            "expected the receiver's type in api.mir, got ${type.orEmpty().map { it.uri }}",
         )
     }
 
@@ -219,6 +275,8 @@ class LanguageServerLiveTest {
             declaration = DeclarationCapabilities().apply { dynamicRegistration = true }
             definition = DefinitionCapabilities().apply { dynamicRegistration = true }
             typeDefinition = TypeDefinitionCapabilities().apply { dynamicRegistration = true }
+            typeHierarchy = TypeHierarchyCapabilities().apply { dynamicRegistration = true }
+            callHierarchy = CallHierarchyCapabilities().apply { dynamicRegistration = true }
             implementation = ImplementationCapabilities().apply { dynamicRegistration = true }
             documentHighlight = DocumentHighlightCapabilities().apply { dynamicRegistration = true }
             foldingRange = FoldingRangeCapabilities().apply {

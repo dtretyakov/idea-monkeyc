@@ -5,38 +5,46 @@ import com.github.dtretyakov.monkeyc.sdk.ApiMirIndex.Declaration
 import com.github.dtretyakov.monkeyc.sdk.ApiMirIndex.Kind
 
 /**
- * Which Toybox declaration a piece of code is pointing at.
+ * Which Toybox declaration a piece of code is pointing at, worked out from the text alone.
  *
- * [ApiMirIndex.resolve] answers for a name written as a path — `WatchUi.Menu2`, `Graphics.Dc`.
- * That covers types and module members and misses the most common thing in the file: a call on an
- * instance. `logger.debug(...)` names a variable and a method, and no amount of matching against
- * qualified names will turn `logger` into `Toybox.Test.Logger`.
+ * Two different jobs, kept apart because one is certain and the other is not.
  *
- * Working out the type properly means type inference, which is the compiler's job and the reason
- * the language server exists — but that server declines this question, since its definition
- * handler never looks in the API. So the receiver's type is read off the source instead. Monkey C
- * annotates types in the text, `logger as Logger`, and idiomatic code annotates parameters and
- * fields, so the annotation is usually a few lines up from the call.
+ * [byName] reads the name as written and looks it up — `WatchUi.Menu2`, `Graphics.COLOR_WHITE`.
+ * That is not a guess: the API declares exactly one thing by that path.
  *
- * When even that fails, the member name alone is matched against the API. That answer can be
- * several declarations wide and the platform shows the choice; past a point a list stops being an
- * answer, so a very common name gives nothing rather than everything.
+ * [byGuess] is for a call on an instance, where the name says nothing: `logger.debug` names a
+ * variable and a method, and nothing about `logger` matches `Toybox.Test.Logger`. The right answer
+ * comes from the language server, which infers the receiver's type — see [ServerSymbolLocation].
+ * This is what is left when the server cannot be asked, and it is worth having for that: the SDK
+ * is still building its index for the first half-minute after a project opens, and the API does
+ * not change while it does.
  */
 object ToyboxReference {
 
     /** Beyond this a chooser is a haystack; `initialize` is declared on most classes in the API. */
     private const val TOO_MANY = 20
 
-    fun resolve(index: ApiMirIndex, text: CharSequence, offset: Int): List<Declaration> {
+    /** The name as written, resolved against the API. Nothing inferred. */
+    fun byName(index: ApiMirIndex, text: CharSequence, offset: Int): List<Declaration> {
         val chain = DottedChain.at(text, offset) ?: return emptyList()
+        return index.resolve(chain)
+    }
 
-        index.resolve(chain).takeIf { it.isNotEmpty() }?.let { return it }
+    /**
+     * The receiver's type read off the source, and failing that the member name on its own.
+     *
+     * Monkey C writes types in the text — `logger as Logger` — and idiomatic code annotates
+     * parameters and fields, so the annotation is usually a few lines above the call. When there
+     * is none, the member name alone is matched across the API; that answer can be several
+     * declarations wide and the platform shows the choice.
+     */
+    fun byGuess(index: ApiMirIndex, text: CharSequence, offset: Int): List<Declaration> {
+        val chain = DottedChain.at(text, offset) ?: return emptyList()
 
         val receiver = chain.substringBeforeLast('.', "")
         val member = chain.substringAfterLast('.')
         if (receiver.isEmpty()) return emptyList()
 
-        // `logger` is a name in this file; what it holds is written beside it.
         declaredType(text, receiver.substringBefore('.'), offset)?.let { type ->
             val rest = receiver.substringAfter('.', "")
             val qualified = listOf(type, rest, member).filter { it.isNotEmpty() }.joinToString(".")
@@ -45,6 +53,10 @@ object ToyboxReference {
 
         return membersNamed(index, member)
     }
+
+    /** Either answer, name first; for callers that only want the best available. */
+    fun resolve(index: ApiMirIndex, text: CharSequence, offset: Int): List<Declaration> =
+        byName(index, text, offset).ifEmpty { byGuess(index, text, offset) }
 
     /**
      * The type written for a name in this file, preferring the nearest one above the caret.
