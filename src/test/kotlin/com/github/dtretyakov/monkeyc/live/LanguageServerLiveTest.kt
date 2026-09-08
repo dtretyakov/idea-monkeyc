@@ -23,6 +23,7 @@ import org.eclipse.lsp4j.DidOpenTextDocumentParams
 import org.eclipse.lsp4j.DocumentHighlightCapabilities
 import org.eclipse.lsp4j.FoldingRangeCapabilities
 import org.eclipse.lsp4j.HoverCapabilities
+import org.eclipse.lsp4j.HoverParams
 import org.eclipse.lsp4j.ImplementationCapabilities
 import org.eclipse.lsp4j.InitializeParams
 import org.eclipse.lsp4j.InitializedParams
@@ -55,6 +56,7 @@ import org.eclipse.lsp4j.jsonrpc.services.JsonRequest
 import org.eclipse.lsp4j.launch.LSPLauncher
 import org.eclipse.lsp4j.services.LanguageClient
 import org.eclipse.lsp4j.services.LanguageServer
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -127,6 +129,9 @@ class LanguageServerLiveTest {
             assertOnlyHierarchyReachesTheApi(server, document, after(text, "dc.setColor", 5), sdk.root)
             assertNoSemanticTokens(client)
             assertSignatureHelpNeedsTheFilter(server, document, after(text, "dc.drawText(", 12))
+            assertHoverIsWholeAndSelfContained(server, document, after(text, "dc.setColor", 5))
+            assertConstructorGoesToTheClass(server, document, after(text, "new FixtureView", 6), text)
+            assertResourceXmlHasNoNavigation(server, project)
         } catch (e: Throwable) {
             // The server reports its own failures on stderr, and they say far more than
             // "Internal error." does.
@@ -139,6 +144,106 @@ class LanguageServerLiveTest {
             process.destroy()
             process.waitFor(10, TimeUnit.SECONDS)
         }
+    }
+
+    /**
+     * That the hover is about the symbol asked for and nothing else.
+     *
+     * Worth pinning down, because the equivalent third-party tooling has this wrong: its hover for
+     * `Activity.Info.timerTime` shows one correct line and then the whole of the *next* entry in
+     * Garmin's documentation HTML, which took its reporter a while even to notice. The language
+     * server does not — it answers structured Markdown assembled from the API rather than scraped
+     * out of a page — and this is the tripwire for the day that changes.
+     */
+    private fun assertHoverIsWholeAndSelfContained(
+        server: LanguageServer,
+        document: TextDocumentIdentifier,
+        position: Position,
+    ) {
+        val hover = server.textDocumentService
+            .hover(HoverParams(document, position))
+            .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        val content = hover?.contents?.right?.value.orEmpty()
+        assertTrue(content.isNotEmpty(), "the server answered no hover at all")
+        assertTrue(content.contains("setColor"), "the hover is not about setColor:\n$content")
+
+        // One signature, not two: a second `public function` heading would be the next API entry
+        // having run on into this one.
+        assertEquals(
+            1,
+            Regex("public function").findAll(content).count(),
+            "the hover carries more than one declaration:\n$content",
+        )
+
+        // The links are VS Code commands, which is what ApiDocumentationLinks rewrites. If they
+        // ever become ordinary URLs, that rewriting is dead code.
+        assertTrue(
+            content.contains("command:monkeyc.viewApiDocumentation"),
+            "the server no longer sends VS Code command links; ApiDocumentationLinks can go",
+        )
+    }
+
+    /**
+     * That `new FixtureView()` still goes to the class rather than to its `initialize`.
+     *
+     * The same complaint exists against the third-party tooling, and it is Garmin's server that
+     * decides: asked about a constructor call it answers with the class declaration. Landing on
+     * the class is adjacent and not wrong, and redirecting to `initialize` would mean this plugin
+     * knowing what `new` means — which is the one thing its design says it will not do.
+     *
+     * So it is recorded rather than worked around, in the shape this project uses for everything
+     * the SDK gets slightly wrong: a test that goes red the day it is fixed, so the note can be
+     * removed rather than outliving the problem.
+     */
+    private fun assertConstructorGoesToTheClass(
+        server: LanguageServer,
+        document: TextDocumentIdentifier,
+        position: Position,
+        text: String,
+    ) {
+        val locations = server.textDocumentService
+            .definition(DefinitionParams(document, position))
+            .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .left.orEmpty()
+        assertTrue(locations.isNotEmpty(), "no definition for a constructor call")
+
+        val line = locations.first().range.start.line
+        val declaration = text.lines().getOrNull(line).orEmpty().trim()
+        assertTrue(
+            declaration.startsWith("class FixtureView"),
+            "the server now sends a constructor call somewhere other than the class ($declaration); " +
+                "if that is `initialize`, this note and this test can go",
+        )
+    }
+
+    /**
+     * That the server still answers nothing inside a resource XML file.
+     *
+     * The plugin routes the project's XML to the server — `ConnectIqXmlMatcher` — on the strength
+     * of it offering completion there. Navigation it does not: asked where a drawable id is
+     * declared, it returns nothing at all. Building that ourselves would mean a model of the
+     * resource references, which is the kind of thing this plugin exists not to maintain.
+     *
+     * Recorded so the day it starts answering is a red test rather than an unnoticed improvement.
+     */
+    private fun assertResourceXmlHasNoNavigation(server: LanguageServer, project: Path) {
+        val resource = project.resolve("resources/drawables.xml")
+        val text = resource.readText()
+        val uri = resource.toUri().toString()
+        server.textDocumentService.didOpen(
+            DidOpenTextDocumentParams(TextDocumentItem(uri, "xml", 1, text)),
+        )
+        val locations = runCatching {
+            server.textDocumentService
+                .definition(DefinitionParams(TextDocumentIdentifier(uri), after(text, "LauncherIcon", 4)))
+                .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .left.orEmpty()
+        }.getOrElse { emptyList() }
+        assertTrue(
+            locations.isEmpty(),
+            "the server now navigates inside resource XML (${locations.firstOrNull()?.uri}); " +
+                "LSPGotoDeclarationHandler can be registered for XML and this test removed",
+        )
     }
 
     /**
