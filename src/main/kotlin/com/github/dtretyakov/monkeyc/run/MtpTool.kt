@@ -3,6 +3,7 @@ package com.github.dtretyakov.monkeyc.run
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.nio.file.Path
+import java.util.concurrent.TimeUnit
 import kotlin.io.path.isExecutable
 import kotlin.io.path.isRegularFile
 
@@ -114,6 +115,60 @@ object MtpTool {
         }
 
     fun deviceArguments(): List<String> = listOf("--json", "devices")
+
+    /** What a finished `mtp-rs` run said and how it ended. */
+    data class Outcome(val exitCode: Int, val output: String, val errors: String)
+
+    /**
+     * Runs the tool and collects both streams without deadlocking on either.
+     *
+     * The obvious way to write this is wrong, and quietly: read stdout to the end, then read
+     * stderr. `mtp-rs` writes its JSON result to stdout only when the transfer finishes, and
+     * streams progress to stderr throughout — "Transfer progress still goes to stderr" even in
+     * `--json` mode. So the reader blocks on stdout while the child fills the stderr pipe buffer,
+     * the child blocks writing, and neither moves again. The timeout below cannot help, because
+     * `waitFor` is never reached.
+     *
+     * The streams cannot simply be merged either: keeping stdout parseable is the entire reason
+     * the tool separates them.
+     */
+    fun run(command: List<String>, timeout: Long, unit: TimeUnit): Outcome {
+        val process = ProcessBuilder(command).start()
+
+        // Both streams are drained on threads of their own, and the timeout is applied to the
+        // process rather than to a read. Reading either stream on this thread makes the timeout
+        // decorative: a run that hangs without printing anything never reaches `waitFor` at all,
+        // and one that floods stderr while stdout stays silent deadlocks outright — which is the
+        // shape of a real transfer, since progress goes to stderr and the JSON result arrives on
+        // stdout only at the end.
+        val output = StringBuilder()
+        val errors = StringBuilder()
+        val readers = listOf(
+            drain(process.inputStream, output),
+            drain(process.errorStream, errors),
+        )
+
+        val finished = process.waitFor(timeout, unit)
+        if (!finished) process.destroyForcibly()
+        // Once the process is gone its streams close, so the readers end on their own; the wait is
+        // bounded anyway, because a reader that somehow does not is not worth hanging the IDE for.
+        readers.forEach { it.join(DRAIN_MILLIS) }
+
+        return Outcome(if (finished) process.exitValue() else TIMED_OUT, output.toString(), errors.toString())
+    }
+
+    private fun drain(stream: java.io.InputStream, into: StringBuilder): Thread = Thread {
+        runCatching { stream.bufferedReader().use { it.forEachLine { line -> synchronized(into) { into.appendLine(line) } } } }
+    }.apply {
+        isDaemon = true
+        start()
+    }
+
+    /** Not one of the tool's codes: ours, for a run that never finished. */
+    const val TIMED_OUT = -1
+
+    /** Long enough for a drained reader to notice the stream closed, short enough not to wait on it. */
+    private const val DRAIN_MILLIS = 2_000L
 
     /**
      * What went wrong, in words, from the tool's exit code and whatever it said.

@@ -24,7 +24,7 @@ class ExportIdentityTest {
         val verdict = ExportIdentity.check(recorded = "", current = original)
 
         assertTrue(verdict is ExportIdentity.Verdict.FirstExport)
-        assertEquals(original, (verdict as ExportIdentity.Verdict.FirstExport).fingerprint)
+        assertEquals(original, (verdict as ExportIdentity.Verdict.FirstExport).value)
     }
 
     @Test
@@ -77,7 +77,7 @@ class ExportIdentityTest {
     fun `a project that has never exported records whichever id it used`() {
         val verdict = ExportIdentity.check(recorded = "", current = "0123abcd")
 
-        assertEquals("0123abcd", (verdict as ExportIdentity.Verdict.FirstExport).fingerprint)
+        assertEquals("0123abcd", (verdict as ExportIdentity.Verdict.FirstExport).value)
     }
 
     @Test

@@ -349,8 +349,8 @@ object MonkeyCLaunch {
             is ExportIdentity.Verdict.Changed -> throw ExecutionException(ExportIdentity.describeKey(verdict))
 
             is ExportIdentity.Verdict.FirstExport -> {
-                settings.exportedWithKey = verdict.fingerprint
-                onProgress("Signing with developer key ${verdict.fingerprint}, recorded for this project.")
+                settings.exportedWithKey = verdict.value
+                onProgress("Signing with developer key ${verdict.value}, recorded for this project.")
             }
 
             ExportIdentity.Verdict.Fine -> fingerprint?.let { onProgress("Signing with developer key $it.") }
@@ -378,8 +378,8 @@ object MonkeyCLaunch {
                 throw ExecutionException(ExportIdentity.describeApplicationId(verdict))
 
             is ExportIdentity.Verdict.FirstExport -> {
-                settings.exportedAsApplicationId = verdict.fingerprint
-                onProgress("Exporting as application id ${verdict.fingerprint}, recorded for this project.")
+                settings.exportedAsApplicationId = verdict.value
+                onProgress("Exporting as application id ${verdict.value}, recorded for this project.")
             }
 
             ExportIdentity.Verdict.Fine -> Unit

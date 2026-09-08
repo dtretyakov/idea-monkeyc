@@ -87,9 +87,15 @@ object ExportPreflight {
     private fun languageGaps(languages: List<String>, known: List<ConnectIqDevice>): List<Finding> {
         if (known.isEmpty()) return emptyList()
 
+        // A device whose catalogue entry carries no language data at all is left out of both
+        // counts. Everything else here says nothing when it cannot tell, and claiming such a
+        // device supports no language would name it under every language the manifest declares.
+        val answering = known.filter { it.languages.isNotEmpty() }
+        if (answering.isEmpty()) return emptyList()
+
         return languages.mapNotNull { language ->
-            val without = known.filter { language !in it.languages }
-            val partial = known.filter { device ->
+            val without = answering.filter { language !in it.languages }
+            val partial = answering.filter { device ->
                 val (with, total) = device.partNumbersWith(language)
                 with in 1 until total
             }
@@ -97,8 +103,8 @@ object ExportPreflight {
             when {
                 without.isNotEmpty() -> Finding(
                     Severity.WARNING,
-                    "$language is declared, but ${without.size} of ${known.size} declared " +
-                        "device${plural(known.size)} do not support it: ${name(without.map { it.id })}. " +
+                    "$language is declared, but ${without.size} of ${answering.size} declared " +
+                        "device${plural(answering.size)} do not support it: ${name(without.map { it.id })}. " +
                         "A language a device cannot render narrows where the app is offered.",
                 )
 

@@ -171,4 +171,37 @@ class ExportPreflightTest {
         assertTrue(finding.text.contains("device5"), finding.text)
         assertTrue(finding.text.contains("and 4 more"), finding.text)
     }
+    @Test
+    fun `a device that declares no languages is not accused of supporting none`() {
+        // Everything else here says nothing when it cannot tell. Claiming a device with no
+        // language data supports nothing would name it under every language the manifest declares.
+        val findings = ExportPreflight.check(
+            manifest(devices = listOf("venu2", "mystery"), languages = listOf("eng", "ukr")),
+            listOf(
+                device("venu2", languages = listOf(setOf("eng", "ukr"))),
+                device("mystery", languages = emptyList()),
+            ),
+        )
+
+        assertEquals(emptyList<ExportPreflight.Finding>(), findings)
+    }
+
+    @Test
+    fun `counts are of the devices that answered, not of every declared device`() {
+        val findings = ExportPreflight.check(
+            manifest(devices = listOf("venu2", "fenix5", "mystery"), languages = listOf("ukr")),
+            listOf(
+                device("venu2", languages = listOf(setOf("eng"))),
+                device("fenix5", languages = listOf(setOf("eng"))),
+                device("mystery", languages = emptyList()),
+            ),
+        )
+
+        // Two devices answered and neither has it; the third said nothing and is left out of both
+        // the count and the list.
+        val finding = findings.single()
+        assertTrue(finding.text.contains("2 of 2"), finding.text)
+        assertTrue(!finding.text.contains("mystery"), finding.text)
+    }
+
 }

@@ -19,7 +19,8 @@ object ExportIdentity {
         object Fine : Verdict
 
         /** The first export of this project. Worth recording, not worth interrupting for. */
-        data class FirstExport(val fingerprint: String) : Verdict
+        /** The value recorded — a key fingerprint or an application id, per caller. */
+        data class FirstExport(val value: String) : Verdict
 
         /** The key changed. This is the one that has to stop and ask. */
         data class Changed(val expected: String, val actual: String) : Verdict

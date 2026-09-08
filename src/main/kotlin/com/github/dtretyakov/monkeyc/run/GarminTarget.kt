@@ -47,20 +47,19 @@ sealed interface GarminTarget {
 
         override fun install(prg: Path): Path {
             val remote = "$APPS_DIRECTORY/${prg.name.uppercase()}"
-            val process = ProcessBuilder(
+            val outcome = MtpTool.run(
                 listOf(tool.toString()) + MtpTool.uploadArguments(info.serial_number, prg, remote),
-            ).start()
+                TIMEOUT_MINUTES,
+                TimeUnit.MINUTES,
+            )
 
-            val output = process.inputStream.bufferedReader().use { it.readText() }
-            val errors = process.errorStream.bufferedReader().use { it.readText() }
-            if (!process.waitFor(TIMEOUT_MINUTES, TimeUnit.MINUTES)) {
-                process.destroyForcibly()
+            if (outcome.exitCode == MtpTool.TIMED_OUT) {
                 throw IllegalStateException("Installing on $name did not finish.")
             }
-            if (process.exitValue() != 0) {
-                throw IllegalStateException(MtpTool.describeFailure(process.exitValue(), errors))
+            if (outcome.exitCode != 0) {
+                throw IllegalStateException(MtpTool.describeFailure(outcome.exitCode, outcome.errors))
             }
-            return Path.of(MtpTool.parseUpload(output)?.remote_path ?: remote)
+            return Path.of(MtpTool.parseUpload(outcome.output)?.remote_path ?: remote)
         }
     }
 
@@ -85,20 +84,16 @@ sealed interface GarminTarget {
 
         private fun mtpDevices(): List<Mtp> {
             val tool = MtpLocator.resolve() ?: return emptyList()
-            val output = runCatching {
-                val process = ProcessBuilder(listOf(tool.toString()) + MtpTool.deviceArguments())
-                    .redirectErrorStream(false)
-                    .start()
-                val text = process.inputStream.bufferedReader().use { it.readText() }
-                if (!process.waitFor(LIST_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                    process.destroyForcibly()
-                    return emptyList()
-                }
-                text
+            val outcome = runCatching {
+                MtpTool.run(
+                    listOf(tool.toString()) + MtpTool.deviceArguments(),
+                    LIST_TIMEOUT_SECONDS,
+                    TimeUnit.SECONDS,
+                )
             }.getOrNull() ?: return emptyList()
 
             // Garmin's vendor id, so a phone or a camera on the same bus is not offered as a watch.
-            return MtpTool.parseDevices(output).filter { it.isGarmin }.map { Mtp(tool, it) }
+            return MtpTool.parseDevices(outcome.output).filter { it.isGarmin }.map { Mtp(tool, it) }
         }
 
         private const val LIST_TIMEOUT_SECONDS = 20L
