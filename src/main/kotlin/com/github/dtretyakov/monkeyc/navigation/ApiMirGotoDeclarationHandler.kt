@@ -30,10 +30,9 @@ class ApiMirGotoDeclarationHandler : GotoDeclarationHandler {
         val file = sourceElement?.containingFile ?: return null
         if (file.fileType != MonkeyCFileType && file.fileType != ApiMirFileType) return null
 
-        val chain = DottedChain.at(file.viewProvider.contents, offset) ?: return null
         val index = ApiMirService.getInstance().index() ?: return null
 
-        val found = index.resolve(chain)
+        val found = ToyboxReference.resolve(index, file.viewProvider.contents, offset)
         if (found.isEmpty()) return null
 
         val apiMir = ApiMirService.getInstance().file() ?: return null

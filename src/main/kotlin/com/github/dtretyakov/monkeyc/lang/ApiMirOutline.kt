@@ -135,20 +135,32 @@ class ApiMirFoldingBuilder : FoldingBuilderEx() {
         val node = root.node ?: return FoldingDescriptor.EMPTY_ARRAY
         val length = document.textLength
 
-        return index.all()
-            .filter { it.kind in HOLDERS && it.endOffset > it.offset }
-            .mapNotNull { declaration ->
-                // The index was built from the file on disk. If the document in front of the user
-                // is shorter, they are looking at something else and folding it would be nonsense.
-                val end = declaration.endOffset.takeIf { it <= length } ?: return@mapNotNull null
-                val start = declaration.offset + declaration.simpleName.length
-                if (end <= start) return@mapNotNull null
+        // The index was built from the file on disk. If the document in front of the user is
+        // shorter, they are looking at something else and folding it would be nonsense.
+        fun range(from: Int, to: Int): TextRange? = if (to in (from + 1)..length) TextRange(from, to) else null
 
-                // No folding group: a group ties regions that fold together, and each of these
-                // is its own.
-                FoldingDescriptor(node, TextRange(start, end), null, " { … }")
+        val bodies = index.all()
+            .filter { it.kind in HOLDERS }
+            .mapNotNull { declaration ->
+                range(declaration.offset + declaration.simpleName.length, declaration.endOffset)
+                    // No folding group: a group ties regions that fold together, and each of
+                    // these is its own.
+                    ?.let { FoldingDescriptor(node, it, null, " { … }") }
             }
-            .toTypedArray()
+
+        // The bookkeeping line above each declaration, out of the way from the start. It points
+        // at Garmin's own `.mb` sources, which the SDK does not ship, so there is nothing behind
+        // it to go and read.
+        val annotations = index.all()
+            .mapNotNull { it.annotation }
+            .distinct()
+            .mapNotNull { at ->
+                range(at.first, at.last)?.let {
+                    FoldingDescriptor(node, it, null, "[…]", true, emptySet())
+                }
+            }
+
+        return (bodies + annotations).toTypedArray()
     }
 
     override fun getPlaceholderText(node: ASTNode): String = " { … }"

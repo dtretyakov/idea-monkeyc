@@ -1,9 +1,11 @@
 package com.github.dtretyakov.monkeyc.live
 
 import com.github.dtretyakov.monkeyc.sdk.ApiDocumentation
+import com.github.dtretyakov.monkeyc.sdk.ApiMirDoc
 import com.github.dtretyakov.monkeyc.sdk.ApiMirIndex
 import com.github.dtretyakov.monkeyc.sdk.ApiMirIndex.Kind
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.net.URI
@@ -108,6 +110,57 @@ class ApiMirLiveTest {
                 assertEquals("#$anchor", url.substring(url.indexOf('#')))
                 assertTrue(page.readText().contains("id=\"$anchor\""), "$page has no $anchor")
             }
+        }
+    }
+
+    @Test
+    fun `every documented declaration has a comment where it says, and it renders`() {
+        val sdk = LiveSdk.require()
+        val file = ApiMirIndex.fileIn(sdk)
+        val text = file.toFile().readText()
+        val index = requireNotNull(ApiMirIndex.at(file))
+
+        val documented = index.all().filter { it.doc != null }
+        assertTrue(documented.size > 1_000, "only ${documented.size} declarations carry documentation")
+
+        documented.forEach { declaration ->
+            val doc = declaration.doc!!
+            val comment = text.substring(doc.first, doc.last)
+
+            assertTrue(
+                comment.trimStart().startsWith("//!"),
+                "${declaration.qualifiedName} points at ${comment.take(40)}, which is not a comment",
+            )
+            // Rendering all of it is the cheapest way to find the one block that breaks the
+            // renderer: it is machine-generated from Garmin's sources and nobody has read it all.
+            val html = ApiMirDoc.toHtml(comment)
+            assertFalse(html.startsWith("//!"), "${declaration.qualifiedName} kept its markers")
+
+            // Markers survive only inside an @example, where Garmin is showing sample code that
+            // has documentation of its own - AntPlus.BikePowerListener is one. Everywhere else
+            // one left behind means a line the renderer did not recognise.
+            if (!comment.contains("@example")) {
+                assertFalse(html.contains("//!"), "${declaration.qualifiedName} kept its markers")
+            }
+        }
+    }
+
+    @Test
+    fun `the bookkeeping line is found where one exists`() {
+        val sdk = LiveSdk.require()
+        val file = ApiMirIndex.fileIn(sdk)
+        val text = file.toFile().readText()
+        val index = requireNotNull(ApiMirIndex.at(file))
+
+        val annotated = index.all().filter { it.annotation != null }
+        assertTrue(annotated.size > 1_000, "only ${annotated.size} declarations carry an annotation")
+
+        annotated.take(500).forEach { declaration ->
+            val at = declaration.annotation!!
+            assertTrue(
+                text.substring(at.first, at.last).trimStart().startsWith("[@"),
+                "${declaration.qualifiedName} points at something that is not an annotation",
+            )
         }
     }
 }

@@ -3,6 +3,7 @@ package com.github.dtretyakov.monkeyc.ui
 import com.github.dtretyakov.monkeyc.lang.ApiMirFileType
 import com.github.dtretyakov.monkeyc.lang.MonkeyCFileType
 import com.github.dtretyakov.monkeyc.navigation.DottedChain
+import com.github.dtretyakov.monkeyc.navigation.ToyboxReference
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.sdk.ApiDocumentation
 import com.github.dtretyakov.monkeyc.sdk.ApiMirIndex
@@ -70,8 +71,9 @@ class OpenApiDocumentationAction : AnAction() {
         val index = ApiMirService.getInstance().index()
             ?: return Outcome.Problem("The SDK at ${sdk.root} has no bin/api.mir to look $chain up in.")
 
-        val found: ApiMirIndex.Declaration = index.resolve(chain).firstOrNull()
-            ?: return Outcome.Problem("$chain is not part of the Connect IQ API.")
+        val found: ApiMirIndex.Declaration =
+            ToyboxReference.resolve(index, file.viewProvider.contents, editor.caretModel.offset).firstOrNull()
+                ?: return Outcome.Problem("$chain is not part of the Connect IQ API.")
 
         return ApiDocumentation.urlFor(sdk, found)
             ?.let { Outcome.Page(it) }

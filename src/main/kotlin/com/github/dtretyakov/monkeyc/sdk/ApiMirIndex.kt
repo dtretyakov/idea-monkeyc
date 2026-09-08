@@ -41,6 +41,20 @@ class ApiMirIndex private constructor(
          * declaration that holds nothing ends at its own line.
          */
         val endOffset: Int = offset,
+        /**
+         * The run of `//!` lines directly above, which is this declaration's documentation.
+         *
+         * Offsets rather than text so the editor can render them in place, the way the JDK's own
+         * sources are rendered, instead of showing four hundred lines of comment markers.
+         */
+        val doc: IntRange? = null,
+        /**
+         * The `[@file = ...; @line = ...; ]` line between the documentation and the declaration.
+         *
+         * Machine bookkeeping pointing at Garmin's own sources, which are not shipped. Worth
+         * folding away and worth nothing to read.
+         */
+        val annotation: IntRange? = null,
     ) {
         val simpleName: String get() = qualifiedName.substringAfterLast('.')
 
@@ -106,6 +120,9 @@ class ApiMirIndex private constructor(
         /** An enum's members, which are `NAME = value,` and are the constants most code reaches for. */
         private val ENUM_MEMBER = Regex("^(\\s*)([A-Z][A-Z0-9_]*)\\s*=")
 
+        private const val DOC_PREFIX = "//!"
+        private const val ANNOTATION_PREFIX = "[@"
+
         private val CONTAINERS = setOf("module", "class", "enum")
 
         fun of(sdk: ConnectIqSdk): ApiMirIndex? = at(fileIn(sdk))
@@ -151,6 +168,12 @@ class ApiMirIndex private constructor(
             // 1127 of them, exactly one per module, class, enum and `<init>` block.
             var lastBraceEnd = 0
 
+            // The documentation and the bookkeeping line waiting for the declaration they belong
+            // to. A `//!` run is separated from its declaration by the annotation line, so the
+            // run survives that line and is cleared by anything else.
+            var doc: IntRange? = null
+            var annotation: IntRange? = null
+
             text.lineSequence().forEach { raw ->
                 line++
                 val start = offset
@@ -168,6 +191,19 @@ class ApiMirIndex private constructor(
                     close((raw.length - raw.trimStart().length) / INDENT, lastBraceEnd)
                 }
 
+                val trimmed = raw.trimStart()
+                when {
+                    trimmed.startsWith(DOC_PREFIX) -> {
+                        doc = (doc?.first ?: start)..(start + raw.length)
+                        return@forEach
+                    }
+
+                    trimmed.startsWith(ANNOTATION_PREFIX) -> {
+                        annotation = start..(start + raw.length)
+                        return@forEach
+                    }
+                }
+
                 DECLARATION.find(raw)?.let { match ->
                     val depth = match.groupValues[1].length / INDENT
                     val keyword = match.groupValues[2]
@@ -182,8 +218,13 @@ class ApiMirIndex private constructor(
                             kind = kindOf(keyword),
                             offset = start + match.groups[3]!!.range.first,
                             line = line,
+                            doc = doc,
+                            annotation = annotation,
                         )
                     }
+
+                    doc = null
+                    annotation = null
 
                     // Only these hold anything; a function or a variable never opens a scope.
                     if (keyword in CONTAINERS) {
@@ -207,9 +248,18 @@ class ApiMirIndex private constructor(
                             kind = Kind.CONSTANT,
                             offset = start + match.groups[2]!!.range.first,
                             line = line,
+                            doc = doc,
+                            annotation = annotation,
                         ),
                     )
+                    doc = null
+                    annotation = null
+                    return@forEach
                 }
+
+                // Anything else - a brace, a blank line, an `<init>` block - ends the run.
+                doc = null
+                annotation = null
             }
 
             close(0, maxOf(lastBraceEnd, maxOf(offset - 1, 0)))

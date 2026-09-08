@@ -211,6 +211,13 @@
             language="ConnectIqApi"
             implementationClass="com.github.dtretyakov.monkeyc.lang.ApiMirFoldingBuilder"/>
 
+        <!--
+          And its documentation rendered in place, as the IDE renders javadoc. api.mir is more
+          comment than code, and read as plain text that is mostly punctuation.
+        -->
+        <platform.backend.documentation.inlineDocumentationProvider
+            implementation="com.github.dtretyakov.monkeyc.lang.ApiMirInlineDocumentationProvider"/>
+
         <!-- The client already declares `foldingRange.lineFoldingOnly`; the server registers the
              request. Only the IDE side was missing. -->
         <lang.foldingBuilder
