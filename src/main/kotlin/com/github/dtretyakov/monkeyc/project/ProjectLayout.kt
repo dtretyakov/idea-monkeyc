@@ -90,6 +90,17 @@ object ProjectLayout {
     fun testPrg(root: Path, projectName: String, device: String): Path =
         root.resolve(OUTPUT_DIRECTORY).resolve("test_${device}_${artifactName(projectName)}.prg")
 
+    /** Where an export goes by default: not `bin/`, which is for things the simulator runs. */
+    const val EXPORT_DIRECTORY = "out"
+
+    /** The signed package the Connect IQ Store takes. */
+    fun exportIq(root: Path, projectName: String): Path =
+        root.resolve(EXPORT_DIRECTORY).resolve("${artifactName(projectName)}.iq")
+
+    /** A library for other projects, which has no device of its own. */
+    fun barrel(root: Path, projectName: String): Path =
+        root.resolve(EXPORT_DIRECTORY).resolve("${artifactName(projectName)}.barrel")
+
     /** The symbol file `monkeyc -g` writes next to the `.prg`; the debugger cannot work without it. */
     fun debugXml(prg: Path): Path = prg.resolveSibling("${prg.fileName}.debug.xml")
 

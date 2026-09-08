@@ -47,10 +47,10 @@ object LiveSdk {
      * resources; building in place would leave artifacts in the repository.
      */
     @OptIn(kotlin.io.path.ExperimentalPathApi::class)
-    fun fixture(into: Path): Path {
-        val source = Path.of("src/test/resources/fixture-app").toAbsolutePath()
+    fun fixture(into: Path, name: String = "fixture-app"): Path {
+        val source = Path.of("src/test/resources/$name").toAbsolutePath()
         check(source.exists()) { "the fixture is missing from $source" }
-        val target = into.resolve("fixture-app")
+        val target = into.resolve(name)
         source.copyToRecursively(target, followLinks = false)
         // Deliberately not the real path: on macOS a temp directory is reached through a symlink,
         // which is the case CanonicalPaths exists for and the language server test relies on.

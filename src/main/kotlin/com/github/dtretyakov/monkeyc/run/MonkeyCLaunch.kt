@@ -61,21 +61,24 @@ object MonkeyCLaunch {
         val root = model.primaryRoot()
             ?: throw ExecutionException("No Connect IQ project here: none of the content roots holds a manifest.xml.")
 
-        val device = resolveDevice(project, model, root, options, target)
+        checkKindSuitsProject(model, root, options.kind)
+
+        val kind = options.kind
+        val device = if (kind.buildKind.needsDevice) resolveDevice(project, model, root, options, target) else ""
+        // A barrel is unsigned, so it is the one kind that can be built without a key at all.
         val key = model.developerKey()
-            ?: throw ExecutionException(
+        if (key == null && kind.buildKind.needsDeveloperKey) {
+            throw ExecutionException(
                 "No developer key. Set one in Settings | Languages & Frameworks | Monkey C, " +
                     "or let the SDK Manager generate one.",
             )
-
-        val simulator = !options.forDevice
-        val output = when {
-            options.kind.isTests -> ProjectLayout.testPrg(root, root.name, device)
-            simulator -> ProjectLayout.appPrg(root, root.name)
-            else -> ProjectLayout.devicePrg(root, root.name, device)
         }
 
-        onProgress(if (simulator) "Building for $device..." else "Building for $device (device build)...")
+        val simulator = !options.forDevice
+        val output = outputFor(options, root, device)
+
+        val title = title(options, device)
+        onProgress("$title...")
         val result = MonkeyCBuildSession.run(
             project,
             BuildSpec(
@@ -83,12 +86,12 @@ object MonkeyCLaunch {
                 root = root,
                 output = output,
                 jungleFiles = model.jungleFiles(root),
-                device = device,
+                device = device.takeIf { it.isNotEmpty() },
                 simulator = simulator,
                 developerKey = key,
                 extraArguments = options.compilerArguments.split(Regex("\\s+")).filter { it.isNotEmpty() },
             ),
-            title = title(options, device),
+            title = title,
         )
         if (!result.succeeded) throw ExecutionException(MonkeyCBuilder.describeFailure(result))
         if (!output.exists()) throw ExecutionException("The build reported success but produced no $output.")
@@ -130,10 +133,62 @@ object MonkeyCLaunch {
         )
     }
 
-    private fun title(options: MonkeyCRunOptions, device: String): String = when {
-        options.kind.isTests -> "Building tests for $device"
-        options.forDevice -> "Building for $device, for the watch"
-        else -> "Building for $device"
+    /**
+     * Where the artifact goes.
+     *
+     * Runnable output lives in `bin`, where the simulator and the debugger already look for it by
+     * name; an export or a barrel is something the developer takes away, so it goes to `out` and
+     * the configuration may say otherwise.
+     */
+    private fun outputFor(options: MonkeyCRunOptions, root: Path, device: String): Path {
+        val chosen = options.outputPath.trim().takeIf { it.isNotEmpty() }?.let {
+            val path = Path.of(it)
+            if (path.isAbsolute) path else root.resolve(path)
+        }
+        return when (options.kind) {
+            MonkeyCRunKind.EXPORT -> chosen ?: ProjectLayout.exportIq(root, root.name)
+            MonkeyCRunKind.BARREL -> chosen ?: ProjectLayout.barrel(root, root.name)
+            MonkeyCRunKind.TESTS, MonkeyCRunKind.BARREL_TESTS -> ProjectLayout.testPrg(root, root.name, device)
+            MonkeyCRunKind.APP -> ProjectLayout.appPrg(root, root.name)
+            MonkeyCRunKind.BUILD ->
+                if (options.forDevice) {
+                    ProjectLayout.devicePrg(root, root.name, device)
+                } else {
+                    ProjectLayout.appPrg(root, root.name)
+                }
+        }
+    }
+
+    /**
+     * A barrel is not an app, and the compiler's complaint about it is not readable.
+     *
+     * Running a barrel project as an app fails deep inside the build with a message about a
+     * missing entry class; saying so here is the difference between a sentence and an hour.
+     */
+    private fun checkKindSuitsProject(model: MonkeyCProject, root: Path, kind: MonkeyCRunKind) {
+        val isBarrel = model.manifest(root)?.isBarrel ?: return
+        if (isBarrel && !kind.barrel) {
+            throw ExecutionException(
+                "${root.name} is a barrel, not an app: it has no entry class and nothing to run. " +
+                    "Use a Connect IQ Barrel configuration to build it, or Connect IQ Barrel Tests " +
+                    "to run its tests.",
+            )
+        }
+        if (!isBarrel && kind.barrel) {
+            throw ExecutionException(
+                "${root.name} is an app, not a barrel. Its manifest declares an application, " +
+                    "so there is no <iq:barrel> to build.",
+            )
+        }
+    }
+
+    private fun title(options: MonkeyCRunOptions, device: String): String = when (options.kind) {
+        MonkeyCRunKind.EXPORT -> "Exporting for every declared device"
+        MonkeyCRunKind.BARREL -> "Building the barrel"
+        MonkeyCRunKind.BARREL_TESTS -> "Building barrel tests for $device"
+        MonkeyCRunKind.TESTS -> "Building tests for $device"
+        MonkeyCRunKind.BUILD, MonkeyCRunKind.APP ->
+            if (options.forDevice) "Building for $device, for the watch" else "Building for $device"
     }
 
     /**

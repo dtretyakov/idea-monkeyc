@@ -56,10 +56,23 @@ class MonkeyCRunConfiguration(
     override fun getConfigurationEditor(): SettingsEditor<out RunConfiguration> = MonkeyCSettingsEditor(project)
 
     override fun checkConfiguration() {
-        if (MonkeyCProject.getInstance(project).primaryRoot() == null) {
-            throw RuntimeConfigurationError(
+        val model = MonkeyCProject.getInstance(project)
+        val root = model.primaryRoot()
+            ?: throw RuntimeConfigurationError(
                 "No Connect IQ project here: none of the content roots holds a manifest.xml.",
             )
+
+        // Caught here as well as at launch, so the dialog can say it before the Run button is
+        // pressed: the compiler's own complaint about a barrel run as an app is unreadable.
+        val isBarrel = model.manifest(root)?.isBarrel ?: return
+        if (isBarrel && !options.kind.barrel) {
+            throw RuntimeConfigurationError(
+                "This project is a barrel, not an app. Build it with a Connect IQ Barrel " +
+                    "configuration, or run its tests with Connect IQ Barrel Tests.",
+            )
+        }
+        if (!isBarrel && options.kind.barrel) {
+            throw RuntimeConfigurationError("This project is an app, not a barrel.")
         }
     }
 }

@@ -1,29 +1,26 @@
 package com.github.dtretyakov.monkeyc.ui
 
-import com.github.dtretyakov.monkeyc.build.BuildKind
-import com.github.dtretyakov.monkeyc.build.BuildSpec
-import com.github.dtretyakov.monkeyc.build.MonkeyCBuildSession
-import com.github.dtretyakov.monkeyc.build.MonkeyCBuilder
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
-import com.intellij.notification.NotificationGroupManager
-import com.intellij.notification.NotificationType
+import com.github.dtretyakov.monkeyc.run.MonkeyCRunConfiguration
+import com.github.dtretyakov.monkeyc.run.MonkeyCRunConfigurationType
+import com.github.dtretyakov.monkeyc.run.MonkeyCRunKind
+import com.intellij.execution.ExecutorRegistry
+import com.intellij.execution.ProgramRunnerUtil
+import com.intellij.execution.RunManager
+import com.intellij.execution.RunnerAndConfigurationSettings
+import com.intellij.execution.executors.DefaultRunExecutor
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.fileChooser.FileChooser
-import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
-import com.intellij.openapi.progress.ProgressIndicator
-import com.intellij.openapi.progress.ProgressManager
-import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
-import java.nio.file.Path
 
 /**
- * Builds the `.iq` file the Connect IQ Store takes.
+ * Builds the `.iq` file the Connect IQ Store takes, or the `.barrel` a library project produces.
  *
- * An export is a different animal from a run: it builds for every device the manifest declares,
- * release-signed, and takes minutes rather than seconds. It is an action rather than a run
- * configuration because there is nothing to run at the end of it.
+ * The work itself is a run configuration rather than something this action does: an export builds
+ * for every device the manifest declares and takes minutes, and a run configuration is what gives
+ * that a console, a progress bar, a Stop button and a place in the run history. The menu item
+ * stays because a first export is not something anyone thinks to look for under Run.
  */
 class ExportAction : AnAction() {
 
@@ -31,63 +28,40 @@ class ExportAction : AnAction() {
 
     override fun update(event: AnActionEvent) {
         val project = event.project
-        event.presentation.isEnabledAndVisible =
-            project != null && MonkeyCProject.getInstance(project).primaryRoot() != null
+        val root = project?.let { MonkeyCProject.getInstance(it).primaryRoot() }
+        event.presentation.isEnabledAndVisible = root != null
+        if (project != null && root != null) {
+            val barrel = MonkeyCProject.getInstance(project).manifest(root)?.isBarrel == true
+            event.presentation.text = if (barrel) "Build Connect IQ Barrel" else "Export Connect IQ App"
+        }
     }
 
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
         val model = MonkeyCProject.getInstance(project)
         val root = model.primaryRoot() ?: return
+        val kind = if (model.manifest(root)?.isBarrel == true) MonkeyCRunKind.BARREL else MonkeyCRunKind.EXPORT
 
-        val chosen = FileChooser.chooseFile(
-            FileChooserDescriptorFactory.createSingleFolderDescriptor().withTitle("Export Connect IQ App"),
-            project,
-            null,
-        ) ?: return
-
-        val manifest = model.manifest(root)
-        val name = ProjectName.of(root)
-        val output = Path.of(chosen.path).resolve(if (manifest?.isBarrel == true) "$name.barrel" else "$name.iq")
-
-        ProgressManager.getInstance().run(
-            object : Task.Backgroundable(project, "Exporting $name", true) {
-                override fun run(indicator: ProgressIndicator) {
-                    indicator.isIndeterminate = true
-                    export(project, model, root, output, manifest?.isBarrel == true)
-                }
-            },
-        )
+        val executor = ExecutorRegistry.getInstance().getExecutorById(DefaultRunExecutor.EXECUTOR_ID) ?: return
+        ProgramRunnerUtil.executeConfiguration(settings(project, kind), executor)
     }
 
-    private fun export(
-        project: Project,
-        model: MonkeyCProject,
-        root: Path,
-        output: Path,
-        isBarrel: Boolean,
-    ) {
-        val result = MonkeyCBuildSession.run(
-            project,
-            BuildSpec(
-                kind = if (isBarrel) BuildKind.BARREL else BuildKind.EXPORT,
-                root = root,
-                output = output,
-                jungleFiles = model.jungleFiles(root),
-                developerKey = model.developerKey(),
-            ),
-            title = "Exporting to ${output.fileName}",
-        )
+    /**
+     * The configuration to run, reusing one the user already has.
+     *
+     * Making a new temporary configuration on every invocation would fill the run history with
+     * copies of the same thing, and lose any output directory the user had set on it.
+     */
+    private fun settings(project: Project, kind: MonkeyCRunKind): RunnerAndConfigurationSettings {
+        val manager = RunManager.getInstance(project)
+        manager.allSettings
+            .firstOrNull { (it.configuration as? MonkeyCRunConfiguration)?.options?.kind == kind }
+            ?.let { return it }
 
-        val group = NotificationGroupManager.getInstance().getNotificationGroup("Monkey C")
-        if (result.succeeded) {
-            group.createNotification("Exported to $output", NotificationType.INFORMATION).notify(project)
-        } else {
-            group.createNotification(
-                "Export failed",
-                MonkeyCBuilder.describeFailure(result),
-                NotificationType.ERROR,
-            ).notify(project)
+        val factory = MonkeyCRunConfigurationType().configurationFactories.first { it.name == kind.display }
+        return manager.createConfiguration(kind.display, factory).also {
+            (it.configuration as MonkeyCRunConfiguration).options.kind = kind
+            manager.addConfiguration(it)
         }
     }
 }

@@ -26,6 +26,8 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
     private lateinit var breakRow: Row
     private lateinit var pairingRow: Row
     private lateinit var deviceBuildRow: Row
+    private lateinit var deviceRow: Row
+    private lateinit var outputRow: Row
 
     private var device: String = ""
     private var testName: String = ""
@@ -33,6 +35,7 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
     private var runNativePairing: Boolean = false
     private var forDevice: Boolean = false
     private var compilerArguments: String = ""
+    private var outputPath: String = ""
 
     override fun createEditor(): JComponent {
         val model = MonkeyCProject.getInstance(project)
@@ -40,7 +43,7 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
         val choices = DeviceChoices(devices)
 
         panel = panel {
-            row("Device:") {
+            deviceRow = row("Device:") {
                 comboBox(choices.labels)
                     .bindItem({ choices.labelFor(device) }, { device = choices.idFor(it) })
                     .comment("Pins this configuration to one device. Otherwise it follows the device chosen next to the Run button.")
@@ -69,6 +72,16 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
                             "A watch build will not start in the simulator, and the other way round.",
                     )
             }
+            outputRow = row("Output:") {
+                textFieldWithBrowseButton(
+                    com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
+                        .createSingleFileOrFolderDescriptor()
+                        .withTitle("Output File"),
+                )
+                    .align(AlignX.FILL)
+                    .bindText({ outputPath }, { outputPath = it })
+                    .comment("Empty writes to the project's <code>out</code> directory.")
+            }
             row("Compiler arguments:") {
                 textField().align(AlignX.FILL).bindText({ compilerArguments }, { compilerArguments = it })
             }
@@ -84,12 +97,15 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
         runNativePairing = options.runNativePairing
         forDevice = options.forDevice
         compilerArguments = options.compilerArguments
+        outputPath = options.outputPath
 
         val kind = options.kind
         testRow.visible(kind.isTests)
         breakRow.visible(kind.launches)
         pairingRow.visible(kind == MonkeyCRunKind.APP)
         deviceBuildRow.visible(kind == MonkeyCRunKind.BUILD)
+        deviceRow.visible(kind.buildKind.needsDevice)
+        outputRow.visible(kind == MonkeyCRunKind.EXPORT || kind == MonkeyCRunKind.BARREL)
 
         panel.reset()
     }
@@ -103,6 +119,7 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
         options.runNativePairing = runNativePairing
         options.forDevice = forDevice
         options.compilerArguments = compilerArguments
+        options.outputPath = outputPath
     }
 
     /**

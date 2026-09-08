@@ -19,6 +19,7 @@ class MonkeyCRunOptions : DAPRunConfigurationOptionsBase() {
     private val nativePairingOption = property(false).provideDelegate(this, "runNativePairing")
     private val forDeviceOption = property(false).provideDelegate(this, "forDevice")
     private val compilerArgumentsOption = string("").provideDelegate(this, "compilerArguments")
+    private val outputPathOption = string("").provideDelegate(this, "outputPath")
 
     var kind: MonkeyCRunKind
         get() = MonkeyCRunKind.of(kindOption.getValue(this))
@@ -59,4 +60,14 @@ class MonkeyCRunOptions : DAPRunConfigurationOptionsBase() {
     var compilerArguments: String
         get() = compilerArgumentsOption.getValue(this).orEmpty()
         set(value) = compilerArgumentsOption.setValue(this, value)
+
+    /**
+     * Where an export or a barrel is written. Empty means the project's own `out` directory.
+     *
+     * Only these two kinds have it: everything else goes to `bin`, where the simulator and the
+     * debugger already look for it by name.
+     */
+    var outputPath: String
+        get() = outputPathOption.getValue(this).orEmpty()
+        set(value) = outputPathOption.setValue(this, value)
 }

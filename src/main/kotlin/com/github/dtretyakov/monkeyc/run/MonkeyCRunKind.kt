@@ -15,13 +15,18 @@ enum class MonkeyCRunKind(
     val buildKind: BuildKind,
     /** Whether something is started once the build succeeds, or the build was the whole point. */
     val launches: Boolean,
+    /** Whether it belongs to a barrel project rather than an app one. */
+    val barrel: Boolean = false,
 ) {
     APP("Connect IQ App", BuildKind.APP, launches = true),
     TESTS("Connect IQ Tests", BuildKind.TESTS, launches = true),
     BUILD("Connect IQ Build", BuildKind.APP, launches = false),
+    EXPORT("Connect IQ Export", BuildKind.EXPORT, launches = false),
+    BARREL("Connect IQ Barrel", BuildKind.BARREL, launches = false, barrel = true),
+    BARREL_TESTS("Connect IQ Barrel Tests", BuildKind.BARREL_TESTS, launches = true, barrel = true),
     ;
 
-    val isTests: Boolean get() = this == TESTS
+    val isTests: Boolean get() = this == TESTS || this == BARREL_TESTS
 
     companion object {
         fun of(name: String?): MonkeyCRunKind = entries.firstOrNull { it.name == name } ?: APP

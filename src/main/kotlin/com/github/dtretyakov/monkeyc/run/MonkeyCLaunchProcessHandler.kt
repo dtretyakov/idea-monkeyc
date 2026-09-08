@@ -78,10 +78,11 @@ class MonkeyCLaunchProcessHandler(
         val built = MonkeyCLaunch.build(project, options, target, ::report)
         if (stopped) return
 
+        val verb = if (options.kind == MonkeyCRunKind.EXPORT) "Exported to" else "Built"
         if (built.upToDate) {
             notifyTextAvailable("\n${built.output} is up to date.\n", ProcessOutputTypes.SYSTEM)
         } else {
-            notifyTextAvailable("\nBuilt ${built.output}\n", ProcessOutputTypes.SYSTEM)
+            notifyTextAvailable("\n$verb ${built.output}\n", ProcessOutputTypes.SYSTEM)
         }
         if (options.forDevice) {
             notifyTextAvailable(

@@ -61,7 +61,10 @@ object CompilerCommand {
         if (spec.kind.needsDevice) {
             spec.device?.let {
                 add("-d")
-                add(if (spec.simulator) "${it}_sim" else it)
+                // `barreltest` takes the plain device id and rejects the simulator variant
+                // outright — "Provided device id 'fenix7_sim' is invalid" — even though the
+                // `.prg` it produces is the one the simulator runs. Only `monkeyc` wants `_sim`.
+                add(if (spec.simulator && spec.kind != BuildKind.BARREL_TESTS) "${it}_sim" else it)
             }
         }
 

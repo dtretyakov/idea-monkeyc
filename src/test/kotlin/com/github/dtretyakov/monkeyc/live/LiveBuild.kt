@@ -29,8 +29,10 @@ object LiveBuild {
     ): Output {
         val name = project.fileName.toString()
         val prg = when (kind) {
-            BuildKind.TESTS -> ProjectLayout.testPrg(project, name, device)
-            else -> ProjectLayout.appPrg(project, name)
+            BuildKind.TESTS, BuildKind.BARREL_TESTS -> ProjectLayout.testPrg(project, name, device)
+            BuildKind.BARREL -> ProjectLayout.barrel(project, name)
+            BuildKind.EXPORT -> ProjectLayout.exportIq(project, name)
+            BuildKind.APP -> ProjectLayout.appPrg(project, name)
         }
 
         val arguments = CompilerCommand.arguments(
@@ -44,7 +46,7 @@ object LiveBuild {
                 jungleFiles = ProjectLayout.jungleFiles(project, null),
                 device = device,
                 simulator = true,
-                developerKey = sdk.defaultDeveloperKey,
+                developerKey = sdk.defaultDeveloperKey.takeIf { kind.needsDeveloperKey },
             ),
         )
 

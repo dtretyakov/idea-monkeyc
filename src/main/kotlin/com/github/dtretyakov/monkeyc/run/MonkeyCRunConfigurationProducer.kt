@@ -21,14 +21,14 @@ class MonkeyCRunConfigurationProducer : LazyRunConfigurationProducer<MonkeyCRunC
     override fun getConfigurationFactory(): ConfigurationFactory =
         ConfigurationTypeUtil.findConfigurationType(MonkeyCRunConfigurationType::class.java)
             .configurationFactories
-            .first { (it as MonkeyCRunConfigurationType.Factory).name == MonkeyCRunKind.APP.display }
+            .first { it.name == MonkeyCRunKind.APP.display }
 
     override fun setupConfigurationFromContext(
         configuration: MonkeyCRunConfiguration,
         context: ConfigurationContext,
         source: Ref<PsiElement>,
     ): Boolean {
-        val root = projectRoot(context) ?: return false
+        val root = appRoot(context) ?: return false
         configuration.name = root.name
         return true
     }
@@ -38,8 +38,20 @@ class MonkeyCRunConfigurationProducer : LazyRunConfigurationProducer<MonkeyCRunC
         context: ConfigurationContext,
     ): Boolean {
         // One project, one app: the app configuration is the one for any file in it.
-        return projectRoot(context) != null && configuration.options.kind == MonkeyCRunKind.APP
+        return appRoot(context) != null && configuration.options.kind == MonkeyCRunKind.APP
     }
+
+    /**
+     * The project this file belongs to, when it is an app.
+     *
+     * A barrel is skipped: it has no entry class and nothing to run, so offering to run it from
+     * the editor would only produce a configuration that fails. Building one is a Build menu
+     * action instead.
+     */
+    private fun appRoot(context: ConfigurationContext) =
+        projectRoot(context)?.takeIf { root ->
+            context.project?.let { MonkeyCProject.getInstance(it).manifest(root)?.isBarrel != true } == true
+        }
 
     private fun projectRoot(context: ConfigurationContext) =
         context.location?.virtualFile
