@@ -48,6 +48,13 @@ First release.
   manifest declares. Devices that cannot run this kind of app are not offered.
 - Compiler diagnostics in the Build tool window, with clickable locations, and how long the build
   took beside them.
+- An export says what it is about to leave out before it spends minutes doing it: devices that are
+  declared but not downloaded, devices that cannot reach the manifest's minimum API level and will
+  be dropped from the package, and languages the declared devices — or particular hardware variants
+  of them — do not support. The last of these is invisible everywhere else, though the data ships
+  with every device.
+- A trial that the store will refuse is refused here first: a non-HTTPS unlock URL, or a trial on a
+  watch face.
 - A device the manifest declares but the SDK Manager never downloaded is named before the build
   starts, rather than reported by the compiler as a device it cannot find.
 - A run survives the simulator refusing it: the SDK leaks two pipes per run and stops accepting

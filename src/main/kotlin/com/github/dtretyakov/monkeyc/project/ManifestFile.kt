@@ -25,6 +25,10 @@ data class ManifestFile(
     val languages: List<String>,
     val minSdkVersion: SdkVersion?,
     val barrelVersion: String?,
+    /** Whether `<iq:trialMode enable="true">` is on, which the store has rules about. */
+    val trialMode: Boolean = false,
+    /** The URL a trial is unlocked through; the store accepts HTTPS only. */
+    val unlockUrl: String? = null,
 ) {
     val isBarrel: Boolean get() = appType == null && barrelVersion != null
 
@@ -92,6 +96,11 @@ data class ManifestFile(
                     // wild — the templates write minApiLevel, the samples minSdkVersion.
                     minSdkVersion = SdkVersion.parse(attribute("minSdkVersion") ?: attribute("minApiLevel")),
                     barrelVersion = barrel?.attributes?.getNamedItem("version")?.nodeValue,
+                    trialMode = document.getElementsByTagNameNS("*", "trialMode").item(0)
+                        ?.attributes?.getNamedItem("enable")?.nodeValue
+                        ?.equals("true", ignoreCase = true) ?: false,
+                    unlockUrl = document.getElementsByTagNameNS("*", "unlockURL").item(0)
+                        ?.textContent?.trim()?.takeIf { it.isNotEmpty() },
                 )
             }.getOrNull()
         }

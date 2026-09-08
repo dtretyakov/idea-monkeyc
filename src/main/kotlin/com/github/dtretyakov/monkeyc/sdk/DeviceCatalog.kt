@@ -28,6 +28,17 @@ data class ConnectIqDevice(
      * file is already open here.
      */
     val memoryLimits: Map<String, Long>,
+    /**
+     * The languages each of this device's part numbers supports, one set per part number.
+     *
+     * Per part number, not per device, because that is how Garmin ships it: a product id can map to
+     * several hardware SKUs — a world-wide one and an APAC one, say — and they do not carry the
+     * same fonts. Garmin's own documentation says "the languages your app support can impact what
+     * regions of the world your app is available in", and one forum thread traced a failing export
+     * precisely to an `<iq:languages>` block. Nothing anywhere shows the trade-off, and the data
+     * has been sitting in a file this plugin already opens.
+     */
+    val languagesByPartNumber: List<Set<String>> = emptyList(),
 ) {
     /** `watchApp`, `widget`, `datafield`, … — what a project may declare for this device. */
     val appTypes: Set<String> get() = memoryLimits.keys
@@ -42,6 +53,19 @@ data class ConnectIqDevice(
     /** Whether this device can run the kind of app the manifest declares. */
     fun supports(manifestAppType: String?): Boolean =
         AppTypes.catalogueName(manifestAppType)?.let { it in memoryLimits } ?: true
+
+    /** Every language any of this device's part numbers offers. */
+    val languages: Set<String> get() = languagesByPartNumber.flatten().toSet()
+
+    /**
+     * How many of this device's part numbers offer [language], out of how many there are.
+     *
+     * Both halves matter. None means the device cannot serve that language at all; some but not all
+     * means a hardware variant of the same watch cannot, which is the case nobody expects and the
+     * reason this is not a boolean.
+     */
+    fun partNumbersWith(language: String): Pair<Int, Int> =
+        languagesByPartNumber.count { language in it } to languagesByPartNumber.size
 }
 
 /**
@@ -83,7 +107,13 @@ private data class CompilerJson(
     data class AppTypeJson(val type: String? = null, val memoryLimit: Long? = null)
 
     @Serializable
-    data class PartNumberJson(val connectIQVersion: String? = null)
+    data class PartNumberJson(
+        val connectIQVersion: String? = null,
+        val languages: List<LanguageJson> = emptyList(),
+    )
+
+    @Serializable
+    data class LanguageJson(val code: String? = null)
 }
 
 @Serializable
@@ -158,6 +188,9 @@ class DeviceCatalog(private val devicesRoot: Path) {
             family = compiler.deviceFamily,
             isTouch = simulator.display.isTouch,
             sdkVersion = compiler.partNumbers.mapNotNull { SdkVersion.parse(it.connectIQVersion) }.maxOrNull(),
+            languagesByPartNumber = compiler.partNumbers.map { part ->
+                part.languages.mapNotNull { it.code }.toSet()
+            },
             memoryLimits = compiler.appTypes
                 .mapNotNull { type -> type.type?.let { it to (type.memoryLimit ?: return@mapNotNull null) } }
                 .toMap(),

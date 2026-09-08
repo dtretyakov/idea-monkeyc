@@ -2,6 +2,7 @@ package com.github.dtretyakov.monkeyc.run
 
 import com.github.dtretyakov.monkeyc.build.BuildKind
 import com.github.dtretyakov.monkeyc.build.BuildSpec
+import com.github.dtretyakov.monkeyc.build.ExportPreflight
 import com.github.dtretyakov.monkeyc.build.MonkeyCBuildSession
 import com.github.dtretyakov.monkeyc.build.MonkeyCBuilder
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
@@ -87,6 +88,7 @@ object MonkeyCLaunch {
         // hand and nothing downstream cares. An `.iq` is the artifact the store checks the key of,
         // and the check has no second chance.
         if (kind.buildKind == BuildKind.EXPORT && key != null) checkSigningKey(project, key, onProgress)
+        if (kind.buildKind == BuildKind.EXPORT) preflight(model, root, onProgress)
 
         val simulator = !options.forDevice
         val output = outputFor(options, root, device)
@@ -311,6 +313,24 @@ object MonkeyCLaunch {
      * "Get them with the SDK Manager" is a different errand for one device than for nine, and
      * knowing which ones is what makes it an errand at all.
      */
+    /**
+     * Says what the export is about to leave out, before it spends minutes doing it.
+     *
+     * Errors stop it: a device that cannot be built or a trial the store will refuse means the
+     * package is wrong, and finding that out after the upload costs days. Warnings do not, because
+     * shipping to fewer devices than you thought is often a decision somebody already made — it
+     * only has to be a decision they can see.
+     */
+    private fun preflight(model: MonkeyCProject, root: Path, onProgress: (String) -> Unit) {
+        val manifest = model.manifest(root) ?: return
+        val findings = ExportPreflight.check(manifest, ConnectIqSdkService.getInstance().devices())
+        if (findings.isEmpty()) return
+
+        findings.forEach { onProgress(it.text) }
+        findings.firstOrNull { it.severity == ExportPreflight.Severity.ERROR }
+            ?.let { throw ExecutionException(it.text) }
+    }
+
     /**
      * Stops an export that would be signed with a key other than the one this project shipped with.
      *
