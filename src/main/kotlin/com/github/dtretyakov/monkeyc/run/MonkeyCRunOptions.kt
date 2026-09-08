@@ -14,7 +14,7 @@ class MonkeyCRunOptions : DAPRunConfigurationOptionsBase() {
 
     /** Empty means "whatever is selected next to the Run button". */
     private val deviceOption = string("").provideDelegate(this, "device")
-    private val testNameOption = string("").provideDelegate(this, "testName")
+    private val testsOption = string("").provideDelegate(this, "tests")
     private val stopAtLaunchOption = property(false).provideDelegate(this, "stopAtLaunch")
     private val nativePairingOption = property(false).provideDelegate(this, "runNativePairing")
     private val forDeviceOption = property(false).provideDelegate(this, "forDevice")
@@ -32,10 +32,18 @@ class MonkeyCRunOptions : DAPRunConfigurationOptionsBase() {
 
     val runTests: Boolean get() = kind.isTests
 
-    /** A single test to run, rather than all of them. */
-    var testName: String
-        get() = testNameOption.getValue(this).orEmpty()
-        set(value) = testNameOption.setValue(this, value)
+    /**
+     * The tests to run, by name, separated by spaces. Empty runs every test in the project.
+     *
+     * A list rather than one name because that is what the runner takes — `monkeydo -t` accepts
+     * any number of names — and it is what "run the tests in this file" needs.
+     */
+    var tests: String
+        get() = testsOption.getValue(this).orEmpty()
+        set(value) = testsOption.setValue(this, value)
+
+    val testNames: List<String>
+        get() = tests.split(Regex("\\s+")).filter { it.isNotEmpty() }
 
     /** Break as soon as the app starts, before its first line runs. Debug only. */
     var stopAtLaunch: Boolean

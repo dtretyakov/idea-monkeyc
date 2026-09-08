@@ -24,7 +24,6 @@ import java.io.OutputStream
 class MonkeyCLaunchProcessHandler(
     private val project: Project,
     private val options: MonkeyCRunOptions,
-    private val target: String?,
 ) : ProcessHandler() {
 
     /**
@@ -75,7 +74,7 @@ class MonkeyCLaunchProcessHandler(
 
     /** A configuration that builds and stops: the console reports where the artifact went. */
     private fun buildOnly() {
-        val built = MonkeyCLaunch.build(project, options, target, ::report)
+        val built = MonkeyCLaunch.build(project, options, ::report)
         if (stopped) return
 
         val verb = if (options.kind == MonkeyCRunKind.EXPORT) "Exported to" else "Built"
@@ -103,7 +102,7 @@ class MonkeyCLaunchProcessHandler(
             )
         }
 
-        val prepared = MonkeyCLaunch.prepare(project, options, target, ::report)
+        val prepared = MonkeyCLaunch.prepare(project, options, ::report)
         if (stopped) return
 
         val java = ConnectIqSdkService.getInstance().java().toString()

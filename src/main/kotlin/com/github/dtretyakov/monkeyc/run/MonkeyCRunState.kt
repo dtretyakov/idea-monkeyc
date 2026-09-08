@@ -12,15 +12,12 @@ import com.intellij.execution.testframework.sm.SMTestRunnerConnectionUtil
 import com.intellij.execution.testframework.sm.runner.ui.SMTRunnerConsoleView
 
 /** Run, as opposed to Debug: the app goes to the simulator through `monkeydo`, with no adapter. */
-class MonkeyCRunState(
-    private val configuration: MonkeyCRunConfiguration,
-    private val target: String?,
-) : RunProfileState {
+class MonkeyCRunState(private val configuration: MonkeyCRunConfiguration) : RunProfileState {
 
     override fun execute(executor: Executor, runner: ProgramRunner<*>): ExecutionResult {
         val project = configuration.project
         val options = configuration.options
-        val handler = MonkeyCLaunchProcessHandler(project, options, target)
+        val handler = MonkeyCLaunchProcessHandler(project, options)
 
         if (!options.kind.isTests) {
             val console = TextConsoleBuilderFactory.getInstance()

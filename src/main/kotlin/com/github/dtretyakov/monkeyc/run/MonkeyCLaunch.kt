@@ -51,7 +51,6 @@ object MonkeyCLaunch {
     fun build(
         project: Project,
         options: MonkeyCRunOptions,
-        target: String?,
         onProgress: (String) -> Unit,
     ): BuiltArtifact {
         val sdk = ConnectIqSdkService.getInstance().sdk
@@ -67,7 +66,7 @@ object MonkeyCLaunch {
         checkKindSuitsProject(model, root, options.kind)
 
         val kind = options.kind
-        val device = if (kind.buildKind.needsDevice) resolveDevice(project, model, root, options, target) else ""
+        val device = if (kind.buildKind.needsDevice) resolveDevice(project, model, root, options) else ""
         // A barrel is unsigned, so it is the one kind that can be built without a key at all.
         val key = model.developerKey()
         if (key == null && kind.buildKind.needsDeveloperKey) {
@@ -150,7 +149,6 @@ object MonkeyCLaunch {
     fun prepare(
         project: Project,
         options: MonkeyCRunOptions,
-        target: String?,
         onProgress: (String) -> Unit,
     ): PreparedLaunch {
         // Before the build, not after it: compiling for a minute and then refusing to run the
@@ -162,7 +160,7 @@ object MonkeyCLaunch {
             )
         }
 
-        val built = build(project, options, target, onProgress)
+        val built = build(project, options, onProgress)
         val paired = buildPaired(project, options, built.device, onProgress)
 
         onProgress("Starting the Connect IQ simulator...")
@@ -247,30 +245,29 @@ object MonkeyCLaunch {
      * choosing one.
      *
      * The configuration's own choice wins, because a configuration that names a device was written
-     * to mean it. Then the device chosen next to the Run button, then the project's default; and a
-     * project that declares exactly one device does not need to be asked at all.
+     * to mean it. Otherwise it is the one chosen next to the Run button, and failing that the
+     * first device the manifest declares — asking would only be a question with one sensible
+     * answer, and it is recorded so the selector shows what was built.
      */
     private fun resolveDevice(
         project: Project,
         model: MonkeyCProject,
         root: Path,
         options: MonkeyCRunOptions,
-        target: String?,
     ): String {
         options.device.takeIf { it.isNotEmpty() }?.let { return it }
-        target?.takeIf { it.isNotEmpty() }?.let { return it }
-        MonkeyCSettings.getInstance(project).targetDevice.takeIf { it.isNotEmpty() }?.let { return it }
 
-        val buildable = model.buildableDevices(root)
-        if (buildable.size == 1) return buildable.first().id
+        val settings = MonkeyCSettings.getInstance(project)
+        settings.targetDevice.takeIf { it.isNotEmpty() }?.let { return it }
 
-        throw ExecutionException(
-            if (buildable.isEmpty()) {
-                "None of the devices this project declares is downloaded. Get them with the SDK Manager."
-            } else {
-                "Choose a device next to the Run button, or set the project's target device in " +
-                    "Settings | Languages & Frameworks | Monkey C."
-            },
-        )
+        // Nothing chosen yet — usually a project opened before the SDK had finished loading, so
+        // the choice made at open time found no devices to make. Pick one now and record it, so
+        // that the selector beside the Run button shows what is actually being built.
+        val chosen = model.defaultDevice(root)
+            ?: throw ExecutionException(
+                "None of the devices this project declares is downloaded. Get them with the SDK Manager.",
+            )
+        settings.targetDevice = chosen
+        return chosen
     }
 }

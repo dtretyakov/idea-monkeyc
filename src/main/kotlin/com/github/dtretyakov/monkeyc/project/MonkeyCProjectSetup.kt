@@ -51,8 +51,10 @@ class MonkeyCProjectSetup : ProjectActivity {
             }
         }
 
-        val isConnectIq = work.isNotEmpty() || readAction { MonkeyCProject.getInstance(project).roots() }.isNotEmpty()
-        if (!isConnectIq) return
+        val roots = readAction { MonkeyCProject.getInstance(project).roots() }
+        if (work.isEmpty() && roots.isEmpty()) return
+
+        chooseDeviceIfUnset(project, settings)
 
         edtWriteAction {
             if (project.isDisposed) return@edtWriteAction
@@ -62,6 +64,20 @@ class MonkeyCProjectSetup : ProjectActivity {
                 settings.rootsConfigured = true
             }
         }
+    }
+
+    /**
+     * Picks a target device the first time, so that Run does something rather than asking.
+     *
+     * Only when nothing is set: a project that has been opened before keeps whatever was chosen,
+     * including a choice the user made and then a device they later removed from the manifest —
+     * that is a mismatch worth showing rather than silently correcting.
+     */
+    private fun chooseDeviceIfUnset(project: Project, settings: MonkeyCSettings) {
+        if (settings.targetDevice.isNotEmpty()) return
+        val model = MonkeyCProject.getInstance(project)
+        val root = model.primaryRoot() ?: return
+        settings.targetDevice = model.defaultDevice(root) ?: return
     }
 
     /**

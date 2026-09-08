@@ -4,7 +4,6 @@ import com.github.dtretyakov.monkeyc.lang.MonkeyCFileType
 import com.github.dtretyakov.monkeyc.lsp.SdkServerCommands
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.project.ProjectLayout
-import com.github.dtretyakov.monkeyc.run.MonkeyCDeviceTarget
 import com.github.dtretyakov.monkeyc.run.MonkeyCLaunch
 import com.github.dtretyakov.monkeyc.run.MonkeyCRunOptions
 import com.github.dtretyakov.monkeyc.run.PreparedLaunch
@@ -45,11 +44,7 @@ class MonkeyCDebugAdapterDescriptor(
             ?: throw ExecutionException("This debug configuration is not a Connect IQ one.")
 
         val indicator = ProgressManager.getInstance().progressIndicator
-        prepared = MonkeyCLaunch.prepare(
-            environment.project,
-            monkeyCOptions,
-            MonkeyCDeviceTarget.deviceOf(environment.executionTarget),
-        ) { step ->
+        prepared = MonkeyCLaunch.prepare(environment.project, monkeyCOptions) { step ->
             indicator?.text = step
         }
 
@@ -85,7 +80,9 @@ class MonkeyCDebugAdapterDescriptor(
             put("stopAtLaunch", monkeyCOptions.stopAtLaunch)
             if (monkeyCOptions.runTests) {
                 put("runTests", true)
-                monkeyCOptions.testName.takeIf { it.isNotEmpty() }?.let { put("tests", listOf(it)) }
+                // Only when a subset was picked: the adapter takes an empty array to mean
+                // "run nothing at all", and then reports no results and no error.
+                monkeyCOptions.testNames.takeIf { it.isNotEmpty() }?.let { put("tests", it) }
             }
             if (monkeyCOptions.runNativePairing) put("runNativePairing", true)
             // A complication pair: the simulator loads both, and the debugger stops in either.

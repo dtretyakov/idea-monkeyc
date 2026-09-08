@@ -70,8 +70,19 @@ class MonkeyCProject(private val project: Project) {
                 minimum == null || device.sdkVersion == null || device.sdkVersion >= minimum
             }
         }
-        return installed.filter { it.id in declared }
+        // In the manifest's order, not the catalogue's: the first product a developer lists is
+        // the one they work against, and it is what the target device defaults to.
+        return declared.mapNotNull { id -> installed.firstOrNull { it.id == id } }
     }
+
+    /**
+     * The device Build and Run use when the user has not picked one.
+     *
+     * Chosen once, when the project opens, rather than left empty: an empty selection reads as a
+     * setting the user forgot, and every run fails with a question instead of doing something. The
+     * platform's own target selector behaves the same way — it preselects the first ready target.
+     */
+    fun defaultDevice(root: Path): String? = buildableDevices(root).firstOrNull()?.id
 
     /** The developer key to sign with: the project's, else the one the SDK Manager generated. */
     fun developerKey(): Path? {

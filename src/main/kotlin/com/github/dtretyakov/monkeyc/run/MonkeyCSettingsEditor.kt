@@ -31,7 +31,7 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
     private lateinit var pairedRow: Row
 
     private var device: String = ""
-    private var testName: String = ""
+    private var tests: String = ""
     private var stopAtLaunch: Boolean = false
     private var runNativePairing: Boolean = false
     private var forDevice: Boolean = false
@@ -50,11 +50,11 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
                     .bindItem({ choices.labelFor(device) }, { device = choices.idFor(it) })
                     .comment("Pins this configuration to one device. Otherwise it follows the device chosen next to the Run button.")
             }
-            testRow = row("Test:") {
+            testRow = row("Tests:") {
                 textField()
                     .align(AlignX.FILL)
-                    .bindText({ testName }, { testName = it })
-                    .comment("A single test to run. Empty runs them all.")
+                    .bindText({ tests }, { tests = it })
+                    .comment("Names separated by spaces. Empty runs every test in the project.")
             }
             breakRow = row {
                 checkBox("Break at launch")
@@ -105,7 +105,7 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
     override fun resetEditorFrom(configuration: MonkeyCRunConfiguration) {
         val options = configuration.options
         device = options.device
-        testName = options.testName
+        tests = options.tests
         stopAtLaunch = options.stopAtLaunch
         runNativePairing = options.runNativePairing
         forDevice = options.forDevice
@@ -129,7 +129,7 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
         panel.apply()
         val options = configuration.options
         options.device = device
-        options.testName = testName
+        options.tests = tests
         options.stopAtLaunch = stopAtLaunch
         options.runNativePairing = runNativePairing
         options.forDevice = forDevice

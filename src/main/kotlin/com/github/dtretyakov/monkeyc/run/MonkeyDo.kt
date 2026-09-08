@@ -26,8 +26,9 @@ object MonkeyDo {
             add(launch.sdk.shell.toString())
             if (options.runNativePairing) add("-n")
             if (options.runTests) {
+                // `-t` alone runs every test; each name after it narrows the run to those.
                 add("-t")
-                options.testName.takeIf { it.isNotEmpty() }?.let { add(it) }
+                addAll(options.testNames)
             }
         }
         return GeneralCommandLine(listOf(java) + arguments).withWorkingDirectory(launch.root)

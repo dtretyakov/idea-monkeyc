@@ -38,7 +38,7 @@ class MonkeyCRunConfiguration(
         if (executor.id == DefaultDebugExecutor.EXECUTOR_ID) {
             super.getState(executor, environment)
         } else {
-            MonkeyCRunState(this, MonkeyCDeviceTarget.deviceOf(environment.executionTarget))
+            MonkeyCRunState(this)
         }
 
     /**
