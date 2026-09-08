@@ -54,7 +54,11 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
                 textField()
                     .align(AlignX.FILL)
                     .bindText({ tests }, { tests = it })
-                    .comment("Names separated by spaces. Empty runs every test in the project.")
+                    .comment(
+                        "Names separated by spaces. Empty runs every test in the project." +
+                            "<br/>Tests cannot be debugged: the SDK's debugger never enters " +
+                            "configuration mode for a test run, so no breakpoint is ever registered.",
+                    )
             }
             breakRow = row {
                 checkBox("Break at launch")

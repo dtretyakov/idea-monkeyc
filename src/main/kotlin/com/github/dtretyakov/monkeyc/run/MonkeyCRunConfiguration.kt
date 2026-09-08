@@ -45,10 +45,25 @@ class MonkeyCRunConfiguration(
      * Only Debug is claimed here. LSP4IJ's DAP runner takes every configuration that says yes, and
      * for Run the platform's own runner and [MonkeyCRunState] are the right pair.
      *
-     * A configuration that builds and stops has nothing to debug, so it does not offer to.
+     * Two kinds decline it. A configuration that builds and stops has nothing to debug. And a test
+     * run cannot be debugged at all — not by this plugin and not by anything else, because the
+     * SDK's own adapter suppresses the `initialized` event for it:
+     *
+     * ```java
+     * if (!this.mRunTests && isForegroundApp) {
+     *     mClient.initialized();
+     * }
+     * ```
+     *
+     * A DAP client only registers breakpoints after `initialized`, so in a test run there is no
+     * moment at which a breakpoint can be set; `stopAtLaunch` is ignored there as well. Offering
+     * Debug would offer a button that silently runs the suite and stops nowhere.
      */
     override fun canRun(executorId: String): Boolean =
-        executorId == DefaultDebugExecutor.EXECUTOR_ID && options.kind.launches && !options.forDevice
+        executorId == DefaultDebugExecutor.EXECUTOR_ID &&
+            options.kind.launches &&
+            !options.forDevice &&
+            !options.kind.isTests
 
     override fun getDebugAdapterServer(): DebugAdapterServerDefinition? =
         DebugAdapterManager.getInstance().getDebugAdapterServerById(MonkeyCDebugAdapterFactory.SERVER_ID)

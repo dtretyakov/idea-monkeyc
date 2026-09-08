@@ -18,6 +18,7 @@ import org.eclipse.lsp4j.debug.launch.DSPLauncher
 import org.eclipse.lsp4j.debug.services.IDebugProtocolClient
 import org.eclipse.lsp4j.debug.services.IDebugProtocolServer
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
@@ -129,6 +130,7 @@ class DebugAdapterLiveTest {
         Session(sdk).use { session ->
             session.initialize()
             val finished = session.awaitOutput("Ran 2 tests")
+            val configurable = session.awaitInitialized()
             session.onInitialized { session.server.configurationDone(ConfigurationDoneArguments()) }
 
             // No `tests` key: the extension only sends one when a subset was picked, and an empty
@@ -150,6 +152,16 @@ class DebugAdapterLiveTest {
             assertTrue(session.output.contains("Executing test fixturePasses"), session.output)
             assertTrue(session.output.contains("PASS"), session.output)
             assertTrue(session.output.contains("FAIL"), session.output)
+
+            // The canary for why Debug is not offered on a test configuration. The adapter's own
+            // code reads `if (!mRunTests && isForegroundApp) mClient.initialized();`, and without
+            // that event no client ever registers a breakpoint. The day this assertion fails,
+            // Garmin has made test debugging possible and MonkeyCRunConfiguration.canRun should
+            // stop refusing it.
+            assertFalse(
+                configurable.await(2, TimeUnit.SECONDS),
+                "the adapter now enters configuration mode for a test run: tests can be debugged",
+            )
         }
     }
 
@@ -162,6 +174,7 @@ class DebugAdapterLiveTest {
 
         private val text = StringBuilder()
         private var onInitialized: (() -> Unit)? = null
+        private val initialized = CountDownLatch(1)
         private val waiters = mutableListOf<Pair<String, CountDownLatch>>()
         private val stopped = CountDownLatch(1)
 
@@ -173,6 +186,7 @@ class DebugAdapterLiveTest {
         init {
             val client = object : IDebugProtocolClient {
                 override fun initialized() {
+                    initialized.countDown()
                     // On the adapter's reading thread, and the callback sends requests of its own —
                     // so it cannot block waiting for a reply that this thread would have to deliver.
                     Thread { onInitialized?.invoke() }.start()
@@ -215,6 +229,9 @@ class DebugAdapterLiveTest {
         }
 
         fun awaitStopped(): CountDownLatch = stopped
+
+        /** Counts down when the adapter asks for configuration, which for a test run it never does. */
+        fun awaitInitialized(): CountDownLatch = initialized
 
         fun awaitOutput(needle: String): CountDownLatch =
             CountDownLatch(1).also { synchronized(waiters) { waiters.add(needle to it) } }
