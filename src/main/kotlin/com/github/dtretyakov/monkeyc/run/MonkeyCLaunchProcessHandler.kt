@@ -107,8 +107,43 @@ class MonkeyCLaunchProcessHandler(
         if (stopped) return
 
         val java = ConnectIqSdkService.getInstance().java().toString()
+
+        // The simulator leaks two pipes per run and stops accepting connections after a few dozen
+        // of them — acknowledged by Garmin in 2023 and still open. The observed behaviour of the
+        // VS Code extension is that the first attempt fails and the second succeeds, and it does
+        // not restart the simulator to get there. So: push again, and only then reach for the
+        // bigger hammer. Driving `monkeydo` from the command line is what puts us on this side of
+        // the bug, and a run that quietly works the second time is the whole difference between
+        // "flaky plugin" and "no, that is the SDK".
+        repeat(ATTEMPTS) { index ->
+            if (stopped) return
+            val attempt = pushToSimulator(prepared, java)
+            if (stopped) return
+
+            val last = index == ATTEMPTS - 1
+            if (!attempt.simulatorRefused || last) {
+                finish(attempt.exitCode)
+                return
+            }
+            recover(prepared, attemptsSoFar = index + 1)
+        }
+    }
+
+    /** What one `monkeydo` invocation did, once it is over. */
+    private class Attempt(val exitCode: Int, val simulatorRefused: Boolean)
+
+    /**
+     * Runs `monkeydo` once and waits for it, forwarding everything it says as it says it.
+     *
+     * Output is not held back while we decide whether to retry. It could be — the refusal is
+     * immediate and produces nothing else — but a run that prints "Unable to connect to
+     * simulator." and then recovers has told the user something true, and a silent retry would
+     * leave them wondering why a run took twice as long.
+     */
+    private fun pushToSimulator(prepared: PreparedLaunch, java: String): Attempt {
         val handler = OSProcessHandler(MonkeyDo.commandLine(prepared, java, options))
         running = handler
+        val errors = StringBuilder()
 
         handler.addProcessListener(
             object : ProcessListener {
@@ -120,6 +155,8 @@ class MonkeyCLaunchProcessHandler(
                     // progress lines are written directly and are unaffected.
                     if (outputType === ProcessOutputTypes.SYSTEM) return
 
+                    if (outputType === ProcessOutputTypes.STDERR) errors.append(event.text)
+
                     if (testMessages != null && outputType === ProcessOutputTypes.STDOUT) {
                         val translated = testMessages.translate(event.text)
                         if (translated.isNotEmpty()) notifyTextAvailable(translated, outputType)
@@ -127,20 +164,44 @@ class MonkeyCLaunchProcessHandler(
                         notifyTextAvailable(event.text, outputType)
                     }
                 }
-
-                override fun processTerminated(event: ProcessEvent) {
-                    // A test still open here never reported a result, and the tree would show it
-                    // running for ever; this is the last chance to close it.
-                    testMessages?.flush()
-                        ?.takeIf { it.isNotEmpty() }
-                        ?.let { notifyTextAvailable(it, ProcessOutputTypes.STDOUT) }
-                    notifyProcessTerminated(event.exitCode)
-                }
             },
         )
 
         notifyTextAvailable("\nRunning on ${prepared.device}...\n\n", ProcessOutputTypes.SYSTEM)
         handler.startNotify()
+        handler.waitFor()
+
+        // `exitCode` is null only for a process that is still running, which this one is not.
+        val exitCode = handler.exitCode ?: 1
+        return Attempt(exitCode, MonkeyDo.simulatorRefused(exitCode, errors.toString()))
+    }
+
+    /**
+     * Gets the simulator back into a state where the next push can work.
+     *
+     * The first refusal is answered by simply trying again, which is what the SDK's own bug report
+     * says is enough. A second one means the simulator is properly wedged, and only a restart
+     * clears that.
+     */
+    private fun recover(prepared: PreparedLaunch, attemptsSoFar: Int) {
+        if (attemptsSoFar == 1) {
+            report("The simulator refused the app. Pushing it again.")
+            return
+        }
+        report("The simulator refused the app twice. Restarting it.")
+        if (!Simulator.restart(prepared.sdk)) {
+            report("The simulator did not come back. The next attempt is likely to fail too.")
+        }
+    }
+
+    /** Closes the test tree, if there is one, and ends the run. */
+    private fun finish(exitCode: Int) {
+        // A test still open here never reported a result, and the tree would show it running for
+        // ever; this is the last chance to close it.
+        testMessages?.flush()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { notifyTextAvailable(it, ProcessOutputTypes.STDOUT) }
+        notifyProcessTerminated(exitCode)
     }
 
     private fun report(step: String) = notifyTextAvailable("$step\n", ProcessOutputTypes.SYSTEM)
@@ -175,5 +236,12 @@ class MonkeyCLaunchProcessHandler(
 
     private companion object {
         val LOG = logger<MonkeyCLaunchProcessHandler>()
+
+        /**
+         * How many times to push the app before giving up: try, try again, restart and try once
+         * more. Three is what the failure needs and no more — a wedged simulator that survives a
+         * restart is a different problem, and looping on it would only hide it.
+         */
+        const val ATTEMPTS = 3
     }
 }

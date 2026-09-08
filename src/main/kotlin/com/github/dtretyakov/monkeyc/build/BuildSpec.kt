@@ -22,6 +22,17 @@ enum class BuildKind {
 
     val needsDevice: Boolean get() = this == APP || this == TESTS || this == BARREL_TESTS
     val needsDeveloperKey: Boolean get() = this != BARREL
+
+    /**
+     * Whether an output that looks current may be used instead of building again.
+     *
+     * True for everything but an export. Skipping a build the user is about to run is worth
+     * seconds every time and costs nothing when it is wrong — the next run rebuilds. An export is
+     * the one artifact that leaves the machine, and a stale `.iq` is discovered after it is in the
+     * store. Garmin's own tooling gets this wrong in exactly this place, and the forum thread
+     * about it is titled "Every second build is from an old version of the code".
+     */
+    val mayBeSkipped: Boolean get() = this != EXPORT
 }
 
 /**

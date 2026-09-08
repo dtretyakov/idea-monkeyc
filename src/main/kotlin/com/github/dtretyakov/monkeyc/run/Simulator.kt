@@ -23,7 +23,26 @@ object Simulator {
      */
     private val PORTS = 1234..1238
 
+    /**
+     * Something answers on one of the simulator's ports.
+     *
+     * This is what the waiting loops need, and it is deliberately not the same question as "the
+     * simulator is up": 1234 is a popular port and the answer can come from something else
+     * entirely. [strangerHoldsPort] is the question with the suspicion in it.
+     */
     fun isReady(): Boolean = PORTS.any { canConnect(it) }
+
+    /**
+     * The port answers, and no Connect IQ simulator can be found to explain it.
+     *
+     * Worth asking before a run rather than after. Whatever holds the port will not speak the
+     * debug shell's protocol, so `monkeydo` fails somewhere inside a handshake and reports it as
+     * the app failing to launch — which is a long way from the truth and sent one developer on
+     * the forums through a fourteen-reply thread before finding that Hyper-V had reserved the
+     * range. Guessing wrong here is cheap: the caller warns, it does not refuse.
+     */
+    fun strangerHoldsPort(dataRoot: Path = ConnectIqSdk.dataRoot()): Boolean =
+        isReady() && running(dataRoot).isEmpty()
 
     /**
      * Every running Connect IQ simulator, from whichever SDK started it.

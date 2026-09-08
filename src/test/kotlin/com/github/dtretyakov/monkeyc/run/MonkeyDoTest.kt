@@ -55,4 +55,22 @@ class MonkeyDoTest {
         )
         return MonkeyDo.commandLine(launch, "java", options).parametersList.list
     }
+    @Test
+    fun `a refused push is told apart from an app that failed`() {
+        // Exactly what SDK 9.2.0 writes with nothing listening on the simulator's ports.
+        assertTrue(MonkeyDo.simulatorRefused(2, "Unable to connect to simulator.\n"))
+    }
+
+    @Test
+    fun `an app failing with the same status is not a refusal`() {
+        // 2 is a status an app can exit with. Retrying someone's failing app three times to
+        // discover that would be a bug of our own.
+        assertFalse(MonkeyDo.simulatorRefused(2, "Error: Symbol Not Found Error\n"))
+    }
+
+    @Test
+    fun `a run that succeeded is never a refusal`() {
+        assertFalse(MonkeyDo.simulatorRefused(0, "Unable to connect to simulator."))
+    }
+
 }

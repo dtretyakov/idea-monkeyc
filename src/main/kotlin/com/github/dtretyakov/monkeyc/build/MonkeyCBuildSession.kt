@@ -33,8 +33,9 @@ object MonkeyCBuildSession {
         skipWhenUpToDate: Boolean = true,
     ): BuildResult {
         // Checked before the tab is opened: a run with nothing to compile should leave the Build
-        // window exactly as the last real build left it.
-        if (skipWhenUpToDate && MonkeyCBuilder.isUpToDate(project, spec)) {
+        // window exactly as the last real build left it. An export is never skipped, whatever the
+        // caller asked for — see BuildKind.mayBeSkipped.
+        if (skipWhenUpToDate && spec.kind.mayBeSkipped && MonkeyCBuilder.isUpToDate(project, spec)) {
             return BuildResult(exitCode = 0, messages = emptyList(), upToDate = true)
         }
 
