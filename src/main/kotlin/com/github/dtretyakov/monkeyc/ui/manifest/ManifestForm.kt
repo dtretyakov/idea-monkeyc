@@ -3,6 +3,7 @@ package com.github.dtretyakov.monkeyc.ui.manifest
 import com.github.dtretyakov.monkeyc.project.ManifestFile
 import com.github.dtretyakov.monkeyc.sdk.AppType
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
+import com.github.dtretyakov.monkeyc.ui.DeviceSelectionSummary
 import com.github.dtretyakov.monkeyc.sdk.ProjectInfo
 import com.github.dtretyakov.monkeyc.ui.MonkeyCConfigurable
 import com.intellij.icons.AllIcons
@@ -30,6 +31,7 @@ import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 import java.util.UUID
 import javax.swing.JComponent
+import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JTextField
 import javax.swing.event.DocumentEvent
@@ -232,20 +234,28 @@ internal class ManifestForm(
             tabs.addTab("$title  ${choices.count { it.selected }}", list.panel(help))
         }
 
+        // Declared before the list so its own change handler can reach it: the handler updates the
+        // line underneath, which belongs to the list it is reporting on.
+        lateinit var products: ChoiceList
+        products = ChoiceList(
+            choices = productChoices,
+            searchable = true,
+            actions = listOf(
+                "All" to { _: String -> true },
+                "None" to { _: String -> false },
+                "Compatible" to { id: String -> id in compatibleDevices },
+            ),
+        ) { ids ->
+            edit { model -> model.setDevices(ids) }
+            showSelectionSummary(products, ids)
+        }
         tab(
             "Products",
             productChoices,
             "A build produces one executable per device. The buttons act on what is shown.",
-            ChoiceList(
-                choices = productChoices,
-                searchable = true,
-                actions = listOf(
-                    "All" to { _: String -> true },
-                    "None" to { _: String -> false },
-                    "Compatible" to { id: String -> id in compatibleDevices },
-                ),
-            ) { ids -> edit { model -> model.setDevices(ids) } },
+            products,
         )
+        showSelectionSummary(products, productChoices.filter { it.selected }.map { it.id })
 
         if (!manifest.isBarrel) {
             tab(
@@ -323,8 +333,19 @@ internal class ManifestForm(
             if (header.componentCount > 0) add(header, BorderLayout.NORTH)
 
             add(JBScrollPane(list), BorderLayout.CENTER)
-            add(ComponentPanelBuilder.createCommentComponent(help, true), BorderLayout.SOUTH)
+            footer = ComponentPanelBuilder.createCommentComponent(help, true)
+            add(footer!!, BorderLayout.SOUTH)
         }
+
+        /**
+         * The line under the list, kept so one tab can make it say something that changes.
+         *
+         * Products is the tab where the ticks have consequences worth stating — how many resource
+         * families they commit you to, and the smallest memory budget the code now has to fit —
+         * and neither is visible anywhere else.
+         */
+        var footer: JComponent? = null
+            private set
 
         /** Ticks every visible choice the predicate accepts and unticks the visible rest. */
         private fun select(wanted: (String) -> Boolean) {
@@ -395,6 +416,20 @@ internal class ManifestForm(
      * not. Leaving those out would be worse than showing them — the form replaces the whole list
      * when it writes, so an entry it never displayed would be silently dropped.
      */
+    /**
+     * Replaces the Products tab's help line with what the ticks actually commit the project to.
+     *
+     * The static sentence is true and says nothing that changes; this says how many resource
+     * families the selection signs you up to draw and the smallest memory budget the code now has
+     * to fit, which is the number that constrains it. Neither is shown anywhere else.
+     */
+    private fun showSelectionSummary(list: ChoiceList, ids: List<String>) {
+        val footer = list.footer as? JLabel ?: return
+        val chosen = devices.filter { it.id in ids }
+        footer.text = DeviceSelectionSummary.of(chosen, manifest.appType)
+            ?: "A build produces one executable per device. The buttons act on what is shown."
+    }
+
     private fun choices(installed: List<Pair<String, String>>, inManifest: List<String>): List<Choice> {
         val known = installed.map { (id, label) -> Choice(id, label, id in inManifest) }
         val unknown = inManifest.filterNot { id -> installed.any { it.first == id } }

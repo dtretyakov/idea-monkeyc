@@ -2,6 +2,7 @@ package com.github.dtretyakov.monkeyc.ui
 
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.project.ManifestFile
+import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
 import com.github.dtretyakov.monkeyc.project.ManifestText
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
@@ -17,7 +18,8 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.vfs.LocalFileSystem
-import com.intellij.ui.CheckBoxList
+import com.intellij.ui.components.JBLabel
+import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.dsl.builder.panel
 import java.nio.file.Path
@@ -61,9 +63,10 @@ class EditProductsAction : AnAction() {
 
         val dialog = ProductsDialog(
             project,
-            eligible.map { it.id to it.displayName },
+            eligible,
             selected,
             EmptyReason.of(installed.size, newEnough.size, eligible.size, minimum, appType),
+            appType,
         )
         if (!dialog.showAndGet()) return
 
@@ -164,31 +167,50 @@ internal sealed interface EmptyReason {
 
 internal class ProductsDialog(
     private val project: Project,
-    private val devices: List<Pair<String, String>>,
+    private val devices: List<ConnectIqDevice>,
     selected: Set<String>,
     private val empty: EmptyReason,
+    private val appType: String?,
 ) : DialogWrapper(project) {
 
-    private val list = CheckBoxList<String>().apply {
-        devices.forEach { (id, displayName) -> addItem(id, "$displayName  ($id)", id in selected) }
-    }
+    private val products = ProductTable(devices, selected, appType)
+    private val summary = JBLabel()
 
     init {
         title = "Connect IQ Products"
         setOKButtonText("Save")
+        products.onChanged = { refreshSummary() }
         init()
+        refreshSummary()
+    }
+
+    /**
+     * The line under the table, which is the only place any of this is said.
+     *
+     * The ticks answer "which watches"; this answers what they cost — how many resource families
+     * have to be drawn and kept working, and the smallest memory budget the code now has to fit,
+     * which is the one that actually constrains it.
+     */
+    private fun refreshSummary() {
+        summary.text = DeviceSelectionSummary.of(products.selectedDevices(), appType) ?: "Nothing selected"
     }
 
     override fun createCenterPanel(): JComponent = panel {
         when (empty) {
             EmptyReason.None -> {
                 row {
-                    cell(JBScrollPane(list)).resizableColumn()
+                    cell(JBScrollPane(products.table)).resizableColumn().align(Align.FILL)
                 }.resizableRow()
+                row {
+                    button("All") { products.setAll({ true }, value = true); refreshSummary() }
+                    button("None") { products.setAll({ true }, value = false); refreshSummary() }
+                }
+                row { cell(summary) }
                 row {
                     comment(
                         "Only devices downloaded with the SDK Manager that support the manifest's " +
-                            "minimum API level and can run this kind of app are listed.",
+                            "minimum API level and can run this kind of app are listed. Sort by " +
+                            "Memory to find the device the app has to fit inside.",
                     )
                 }
             }
@@ -225,5 +247,5 @@ internal class ProductsDialog(
         }
     }.also { it.preferredSize = java.awt.Dimension(420, 480) }
 
-    fun selected(): List<String> = devices.map { it.first }.filter { list.isItemSelected(it) }
+    fun selected(): List<String> = products.selected()
 }

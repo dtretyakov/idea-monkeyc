@@ -39,6 +39,16 @@ data class ConnectIqDevice(
      * has been sitting in a file this plugin already opens.
      */
     val languagesByPartNumber: List<Set<String>> = emptyList(),
+    /** Pixels across and down, which with [shape] is what a layout has to fit. */
+    val resolution: Pair<Int, Int>? = null,
+    /** `round`, `rectangle`, `semi-octagon`, `semi-round`. */
+    val shape: String? = null,
+    /** 16, 8, 4 or 1. A design drawn for sixteen falls apart on four. */
+    val bitsPerPixel: Int? = null,
+    /** `mip`, `amoled` or `lcd`; an AMOLED watch face has burn-in rules a MIP one does not. */
+    val displayType: String? = null,
+    /** How many physical buttons, or null when the profile does not say. */
+    val buttons: Int? = null,
 ) {
     /** `watchApp`, `widget`, `datafield`, … — what a project may declare for this device. */
     val appTypes: Set<String> get() = memoryLimits.keys
@@ -66,6 +76,19 @@ data class ConnectIqDevice(
      */
     fun partNumbersWith(language: String): Pair<Int, Int> =
         languagesByPartNumber.count { language in it } to languagesByPartNumber.size
+
+    /** "round 240×240", or as much of it as the profile says. */
+    val screen: String
+        get() = listOfNotNull(shape, resolution?.let { "${it.first}×${it.second}" }).joinToString(" ")
+
+    /** How the user gets around: the thing that decides whether an app is usable at all. */
+    val input: String
+        get() = when {
+            isTouch && (buttons ?: 0) > 0 -> "touch, ${buttons} button${if (buttons == 1) "" else "s"}"
+            isTouch -> "touch"
+            buttons != null -> "$buttons button${if (buttons == 1) "" else "s"}"
+            else -> ""
+        }
 }
 
 /**
@@ -100,6 +123,9 @@ private data class CompilerJson(
     val displayName: String? = null,
     val deviceGroup: String? = null,
     val deviceFamily: String? = null,
+    val bitsPerPixel: Int? = null,
+    val displayType: String? = null,
+    val resolution: ResolutionJson? = null,
     val appTypes: List<AppTypeJson> = emptyList(),
     val partNumbers: List<PartNumberJson> = emptyList(),
 ) {
@@ -114,12 +140,21 @@ private data class CompilerJson(
 
     @Serializable
     data class LanguageJson(val code: String? = null)
+
+    @Serializable
+    data class ResolutionJson(val width: Int? = null, val height: Int? = null)
 }
 
 @Serializable
-private data class SimulatorJson(val display: Display = Display()) {
+private data class SimulatorJson(
+    val display: Display = Display(),
+    val keys: List<KeyJson> = emptyList(),
+) {
     @Serializable
-    data class Display(val isTouch: Boolean = false)
+    data class Display(val isTouch: Boolean = false, val shape: String? = null)
+
+    @Serializable
+    data class KeyJson(val id: String? = null)
 }
 
 /**
@@ -187,6 +222,15 @@ class DeviceCatalog(private val devicesRoot: Path) {
             group = compiler.deviceGroup,
             family = compiler.deviceFamily,
             isTouch = simulator.display.isTouch,
+            shape = simulator.display.shape,
+            buttons = simulator.keys.size.takeIf { simulator.keys.isNotEmpty() },
+            bitsPerPixel = compiler.bitsPerPixel,
+            displayType = compiler.displayType,
+            resolution = compiler.resolution?.let { size ->
+                val width = size.width
+                val height = size.height
+                if (width != null && height != null) width to height else null
+            },
             sdkVersion = compiler.partNumbers.mapNotNull { SdkVersion.parse(it.connectIQVersion) }.maxOrNull(),
             languagesByPartNumber = compiler.partNumbers.map { part ->
                 part.languages.mapNotNull { it.code }.toSet()

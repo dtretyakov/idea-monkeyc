@@ -89,7 +89,13 @@ First release.
 - Developer key generation, without needing openssl.
 - A project can pin the SDK it builds with, instead of following whichever the SDK Manager has
   made current. A pin the machine cannot honour falls back rather than failing, and says so.
-- A form editor for `manifest.xml`, with products, permissions and languages.
+- A form editor for `manifest.xml`, with products, permissions and languages. Products are a
+  sortable table — screen, colour depth, panel, input and the memory this kind of app gets — so
+  the device that will actually constrain the app can be found by sorting rather than by looking
+  each one up on Garmin's website.
+- Under it, what a selection commits the project to: how many resource families have to be drawn
+  and kept working, the smallest memory budget the code now has to fit, how many devices have no
+  touchscreen, and the poorest colour depth the artwork has to survive.
 - Stopping and restarting the Connect IQ simulator, and clearing the app data it keeps between
   runs — which is what makes an edited default in `properties.xml` take effect, since a value there
   applies only while the property does not yet exist.
