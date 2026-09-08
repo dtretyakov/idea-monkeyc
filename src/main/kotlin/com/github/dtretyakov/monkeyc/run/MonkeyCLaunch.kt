@@ -7,7 +7,7 @@ import com.github.dtretyakov.monkeyc.build.MonkeyCBuildSession
 import com.github.dtretyakov.monkeyc.build.MonkeyCBuilder
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.project.DeviceProblems
-import com.github.dtretyakov.monkeyc.project.SigningIdentity
+import com.github.dtretyakov.monkeyc.project.ExportIdentity
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.project.ProjectLayout
@@ -87,8 +87,11 @@ object MonkeyCLaunch {
         // Only an export: a `.prg` for the simulator or a watch is signed with whatever key is to
         // hand and nothing downstream cares. An `.iq` is the artifact the store checks the key of,
         // and the check has no second chance.
-        if (kind.buildKind == BuildKind.EXPORT && key != null) checkSigningKey(project, key, onProgress)
-        if (kind.buildKind == BuildKind.EXPORT) preflight(model, root, onProgress)
+        if (kind.buildKind == BuildKind.EXPORT) {
+            if (key != null) checkSigningKey(project, key, onProgress)
+            checkApplicationId(project, model, root, onProgress)
+            preflight(model, root, onProgress)
+        }
 
         val simulator = !options.forDevice
         val output = outputFor(options, root, device)
@@ -342,15 +345,44 @@ object MonkeyCLaunch {
         val settings = MonkeyCSettings.getInstance(project)
         val fingerprint = DeveloperKey.fingerprint(key)
 
-        when (val verdict = SigningIdentity.check(settings.exportedWithKey, fingerprint)) {
-            is SigningIdentity.Verdict.Changed -> throw ExecutionException(SigningIdentity.describe(verdict))
+        when (val verdict = ExportIdentity.check(settings.exportedWithKey, fingerprint)) {
+            is ExportIdentity.Verdict.Changed -> throw ExecutionException(ExportIdentity.describeKey(verdict))
 
-            is SigningIdentity.Verdict.FirstExport -> {
+            is ExportIdentity.Verdict.FirstExport -> {
                 settings.exportedWithKey = verdict.fingerprint
                 onProgress("Signing with developer key ${verdict.fingerprint}, recorded for this project.")
             }
 
-            SigningIdentity.Verdict.Fine -> fingerprint?.let { onProgress("Signing with developer key $it.") }
+            ExportIdentity.Verdict.Fine -> fingerprint?.let { onProgress("Signing with developer key $it.") }
+        }
+    }
+
+    /**
+     * Stops an export that would go out under a different application id than the last one.
+     *
+     * The same shape as the key check and for the same reason: the mistake is silent, the package
+     * it produces is valid, and the damage — a second listing, or an update to the wrong app —
+     * happens at the store rather than here.
+     */
+    private fun checkApplicationId(
+        project: Project,
+        model: MonkeyCProject,
+        root: Path,
+        onProgress: (String) -> Unit,
+    ) {
+        val settings = MonkeyCSettings.getInstance(project)
+        val applicationId = model.manifest(root)?.applicationId
+
+        when (val verdict = ExportIdentity.check(settings.exportedAsApplicationId, applicationId)) {
+            is ExportIdentity.Verdict.Changed ->
+                throw ExecutionException(ExportIdentity.describeApplicationId(verdict))
+
+            is ExportIdentity.Verdict.FirstExport -> {
+                settings.exportedAsApplicationId = verdict.fingerprint
+                onProgress("Exporting as application id ${verdict.fingerprint}, recorded for this project.")
+            }
+
+            ExportIdentity.Verdict.Fine -> Unit
         }
     }
 

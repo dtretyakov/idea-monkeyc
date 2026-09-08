@@ -39,6 +39,16 @@ class MonkeyCSettings : PersistentStateComponent<MonkeyCSettings> {
      */
     var exportedWithKey: String = ""
 
+    /**
+     * The application id this project last exported as. Empty until it has exported once.
+     *
+     * Recorded for the same reason as the key, and against the same kind of mistake. Garmin's beta
+     * mechanism works by putting a different app id in the manifest and editing it back to promote
+     * the app; forgetting either edit produces a package that is perfectly valid and updates the
+     * wrong listing.
+     */
+    var exportedAsApplicationId: String = ""
+
     /** Device the run configurations build for; empty means "ask, then remember". */
     var targetDevice: String = ""
 

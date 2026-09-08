@@ -28,7 +28,7 @@ sealed interface GarminTarget {
     /** A watch that mounts as a disk: the file copy that has always worked. */
     data class Volume(val volume: GarminVolume) : GarminTarget {
         override val name: String get() = volume.name
-        override fun install(prg: Path): Path = volume.install(prg, settingsJson = null)
+        override fun install(prg: Path): Path = volume.install(prg)
     }
 
     /**

@@ -6,7 +6,6 @@ import java.nio.file.Path
 import kotlin.io.path.copyTo
 import kotlin.io.path.createDirectories
 import kotlin.io.path.isDirectory
-import kotlin.io.path.isRegularFile
 import kotlin.io.path.name
 
 /**
@@ -24,32 +23,26 @@ data class GarminVolume(val root: Path) {
     /** Where a sideloaded `.prg` goes. */
     val apps: Path get() = garmin.resolve("APPS")
 
-    /**
-     * Where a sideloaded app's settings go.
-     *
-     * Sideloaded apps have no settings: the app store is what serves them, and a build that never
-     * went through the store is not in it. The documented way round that is to copy the settings
-     * the simulator wrote into this directory, which is a trick nobody finds by themselves.
-     */
-    val settings: Path get() = apps.resolve("SETTINGS")
-
     private val garmin: Path get() = GarminVolume.garminDirectory(root) ?: root.resolve("GARMIN")
 
     /**
-     * Copies a built `.prg` onto the device, with its settings if there are any.
+     * Copies a built `.prg` onto the device, and returns where it went.
      *
-     * Returns where it went. The caller says so, and says the other thing too — that the file will
-     * not be there when the device is next plugged in.
+     * The `.prg` and nothing else. This used to copy the simulator's `<App>-settings.json` into
+     * `GARMIN/APPS/SETTINGS` as well, which was a guess that looked like a feature: settings reach
+     * an installed app through Garmin Connect and Garmin Express, and those read them from the
+     * app's *store listing* — which a sideloaded build does not have. The forum thread that finally
+     * got settings working on a sideloaded app describes a `.SET` file whose name matches the
+     * program's including case, which is not the file the simulator writes or the name we gave it.
+     *
+     * So it is gone until somebody can hold a watch and find out what the device actually reads.
+     * Code that appears to configure the app and does not is worse than no code, because it stops
+     * people looking for the real answer.
      */
-    fun install(prg: Path, settingsJson: Path?): Path {
+    fun install(prg: Path): Path {
         apps.createDirectories()
         val destination = apps.resolve(prg.name)
         prg.copyTo(destination, overwrite = true)
-
-        if (settingsJson != null && settingsJson.isRegularFile()) {
-            settings.createDirectories()
-            settingsJson.copyTo(settings.resolve(settingsJson.name), overwrite = true)
-        }
         return destination
     }
 

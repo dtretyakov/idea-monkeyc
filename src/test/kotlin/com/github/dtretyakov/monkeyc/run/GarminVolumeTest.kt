@@ -52,26 +52,31 @@ class GarminVolumeTest {
             it.writeText("a program")
         }
 
-        val destination = volume.install(prg, settingsJson = null)
+        val destination = volume.install(prg)
 
         assertEquals(volume.apps.resolve("App.prg"), destination)
         assertEquals("a program", destination.readText())
     }
 
     @Test
-    fun `settings travel with it, because a sideloaded app has none of its own`(@TempDir temp: Path) {
-        // The app store serves settings, and a build that never went through the store is not in
-        // it. Copying what the simulator wrote is the documented way round that.
+    fun `nothing but the program is copied`(@TempDir temp: Path) {
+        // This used to copy the simulator's settings file into GARMIN/APPS/SETTINGS, which was a
+        // guess that looked like a feature. Settings reach an installed app from its store listing,
+        // and a sideloaded build has none; the file the device is said to read is a `.SET` whose
+        // name matches the program's, which is neither the file the simulator writes nor the name
+        // we gave it. Until somebody can hold a watch and find out, copying nothing is the honest
+        // behaviour, and this is what would notice it coming back.
         val volume = deviceAt(temp)
         val prg = temp.resolve("build/App.prg").also {
             it.parent.createDirectories()
             it.writeText("a program")
         }
-        val settings = temp.resolve("build/App-settings.json").also { it.writeText("{}") }
+        temp.resolve("build/App-settings.json").writeText("{}")
 
-        volume.install(prg, settings)
+        volume.install(prg)
 
-        assertTrue(volume.settings.resolve("App-settings.json").exists())
+        val copied = volume.apps.toFile().walkTopDown().filter { it.isFile }.map { it.name }.toList()
+        assertEquals(listOf("App.prg"), copied, "only the program should reach the device")
     }
 
     @Test
@@ -81,10 +86,10 @@ class GarminVolumeTest {
             it.parent.createDirectories()
             it.writeText("yesterday")
         }
-        volume.install(prg, null)
+        volume.install(prg)
         prg.writeText("today")
 
-        val destination = volume.install(prg, null)
+        val destination = volume.install(prg)
 
         assertEquals("today", destination.readText())
     }
@@ -95,7 +100,7 @@ class GarminVolumeTest {
         val volume = deviceAt(temp)
         val prg = temp.resolve("App.prg").also { it.writeText("a program") }
 
-        assertTrue(volume.install(prg, null).exists())
+        assertTrue(volume.install(prg).exists())
     }
 
     private fun deviceAt(temp: Path): GarminVolume {

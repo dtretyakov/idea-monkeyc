@@ -36,7 +36,8 @@ First release.
   offers to install the `.prg` on it — over MTP for current devices, which appear under no volume
   at all, and as a file copy for older ones that mount as a disk. It says which watch is attached,
   warns when the build was made for a different one, and says that the file vanishing from the
-  folder afterwards is the install working, not failing.
+  folder afterwards is the install working, not failing. The program and nothing else is copied:
+  app settings reach an installed app from its store listing, which a sideloaded build has none of.
 - MTP needs `mtp-rs`, which is looked for rather than required: a watch that mounts as a disk needs
   none of it, and its absence is only mentioned when no device could be found at all.
 - Builds are skipped when the output already matches the sources and the compiler flags — except
@@ -55,6 +56,10 @@ First release.
   with every device.
 - A trial that the store will refuse is refused here first: a non-HTTPS unlock URL, or a trial on a
   watch face.
+- An export remembers the developer key and the application id it went out as, and refuses a later
+  export that would change either. A different key cannot update an app on the store at all; a
+  different application id updates a different listing, which is the mistake Garmin's beta
+  mechanism invites by asking you to edit the id and edit it back.
 - A device the manifest declares but the SDK Manager never downloaded is named before the build
   starts, rather than reported by the compiler as a device it cannot find.
 - A run survives the simulator refusing it: the SDK leaks two pipes per run and stops accepting
