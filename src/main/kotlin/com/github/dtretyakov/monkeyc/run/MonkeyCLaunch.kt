@@ -10,6 +10,7 @@ import com.github.dtretyakov.monkeyc.project.DeviceProblems
 import com.github.dtretyakov.monkeyc.project.ExportIdentity
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
+import com.github.dtretyakov.monkeyc.project.MonkeyCTarget
 import com.github.dtretyakov.monkeyc.project.ProjectLayout
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
 import com.github.dtretyakov.monkeyc.sdk.DeveloperKey
@@ -71,6 +72,14 @@ object MonkeyCLaunch {
             ?: throw ExecutionException("No Connect IQ project here: none of the content roots holds a manifest.xml.")
 
         checkKindSuitsProject(model, root, options.kind)
+        // Run No Evil runs in the simulator and nowhere else, so a watch target is a question with
+        // no answer rather than a build to attempt.
+        if (options.kind.isTests && onWatch(project, options)) {
+            throw ExecutionException(
+                "Unit tests run in the Connect IQ simulator, and the target is a watch. " +
+                    "Choose the device under Simulator beside the Run button to run them.",
+            )
+        }
 
         val kind = options.kind
         val device = if (kind.buildKind.needsDevice) resolveDevice(project, model, root, options) else ""
@@ -93,10 +102,11 @@ object MonkeyCLaunch {
             preflight(model, root, onProgress)
         }
 
-        val simulator = !options.forDevice
-        val output = outputFor(options, root, device)
+        val onWatch = onWatch(project, options)
+        val simulator = !onWatch
+        val output = outputFor(options, root, device, onWatch)
 
-        val title = title(options, device)
+        val title = title(options, device, onWatch)
         onProgress("$title...")
         val result = MonkeyCBuildSession.run(
             project,
@@ -171,10 +181,10 @@ object MonkeyCLaunch {
     ): PreparedLaunch {
         // Before the build, not after it: compiling for a minute and then refusing to run the
         // result would be the worst of both.
-        if (options.forDevice) {
+        if (onWatch(project, options)) {
             throw ExecutionException(
-                "This configuration builds for the watch, not for the simulator, so there is " +
-                    "nothing to run here. Copy the .prg to GARMIN/APPS over USB.",
+                "The target is a watch, so there is nothing to start in the simulator. " +
+                    "Choose the same device under Simulator beside the Run button to run it there.",
             )
         }
 
@@ -230,7 +240,7 @@ object MonkeyCLaunch {
      * name; an export or a barrel is something the developer takes away, so it goes to `out` and
      * the configuration may say otherwise.
      */
-    private fun outputFor(options: MonkeyCRunOptions, root: Path, device: String): Path {
+    private fun outputFor(options: MonkeyCRunOptions, root: Path, device: String, onWatch: Boolean): Path {
         val chosen = options.outputPath.trim().takeIf { it.isNotEmpty() }?.let {
             val path = Path.of(it)
             if (path.isAbsolute) path else root.resolve(path)
@@ -239,13 +249,11 @@ object MonkeyCLaunch {
             MonkeyCRunKind.EXPORT -> chosen ?: ProjectLayout.exportIq(root, root.name)
             MonkeyCRunKind.BARREL -> chosen ?: ProjectLayout.barrel(root, root.name)
             MonkeyCRunKind.TESTS, MonkeyCRunKind.BARREL_TESTS -> ProjectLayout.testPrg(root, root.name, device)
-            MonkeyCRunKind.APP -> ProjectLayout.appPrg(root, root.name)
-            MonkeyCRunKind.BUILD ->
-                if (options.forDevice) {
-                    ProjectLayout.devicePrg(root, root.name, device)
-                } else {
-                    ProjectLayout.appPrg(root, root.name)
-                }
+            // A watch build and a simulator build are different binaries that will not run in each
+            // other's place, so they must not share a name — and the device in the name is what
+            // says which watch the file on the desk belongs to.
+            MonkeyCRunKind.APP, MonkeyCRunKind.BUILD ->
+                if (onWatch) ProjectLayout.devicePrg(root, root.name, device) else ProjectLayout.appPrg(root, root.name)
         }
     }
 
@@ -273,13 +281,13 @@ object MonkeyCLaunch {
         }
     }
 
-    private fun title(options: MonkeyCRunOptions, device: String): String = when (options.kind) {
+    private fun title(options: MonkeyCRunOptions, device: String, onWatch: Boolean): String = when (options.kind) {
         MonkeyCRunKind.EXPORT -> "Exporting for every declared device"
         MonkeyCRunKind.BARREL -> "Building the barrel"
         MonkeyCRunKind.BARREL_TESTS -> "Building barrel tests for $device"
         MonkeyCRunKind.TESTS -> "Building tests for $device"
         MonkeyCRunKind.BUILD, MonkeyCRunKind.APP ->
-            if (options.forDevice) "Building for $device, for the watch" else "Building for $device"
+            if (onWatch) "Building for $device, for the watch" else "Building for $device"
     }
 
     /**
@@ -297,18 +305,39 @@ object MonkeyCLaunch {
         root: Path,
         options: MonkeyCRunOptions,
     ): String {
-        options.device.takeIf { it.isNotEmpty() }?.let { return it }
+        resolveTarget(project, options)?.let { return it.device }
 
-        val settings = MonkeyCSettings.getInstance(project)
-        settings.targetDevice.takeIf { it.isNotEmpty() }?.let { return it }
-
-        // Nothing chosen yet — usually a project opened before the SDK had finished loading, so
-        // the choice made at open time found no devices to make. Pick one now and record it, so
+        // Nothing chosen anywhere — usually a project opened before the SDK had finished loading,
+        // so the choice made at open time found no devices to make. Pick one now and record it, so
         // that the selector beside the Run button shows what is actually being built.
         val chosen = model.defaultDevice(root) ?: throw ExecutionException(noDeviceReason(model, root))
-        settings.targetDevice = chosen
+        MonkeyCSettings.getInstance(project).targetDevice = chosen
         return chosen
     }
+
+    /**
+     * The target this run will use: the configuration's pin, else the toolbar's choice.
+     *
+     * Needs no project root and no manifest, deliberately. An earlier version took both and fell
+     * back to the old flag when it could not find them, which meant the destination silently
+     * reverted outside a Connect IQ project — a fallback that could only ever be wrong.
+     */
+    fun resolveTarget(project: Project, options: MonkeyCRunOptions): MonkeyCTarget? = MonkeyCTarget.resolve(
+        pinned = MonkeyCTarget.ofOptions(options.device, options.forDevice),
+        chosen = MonkeyCSettings.getInstance(project).target,
+        default = null,
+    )
+
+    /**
+     * Whether this run goes to a watch rather than the simulator.
+     *
+     * Asked in two places that cannot share the build's own resolution — the process handler
+     * decides whether to launch anything before the build has run — so the answer is computed the
+     * same way from the same two sources rather than read off a flag that only one of them keeps
+     * up to date.
+     */
+    fun onWatch(project: Project, options: MonkeyCRunOptions): Boolean =
+        resolveTarget(project, options)?.onWatch ?: false
 
     /**
      * Why there is no device to build for, naming the devices rather than counting them.

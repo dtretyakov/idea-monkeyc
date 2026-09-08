@@ -55,7 +55,7 @@ class MonkeyCLaunchProcessHandler(
 
     private fun launch() {
         try {
-            if (options.kind.launches && !options.forDevice) {
+            if (options.kind.launches && !MonkeyCLaunch.onWatch(project, options)) {
                 runInSimulator()
             } else {
                 buildOnly()
@@ -89,7 +89,7 @@ class MonkeyCLaunchProcessHandler(
         } else {
             notifyTextAvailable("\n$verb ${built.output}\n", ProcessOutputTypes.SYSTEM)
         }
-        if (options.forDevice) offerToInstall(built)
+        if (MonkeyCLaunch.onWatch(project, options)) offerToInstall(built)
         finish(0)
     }
 

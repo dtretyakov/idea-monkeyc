@@ -45,8 +45,10 @@ First release.
 - Every build reports what it takes of the target device's memory, and what is left. The limits
   come from the device data the SDK Manager downloaded, and differ by an order of magnitude
   between devices.
-- The target device is chosen beside the Run button and defaults to the first product the
-  manifest declares. Devices that cannot run this kind of app are not offered.
+- The target is chosen beside the Run button: a device, and whether it goes to the simulator or to
+  a watch. Attached watches are marked, so it is clear when an install will be offered rather than
+  just a file. The chip shows the target the selected run configuration will actually use, not the
+  project setting it may be overriding. Devices that cannot run this kind of app are not offered.
 - Compiler diagnostics in the Build tool window, with clickable locations, and how long the build
   took beside them.
 - An export says what it is about to leave out before it spends minutes doing it: devices that are

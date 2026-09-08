@@ -79,6 +79,30 @@ sealed interface GarminTarget {
             return volumes + mtpDevices()
         }
 
+        /**
+         * The ids of the catalogue devices currently attached, from a short-lived cache.
+         *
+         * The toolbar's device chip asks this on every repaint, and finding out means walking the
+         * mount points and starting a subprocess. Neither belongs on the IDE's pulse, and a watch
+         * does not appear and vanish within a couple of seconds — so the answer is remembered
+         * briefly and recomputed off the UI thread by whoever asks next.
+         */
+        @Volatile
+        private var attachedCache: Pair<Long, Set<String>> = 0L to emptySet()
+
+        fun attachedDeviceIds(): Set<String> {
+            val now = System.currentTimeMillis()
+            val (at, ids) = attachedCache
+            if (now - at < CACHE_MILLIS) return ids
+
+            val fresh = runCatching { attached().mapNotNull { it.device?.id }.toSet() }.getOrDefault(emptySet())
+            attachedCache = now to fresh
+            return fresh
+        }
+
+        /** Long enough to keep the toolbar cheap, short enough that plugging in a watch is noticed. */
+        private const val CACHE_MILLIS = 4_000L
+
         /** Whether the tool is missing, which is only worth saying when a watch might need it. */
         fun mtpToolMissing(): Boolean = MtpLocator.resolve() == null
 

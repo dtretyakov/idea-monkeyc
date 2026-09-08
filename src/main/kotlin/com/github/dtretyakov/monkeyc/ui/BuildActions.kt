@@ -1,6 +1,7 @@
 package com.github.dtretyakov.monkeyc.ui
 
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
+import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.run.MonkeyCRunKind
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
@@ -30,7 +31,16 @@ abstract class BuildAction : AnAction() {
 
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
-        ConnectIqRunConfigurations.run(project, MonkeyCRunKind.BUILD, forDevice = forDevice)
+
+        // The destination is the target, not a hidden flag on a configuration. Setting it here is
+        // what makes the menu item honest: afterwards the chip beside Run says "on the watch", so
+        // the next Run does the same thing this item just did, and the user can see why.
+        val settings = MonkeyCSettings.getInstance(project)
+        if (settings.targetOnWatch != forDevice) {
+            settings.targetOnWatch = forDevice
+            project.messageBus.syncPublisher(MonkeyCSettings.TOPIC).settingsChanged(project)
+        }
+        ConnectIqRunConfigurations.run(project, MonkeyCRunKind.BUILD)
     }
 
     protected abstract val forDevice: Boolean

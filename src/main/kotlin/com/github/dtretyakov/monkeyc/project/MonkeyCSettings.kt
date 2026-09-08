@@ -52,6 +52,16 @@ class MonkeyCSettings : PersistentStateComponent<MonkeyCSettings> {
     /** Device the run configurations build for; empty means "ask, then remember". */
     var targetDevice: String = ""
 
+    /**
+     * Whether that device is targeted on the watch rather than in the simulator.
+     *
+     * The other half of the target. It used to be a checkbox inside one run configuration called
+     * "Build for the watch, not the simulator", which is a destination wearing a compiler flag's
+     * clothes — the user thinks "run it over there", and the control asked them to think about
+     * what the compiler emits.
+     */
+    var targetOnWatch: Boolean = false
+
     /** `;`-separated jungle files, relative to the project root. Empty means `monkey.jungle`. */
     var jungleFiles: String = ""
 
@@ -110,6 +120,17 @@ class MonkeyCSettings : PersistentStateComponent<MonkeyCSettings> {
     override fun getState(): MonkeyCSettings = this
 
     override fun loadState(state: MonkeyCSettings) = XmlSerializerUtil.copyBean(state, this)
+
+    /** What the toolbar says, or null when nothing has been chosen yet. */
+    val target: MonkeyCTarget?
+        get() = targetDevice.takeIf { it.isNotEmpty() }?.let {
+            MonkeyCTarget(it, if (targetOnWatch) MonkeyCTarget.Destination.WATCH else MonkeyCTarget.Destination.SIMULATOR)
+        }
+
+    fun setTarget(target: MonkeyCTarget) {
+        targetDevice = target.device
+        targetOnWatch = target.onWatch
+    }
 
     companion object {
         fun getInstance(project: Project): MonkeyCSettings = project.service()

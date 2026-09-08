@@ -25,7 +25,6 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
     private lateinit var testRow: Row
     private lateinit var breakRow: Row
     private lateinit var pairingRow: Row
-    private lateinit var deviceBuildRow: Row
     private lateinit var deviceRow: Row
     private lateinit var outputRow: Row
     private lateinit var pairedRow: Row
@@ -45,10 +44,19 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
         val choices = DeviceChoices(devices)
 
         panel = panel {
-            deviceRow = row("Device:") {
+            deviceRow = row("Target:") {
                 comboBox(choices.labels)
-                    .bindItem({ choices.labelFor(device) }, { device = choices.idFor(it) })
-                    .comment("Pins this configuration to one device. Otherwise it follows the device chosen next to the Run button.")
+                    .bindItem(
+                        { choices.labelFor(device, forDevice) },
+                        { label ->
+                            device = choices.idFor(label)
+                            forDevice = choices.onWatchFor(label)
+                        },
+                    )
+                    .comment(
+                        "Pins this configuration to one target. Otherwise it follows the one chosen " +
+                            "beside the Run button.",
+                    )
             }
             testRow = row("Tests:") {
                 textField()
@@ -69,14 +77,6 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
                 checkBox("Native pairing")
                     .bindSelected({ runNativePairing }, { runNativePairing = it })
                     .comment("Runs the app the way a device that ships it would.")
-            }
-            deviceBuildRow = row {
-                checkBox("Build for the watch, not the simulator")
-                    .bindSelected({ forDevice }, { forDevice = it })
-                    .comment(
-                        "Produces a <code>.prg</code> to copy to <code>GARMIN/APPS</code> over USB. " +
-                            "A watch build will not start in the simulator, and the other way round.",
-                    )
             }
             pairedRow = row("Paired app:") {
                 textFieldWithBrowseButton(
@@ -121,7 +121,6 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
         testRow.visible(kind.isTests)
         breakRow.visible(kind.launches)
         pairingRow.visible(kind == MonkeyCRunKind.APP)
-        deviceBuildRow.visible(kind == MonkeyCRunKind.BUILD)
         deviceRow.visible(kind.buildKind.needsDevice)
         outputRow.visible(kind == MonkeyCRunKind.EXPORT || kind == MonkeyCRunKind.BARREL)
         pairedRow.visible(kind == MonkeyCRunKind.APP)
@@ -148,18 +147,30 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
      * The option stores the id, so the two have to be mapped back and forth, and "no pin" is a
      * value of its own rather than a blank line.
      */
+    /**
+     * The targets a configuration can pin itself to, which are the ones the toolbar offers.
+     *
+     * Both destinations for every device, because the same watch is two different things to build
+     * for: a simulator binary and a hardware one will not run in each other's place. The two lists
+     * are prefixed rather than grouped, because a combo box has no headings.
+     */
     private class DeviceChoices(devices: List<com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice>) {
-        private val byLabel = devices.associateBy { "${it.displayName}  (${it.id})" }
+        private val simulator = devices.associateBy { "Simulator:  ${it.displayName}  (${it.id})" }
+        private val watch = devices.associateBy { "Watch:  ${it.displayName}  (${it.id})" }
 
-        val labels: List<String> = listOf(FOLLOW_SELECTION) + byLabel.keys
+        val labels: List<String> = listOf(FOLLOW_SELECTION) + simulator.keys + watch.keys
 
-        fun labelFor(id: String): String =
-            byLabel.entries.firstOrNull { it.value.id == id }?.key ?: FOLLOW_SELECTION
+        fun labelFor(id: String, onWatch: Boolean): String {
+            val from = if (onWatch) watch else simulator
+            return from.entries.firstOrNull { it.value.id == id }?.key ?: FOLLOW_SELECTION
+        }
 
-        fun idFor(label: String?): String = byLabel[label]?.id.orEmpty()
+        fun idFor(label: String?): String = (simulator[label] ?: watch[label])?.id.orEmpty()
+
+        fun onWatchFor(label: String?): Boolean = label != null && watch.containsKey(label)
 
         private companion object {
-            const val FOLLOW_SELECTION = "Whatever is selected"
+            const val FOLLOW_SELECTION = "Whatever is selected beside Run"
         }
     }
 }

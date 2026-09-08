@@ -22,7 +22,7 @@ import com.intellij.openapi.project.Project
  */
 object ConnectIqRunConfigurations {
 
-    fun run(project: Project, kind: MonkeyCRunKind, forDevice: Boolean = false) {
+    fun run(project: Project, kind: MonkeyCRunKind) {
         val executor = ExecutorRegistry.getInstance().getExecutorById(DefaultRunExecutor.EXECUTOR_ID)
         if (executor == null) {
             // Should not happen — Run is part of the platform — but a menu item that does nothing
@@ -37,7 +37,7 @@ object ConnectIqRunConfigurations {
                 .notify(project)
             return
         }
-        ProgramRunnerUtil.executeConfiguration(settings(project, kind, forDevice), executor)
+        ProgramRunnerUtil.executeConfiguration(settings(project, kind), executor)
     }
 
     /**
@@ -49,18 +49,16 @@ object ConnectIqRunConfigurations {
     private fun settings(
         project: Project,
         kind: MonkeyCRunKind,
-        forDevice: Boolean,
     ): RunnerAndConfigurationSettings {
         val manager = RunManager.getInstance(project)
 
-        // Matched on both: a simulator build and a watch build are the same kind and produce
-        // binaries that will not run in each other's place, so reusing one for the other would
-        // quietly hand the user the wrong file.
+        // Matched on the kind alone now: where a build goes is the target beside the Run button
+        // rather than a flag on the configuration, so one Build configuration serves both.
         manager.allSettings
             .firstOrNull { candidate ->
                 if (candidate.isTemporary) return@firstOrNull false
                 val configuration = candidate.configuration as? MonkeyCRunConfiguration ?: return@firstOrNull false
-                configuration.options.kind == kind && configuration.options.forDevice == forDevice
+                configuration.options.kind == kind
             }
             ?.let { return it }
 
@@ -70,14 +68,10 @@ object ConnectIqRunConfigurations {
             .configurationFactories
             .first { it.name == kind.display }
 
-        return manager.createConfiguration(nameFor(kind, forDevice), factory).also {
+        return manager.createConfiguration(kind.display, factory).also {
             val configuration = it.configuration as MonkeyCRunConfiguration
             configuration.options.kind = kind
-            configuration.options.forDevice = forDevice
             manager.addConfiguration(it)
         }
     }
-
-    private fun nameFor(kind: MonkeyCRunKind, forDevice: Boolean): String =
-        if (forDevice) "Build for Watch" else kind.display
 }

@@ -2,6 +2,10 @@ package com.github.dtretyakov.monkeyc.ui
 
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
+import com.github.dtretyakov.monkeyc.project.MonkeyCTarget
+import com.github.dtretyakov.monkeyc.run.GarminTarget
+import com.github.dtretyakov.monkeyc.run.MonkeyCRunConfiguration
+import com.intellij.execution.RunManager
 import com.intellij.execution.ui.TogglePopupAction
 import com.intellij.openapi.actionSystem.ActionGroup
 import com.intellij.openapi.actionSystem.ActionUpdateThread
@@ -59,10 +63,18 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
         presentation.isEnabledAndVisible = visible
         if (!visible) return
 
-        val device = MonkeyCSettings.getInstance(project).targetDevice
-        presentation.setText(device.ifEmpty { "No device" }, false)
+        // The effective target of the configuration that is selected, not the project setting.
+        // Showing the setting was misleading: a configuration pinned to one watch built that watch
+        // while this said another, and a control the platform puts beside Run has to describe the
+        // next click.
+        val target = effectiveTarget(project)
+        presentation.setText(target?.describe()?.ifEmpty { null } ?: "No device", false)
         presentation.icon = MonkeyCIcons.CONNECT_IQ
-        presentation.description = "The watch that Build, Run and Debug target"
+        presentation.description = if (pinnedByConfiguration(project)) {
+            "Pinned by the selected run configuration"
+        } else {
+            "Where Build, Run and Debug put the app"
+        }
     }
 
     override fun getActionGroup(e: AnActionEvent): ActionGroup? {
@@ -85,10 +97,52 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
             )
         }
 
+        // Which of them is plugged in, from a short-lived cache: this runs when the popup opens,
+        // and finding out means walking mount points and starting a subprocess.
+        val attached = GarminTarget.attachedDeviceIds()
+
+        val simulator = devices.map {
+            Select(project, MonkeyCTarget(it.id, MonkeyCTarget.Destination.SIMULATOR), "${it.displayName}  (${it.id})")
+        }
+        // Every device, not only the attached ones: building a `.prg` for a watch you do not own
+        // is ordinary, and it is how you hand one to somebody else. The attached ones are marked
+        // because for those an install will be offered rather than just a file.
+        val watch = devices.map {
+            val connected = if (it.id in attached) "  · connected" else ""
+            Select(
+                project,
+                MonkeyCTarget(it.id, MonkeyCTarget.Destination.WATCH),
+                "${it.displayName}  (${it.id})$connected",
+            )
+        }
+
         return DefaultActionGroup(
-            devices.map { Select(project, it.id, "${it.displayName}  (${it.id})") } +
+            listOf(Separator("Simulator")) + simulator +
+                listOf(Separator("Watch")) + watch +
                 listOf(Separator.getInstance(), acquire),
         )
+    }
+
+    /** The target the selected run configuration will actually use. */
+    private fun effectiveTarget(project: Project): MonkeyCTarget? = MonkeyCTarget.resolve(
+        pinned = pinnedTarget(project),
+        chosen = MonkeyCSettings.getInstance(project).target,
+        default = null,
+    )
+
+    private fun pinnedByConfiguration(project: Project): Boolean = pinnedTarget(project) != null
+
+    /**
+     * The target the selected configuration pins itself to, if it pins one.
+     *
+     * Read straight off the selected configuration rather than kept in sync with it: the toolbar
+     * repaints when the selection changes, so asking then is both current and free of listeners
+     * that could go stale.
+     */
+    private fun pinnedTarget(project: Project): MonkeyCTarget? {
+        val options = (RunManager.getInstance(project).selectedConfiguration?.configuration
+            as? MonkeyCRunConfiguration)?.options ?: return null
+        return MonkeyCTarget.ofOptions(options.device, options.forDevice)
     }
 
     override fun createCustomComponent(presentation: Presentation, place: String): JComponent {
@@ -111,14 +165,14 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
 
     private class Select(
         private val project: Project,
-        private val device: String,
+        private val target: MonkeyCTarget,
         text: String,
     ) : AnAction(text) {
 
         override fun actionPerformed(event: AnActionEvent) {
             val settings = MonkeyCSettings.getInstance(project)
-            if (settings.targetDevice == device) return
-            settings.targetDevice = device
+            if (settings.target == target) return
+            settings.setTarget(target)
             // The language server is told the device at initialize and caches it, so it has to be
             // told again; everything else reads the setting at the moment it runs.
             project.messageBus.syncPublisher(MonkeyCSettings.TOPIC).settingsChanged(project)
