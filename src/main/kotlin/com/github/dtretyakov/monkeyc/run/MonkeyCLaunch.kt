@@ -163,6 +163,18 @@ object MonkeyCLaunch {
         val built = build(project, options, onProgress)
         val paired = buildPaired(project, options, built.device, onProgress)
 
+        // A simulator from another SDK holds the same ports, and `isReady` cannot tell them
+        // apart — so without this the run would push a `.prg` built by one SDK into the other's
+        // simulator, which fails in ways that read as a broken plugin. Happens whenever the SDK
+        // Manager installs a new SDK while yesterday's simulator is still open.
+        Simulator.conflictingSdk(built.sdk)?.let { other ->
+            throw ExecutionException(
+                "A Connect IQ simulator from ${other.fileName} is running and holding the port, " +
+                    "but this project builds with ${built.sdk.root.fileName}. " +
+                    "Restart it from Run | Connect IQ Simulator | Restart Simulator.",
+            )
+        }
+
         onProgress("Starting the Connect IQ simulator...")
         if (!Simulator.start(built.sdk)) {
             throw ExecutionException(

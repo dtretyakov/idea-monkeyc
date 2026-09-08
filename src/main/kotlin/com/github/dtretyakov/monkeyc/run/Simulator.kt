@@ -5,6 +5,7 @@ import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.OSProcessHandler
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.nio.file.Path
 
 /**
  * Starts the Connect IQ simulator and waits until it will accept an app.
@@ -25,27 +26,63 @@ object Simulator {
     fun isReady(): Boolean = PORTS.any { canConnect(it) }
 
     /**
-     * The simulator processes belonging to this SDK.
+     * Every running Connect IQ simulator, from whichever SDK started it.
      *
-     * Matched by path rather than by name, so a simulator from another installed SDK — which the
-     * SDK Manager makes easy to have — is left alone.
+     * Deliberately not scoped to the current SDK. Scoping sounded principled — leave another
+     * SDK's simulator alone — and broke the case that actually happens: the SDK Manager installs
+     * a new SDK and makes it current while yesterday's simulator is still open. Stop then found
+     * nothing and said so while the window sat there, and Start saw the port taken and did
+     * nothing. Two SDKs deliberately running side by side is far rarer than upgrading one.
      */
-    fun running(sdk: ConnectIqSdk): List<ProcessHandle> {
-        val bin = sdk.root.resolve("bin")
-        // Both spellings: the SDK is often reached through a symlink, and a process reports the
-        // path it was actually started from.
-        val prefixes = listOfNotNull(
-            bin.toString(),
-            runCatching { bin.toRealPath().toString() }.getOrNull(),
-        ).distinct()
-
+    fun running(dataRoot: Path = ConnectIqSdk.dataRoot()): List<ProcessHandle> {
+        val prefixes = simulatorPrefixes(dataRoot)
         return ProcessHandle.allProcesses()
-            .filter { handle ->
-                val command = handle.info().command().orElse("")
-                command.isNotEmpty() && prefixes.any { command.startsWith(it) }
-            }
+            .filter { handle -> handle.simulatorRoot(prefixes) != null }
             .toList()
     }
+
+    /**
+     * The SDK whose simulator is listening now, or null when none is.
+     *
+     * Needed because "a simulator is up" is not the same question as "the right simulator is up",
+     * and a `.prg` built by one SDK pushed into another's simulator fails in ways that read as a
+     * broken plugin.
+     */
+    fun runningSdk(dataRoot: Path = ConnectIqSdk.dataRoot()): Path? {
+        val prefixes = simulatorPrefixes(dataRoot)
+        return ProcessHandle.allProcesses()
+            .map { it.simulatorRoot(prefixes) }
+            .filter { it != null }
+            .findFirst()
+            .orElse(null)
+    }
+
+    /** An SDK other than [sdk] whose simulator holds the port, or null when there is no conflict. */
+    fun conflictingSdk(sdk: ConnectIqSdk): Path? {
+        if (!isReady()) return null
+        val live = runningSdk(sdk.dataRoot) ?: return null
+        return live.takeIf { !it.sameAs(sdk.root) }
+    }
+
+    /** Every unpacked SDK's `bin`, in both spellings, since a process reports where it really started. */
+    private fun simulatorPrefixes(dataRoot: Path): List<String> =
+        (ConnectIqSdk.installed(dataRoot) + listOfNotNull(ConnectIqSdk.detect(dataRoot)?.root))
+            .distinct()
+            .flatMap { root ->
+                val bin = root.resolve("bin")
+                listOfNotNull(bin.toString(), runCatching { bin.toRealPath().toString() }.getOrNull())
+            }
+            .distinct()
+
+    /** The SDK root this process was started from, when it is a Connect IQ simulator. */
+    private fun ProcessHandle.simulatorRoot(prefixes: List<String>): Path? {
+        val command = info().command().orElse("").takeIf { it.isNotEmpty() } ?: return null
+        val prefix = prefixes.firstOrNull { command.startsWith(it) } ?: return null
+        return Path.of(prefix).parent
+    }
+
+    private fun Path.sameAs(other: Path): Boolean =
+        runCatching { toRealPath() == other.toRealPath() }.getOrDefault(this == other)
 
     /**
      * Closes the simulator, politely and then not.
@@ -54,7 +91,7 @@ object Simulator {
      * it gets into states — a hung app, a device left half-loaded — that only a restart clears.
      */
     fun stop(sdk: ConnectIqSdk, timeoutMillis: Long = 10_000): Boolean {
-        val processes = running(sdk)
+        val processes = running(sdk.dataRoot)
         if (processes.isEmpty()) return true
 
         processes.forEach { it.destroy() }

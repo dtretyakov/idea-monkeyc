@@ -61,7 +61,7 @@ class StopSimulatorAction : SimulatorAction() {
     override val progressTitle: String = "Stopping the Connect IQ simulator"
 
     override fun act(sdk: ConnectIqSdk): Pair<String, NotificationType> = when {
-        Simulator.running(sdk).isEmpty() -> "The Connect IQ simulator was not running." to NotificationType.INFORMATION
+        Simulator.running(sdk.dataRoot).isEmpty() -> "The Connect IQ simulator was not running." to NotificationType.INFORMATION
         Simulator.stop(sdk) -> "The Connect IQ simulator has been stopped." to NotificationType.INFORMATION
         else -> "The Connect IQ simulator did not stop." to NotificationType.WARNING
     }

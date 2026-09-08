@@ -68,6 +68,12 @@ class DebugAdapterLiveTest {
         val built = LiveBuild.run(sdk, project, device)
         assertEquals(0, built.exitCode, built.text)
         assumeTrue(Simulator.isReady(), "the Connect IQ simulator is not running")
+        // A simulator from another SDK holds the same ports and answers nothing useful, which
+        // arrives here as an unexplained timeout. Say which it is instead.
+        assumeTrue(
+            Simulator.conflictingSdk(sdk) == null,
+            "the running simulator is from ${Simulator.conflictingSdk(sdk)}, not ${sdk.root}",
+        )
 
         // The compiler records real paths in the symbol file, and on macOS a temp directory is
         // reached through a symlink — a breakpoint on the unresolved path is silently never hit.
@@ -126,6 +132,12 @@ class DebugAdapterLiveTest {
         val built = LiveBuild.run(sdk, project, device, kind = BuildKind.TESTS)
         assertEquals(0, built.exitCode, built.text)
         assumeTrue(Simulator.isReady(), "the Connect IQ simulator is not running")
+        // A simulator from another SDK holds the same ports and answers nothing useful, which
+        // arrives here as an unexplained timeout. Say which it is instead.
+        assumeTrue(
+            Simulator.conflictingSdk(sdk) == null,
+            "the running simulator is from ${Simulator.conflictingSdk(sdk)}, not ${sdk.root}",
+        )
 
         Session(sdk).use { session ->
             session.initialize()
