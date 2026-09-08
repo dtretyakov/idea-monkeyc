@@ -4,6 +4,9 @@ import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
 import com.github.dtretyakov.monkeyc.sdk.SdkManagerApp
 import com.github.dtretyakov.monkeyc.sdk.SdkVersion
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vcs.ProjectLevelVcsManager
+import com.intellij.openapi.vcs.changes.ChangeListManager
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.util.io.FileUtil
 import java.nio.file.Path
 
@@ -182,9 +185,29 @@ object ConnectIqEnvironment {
 
         val model = MonkeyCProject.getInstance(project)
         val problem = model.developerKeyProblem()
-            ?: return Item("Developer key", Status.READY, shorten(model.developerKey()!!))
+        if (problem != null) return Item("Developer key", Status.MISSING, problem, Fix.GENERATE_KEY)
 
-        return Item("Developer key", Status.MISSING, problem, Fix.GENERATE_KEY)
+        val key = model.developerKey()!!
+        val location = DeveloperKeyLocation.check(key, model.roots(), isIgnored(project, key))
+        if (location is DeveloperKeyLocation.Verdict.Committable) {
+            // Not blocking: the build works perfectly well, and this is about what happens later.
+            return Item("Developer key", Status.MISSING, DeveloperKeyLocation.describe(location), blocking = false)
+        }
+
+        return Item("Developer key", Status.READY, shorten(key))
+    }
+
+    /**
+     * Whether version control is ignoring this file, or null when nothing can say.
+     *
+     * Null is the common answer for a key outside the project, and for a project that is not under
+     * version control at all. The caller treats it as "do not warn": a false alarm about a leaked
+     * key is the kind of thing that teaches people to stop reading the checklist.
+     */
+    private fun isIgnored(project: Project, key: Path): Boolean? {
+        val file = LocalFileSystem.getInstance().findFileByNioFile(key) ?: return null
+        if (!ProjectLevelVcsManager.getInstance(project).hasActiveVcss()) return null
+        return runCatching { ChangeListManager.getInstance(project).isIgnoredFile(file) }.getOrNull()
     }
 
     /**
