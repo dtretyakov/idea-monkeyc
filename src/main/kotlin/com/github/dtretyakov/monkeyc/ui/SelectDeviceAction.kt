@@ -14,6 +14,8 @@ import com.intellij.openapi.actionSystem.ex.CustomComponentAction
 import com.intellij.openapi.actionSystem.impl.ActionButtonWithText
 import com.intellij.openapi.application.runReadActionBlocking
 import com.intellij.openapi.project.DumbAware
+import com.intellij.openapi.ui.popup.Balloon
+import com.intellij.ui.GotItTooltip
 import com.intellij.openapi.project.Project
 import com.intellij.util.ui.JBInsets
 import com.intellij.util.ui.JBUI
@@ -89,8 +91,23 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
         )
     }
 
-    override fun createCustomComponent(presentation: Presentation, place: String): JComponent =
-        DeviceButton(this, presentation, place)
+    override fun createCustomComponent(presentation: Presentation, place: String): JComponent {
+        // Shown once, the first time the chip appears, and never again — the platform remembers by
+        // id. This is what the Got It tooltip is for by the guideline: a small toolbar control that
+        // is easy to overlook, introducing a concept the user has not met. It is not for explaining
+        // that an SDK is missing; that is a banner, and there is one.
+        GotItTooltip(
+            "monkeyc.device.chip",
+            "A Connect IQ app is built for one watch at a time. This is the one that Build, Run " +
+                "and Debug use — switching it here rebuilds for the other screen.",
+            null,
+        )
+            .withHeader("Choose the watch")
+            .withPosition(Balloon.Position.below)
+            .assignTo(presentation, GotItTooltip.BOTTOM_MIDDLE)
+
+        return DeviceButton(this, presentation, place)
+    }
 
     private class Select(
         private val project: Project,

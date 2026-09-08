@@ -21,6 +21,7 @@ import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.columns
 import java.nio.file.Path
+import kotlin.io.path.exists
 
 /**
  * What a new Connect IQ project needs beyond its name: what to start from, the oldest API level it

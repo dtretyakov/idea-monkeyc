@@ -113,6 +113,13 @@ class MonkeyCLaunchProcessHandler(
         handler.addProcessListener(
             object : ProcessListener {
                 override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
+                    // The platform's own handler announces itself: BaseOSProcessHandler.startNotify
+                    // writes the whole command line as SYSTEM output. Forwarding that puts a
+                    // five-hundred-character java invocation above the app's first line of output,
+                    // which is a log entry rather than anything the user asked to see. Our own
+                    // progress lines are written directly and are unaffected.
+                    if (outputType === ProcessOutputTypes.SYSTEM) return
+
                     if (testMessages != null && outputType === ProcessOutputTypes.STDOUT) {
                         val translated = testMessages.translate(event.text)
                         if (translated.isNotEmpty()) notifyTextAvailable(translated, outputType)
