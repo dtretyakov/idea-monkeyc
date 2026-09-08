@@ -101,6 +101,14 @@
         <lang.braceMatcher language="Jungle" implementationClass="com.github.dtretyakov.monkeyc.lang.JungleBraceMatcher"/>
         <lang.braceMatcher language="MSS" implementationClass="com.github.dtretyakov.monkeyc.lang.MssBraceMatcher"/>
 
+        <!--
+          Enter, and where the caret lands after it. The platform gets this from the formatter, and
+          there is no formatter here - a formatter needs a syntax tree with blocks in it, and the
+          server offers no formatting of its own either. lineIndentProvider is the platform's answer
+          for a language that is lexed but not parsed.
+        -->
+        <lineIndentProvider implementation="com.github.dtretyakov.monkeyc.lang.MonkeyCLineIndentProvider"/>
+
         <lang.quoteHandler language="MonkeyC" implementationClass="com.github.dtretyakov.monkeyc.lang.MonkeyCQuoteHandler"/>
         <lang.quoteHandler language="Jungle" implementationClass="com.github.dtretyakov.monkeyc.lang.JungleQuoteHandler"/>
         <lang.quoteHandler language="MSS" implementationClass="com.github.dtretyakov.monkeyc.lang.MssQuoteHandler"/>
@@ -292,6 +300,26 @@
           the run is, and switching it - a round face, then a square one - is most of testing a
           watch app.
         -->
+        <!--
+          The follow-up the SDK's server asks for after completing a function call.
+
+          MonkeyCCompletionItemBuilder attaches `monkeyc.functionCompletion` to any function that
+          takes parameters, exactly as it attaches the standard `editor.action.triggerSuggest` to a
+          module — insert `name()`, put the caret between the parens, then show the parameters.
+          LSP4IJ resolves an LSP command by looking for an IDE action with that id, and finding
+          none it told the user, over and over, that a command was missing.
+
+          It is the same follow-up LSP4IJ already implements for VS Code's own
+          `editor.action.triggerParameterHints`, so that class serves it directly. This only shows
+          anything because codeInsight.parameterInfo is now registered for Monkey C above; before
+          that there would have been nothing behind the command either.
+        -->
+        <action
+            id="monkeyc.functionCompletion"
+            class="com.redhat.devtools.lsp4ij.commands.editor.TriggerParameterHintsAction"
+            text="Show Connect IQ Parameter Info"
+            description="Shown after completing a call to a function that takes parameters"/>
+
         <action
             id="MonkeyC.OpenApiDocumentation"
             class="com.github.dtretyakov.monkeyc.ui.OpenApiDocumentationAction"

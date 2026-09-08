@@ -3,6 +3,8 @@ package com.github.dtretyakov.monkeyc.ui
 import com.github.dtretyakov.monkeyc.dap.MonkeyCDebugAdapterFactory
 import com.github.dtretyakov.monkeyc.lang.ApiMirFileType
 import com.github.dtretyakov.monkeyc.lang.JungleFileType
+import com.github.dtretyakov.monkeyc.lang.MonkeyCLanguage
+import com.github.dtretyakov.monkeyc.lang.MonkeyCLineIndentProvider
 import com.github.dtretyakov.monkeyc.lang.MonkeyCFileType
 import com.github.dtretyakov.monkeyc.lang.MssFileType
 import com.github.dtretyakov.monkeyc.lsp.MonkeyCLanguageServerFactory
@@ -29,6 +31,7 @@ import java.nio.file.Files
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import com.intellij.openapi.roots.AdditionalLibraryRootsProvider
+import com.intellij.psi.codeStyle.lineIndent.LineIndentProvider
 import com.redhat.devtools.lsp4ij.dap.DebugAdapterManager
 import com.redhat.devtools.lsp4ij.LanguageServersRegistry
 import kotlin.system.exitProcess
@@ -100,6 +103,7 @@ class SelfCheckStarter : ModernApplicationStarter() {
         }
 
         problems += apiSurfaceProblems()
+        problems += typingProblems()
 
         val debugAdapter = DebugAdapterManager.getInstance()
             .getDebugAdapterServerById(MonkeyCDebugAdapterFactory.SERVER_ID)
@@ -162,6 +166,38 @@ class SelfCheckStarter : ModernApplicationStarter() {
         } finally {
             Files.deleteIfExists(probe)
         }
+    }
+
+    /**
+     * The two things that answer while the user is typing.
+     *
+     * Indentation on Enter has no formatter behind it, so it hangs on one registration and nothing
+     * says when that registration is absent — the caret simply goes to column one. And the SDK's
+     * server attaches `monkeyc.functionCompletion` to every function that takes parameters, which
+     * LSP4IJ resolves by looking for an IDE action of that id; without one, completing a call
+     * raises an error balloon each time.
+     */
+    private fun typingProblems(): List<String> {
+        val problems = mutableListOf<String>()
+
+        val indent = ExtensionPointName<LineIndentProvider>("com.intellij.lineIndentProvider")
+            .extensionList
+            .filterIsInstance<MonkeyCLineIndentProvider>()
+            .firstOrNull()
+        if (indent == null || !indent.isSuitableFor(MonkeyCLanguage)) {
+            problems += "Enter will not indent: no line indent provider claims Monkey C"
+        } else {
+            println("[self-check] typing: Enter indents Monkey C")
+        }
+
+        val completion = ActionManager.getInstance().getAction(FUNCTION_COMPLETION_COMMAND)
+        if (completion == null) {
+            problems += "completing a call will raise an error: no action serves $FUNCTION_COMPLETION_COMMAND"
+        } else {
+            println("[self-check] typing: $FUNCTION_COMPLETION_COMMAND -> ${completion.javaClass.simpleName}")
+        }
+
+        return problems
     }
 
     /**
@@ -240,6 +276,9 @@ class SelfCheckStarter : ModernApplicationStarter() {
     }
 
     private companion object {
+        /** The command Garmin's server sends after completing a call; see plugin.xml. */
+        const val FUNCTION_COMPLETION_COMMAND = "monkeyc.functionCompletion"
+
         val ALL = listOf("MonkeyC", "Jungle", "MSS")
 
         /** The SDK's API surface, whose outline and folding come from the index, not the server. */
