@@ -2,19 +2,66 @@ package com.github.dtretyakov.monkeyc.lsp
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.progress.ProgressIndicator
+import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.progress.Task
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.redhat.devtools.lsp4ij.client.LanguageClientImpl
+import org.eclipse.lsp4j.MessageParams
 import org.eclipse.lsp4j.jsonrpc.services.JsonRequest
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** The answer the server expects from `custom/save`. */
 data class SaveWorkspaceResult(val savedFiles: List<String>, val error: Boolean)
 
 class MonkeyCLanguageClient(project: Project) : LanguageClientImpl(project) {
+
+    /** Completed when the server says its index is ready; nothing it answers before then is useful. */
+    private val indexed = CompletableFuture<Unit>()
+    private val indicatorShown = AtomicBoolean(false)
+
+    /**
+     * Turns the server's quietest sentence into the one thing the user needs to see.
+     *
+     * The Monkey C server compiles the whole workspace before it can answer anything, and until it
+     * has, completion returns nothing at all. It announces the end of that with
+     * `Full workspace build successful` — over `window/logMessage`, which LSP4IJ files away in its
+     * own console. So the first minute of every project looks exactly like a broken plugin: you
+     * type `WatchUi.` and nothing happens, with no reason on screen.
+     *
+     * A background progress says what is going on, in the place the IDE already puts that news.
+     */
+    override fun logMessage(params: MessageParams) {
+        super.logMessage(params)
+
+        if (params.message.contains(INDEX_READY, ignoreCase = true)) {
+            indexed.complete(Unit)
+            return
+        }
+        if (indicatorShown.compareAndSet(false, true)) showIndexingProgress()
+    }
+
+    private fun showIndexingProgress() {
+        ApplicationManager.getApplication().invokeLater {
+            if (project.isDisposed || indexed.isDone) return@invokeLater
+            ProgressManager.getInstance().run(
+                object : Task.Backgroundable(project, "Monkey C: building the workspace index", true) {
+                    override fun run(indicator: ProgressIndicator) {
+                        indicator.isIndeterminate = true
+                        // Bounded: a server that dies before announcing readiness must not leave a
+                        // progress bar turning for the rest of the session.
+                        runCatching { indexed.get(INDEX_TIMEOUT_MINUTES, TimeUnit.MINUTES) }
+                    }
+                },
+            )
+        }
+    }
 
     /**
      * Saves the project's unsaved files, because the server asked.
@@ -56,4 +103,11 @@ class MonkeyCLanguageClient(project: Project) : LanguageClientImpl(project) {
 
     private fun VirtualFile.isUnder(root: Path): Boolean =
         runCatching { toNioPath().startsWith(root) }.getOrDefault(false)
+
+    private companion object {
+        /** The server's own words for "my index is ready". */
+        const val INDEX_READY = "build successful"
+
+        const val INDEX_TIMEOUT_MINUTES = 10L
+    }
 }

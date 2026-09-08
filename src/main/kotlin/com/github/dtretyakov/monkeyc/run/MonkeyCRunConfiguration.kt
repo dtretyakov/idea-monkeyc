@@ -1,7 +1,11 @@
 package com.github.dtretyakov.monkeyc.run
 
 import com.github.dtretyakov.monkeyc.dap.MonkeyCDebugAdapterFactory
+import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
+import com.github.dtretyakov.monkeyc.ui.MonkeyCConfigurable
+import com.github.dtretyakov.monkeyc.ui.OpenSdkManager
+import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.execution.Executor
 import com.intellij.execution.configurations.ConfigurationFactory
 import com.intellij.execution.configurations.RunConfiguration
@@ -70,6 +74,14 @@ class MonkeyCRunConfiguration(
 
     override fun getConfigurationEditor(): SettingsEditor<out RunConfiguration> = MonkeyCSettingsEditor(project)
 
+    /**
+     * Everything that would stop this configuration, said before the Run button is pressed.
+     *
+     * It used to check two things, so a run with no SDK, no key or no downloaded device showed a
+     * green button, started, and reported the refusal to a console the user had to open. The
+     * platform renders these with a clickable fix, so each one arrives with the button that
+     * resolves it rather than the name of a dialog to go and find.
+     */
     override fun checkConfiguration() {
         val model = MonkeyCProject.getInstance(project)
         val root = model.primaryRoot()
@@ -77,6 +89,11 @@ class MonkeyCRunConfiguration(
                 "No Connect IQ project here: none of the content roots holds a manifest.xml.",
             )
 
+        checkKindSuitsProject(model, root)
+        checkEnvironment(model, root)
+    }
+
+    private fun checkKindSuitsProject(model: MonkeyCProject, root: java.nio.file.Path) {
         // Caught here as well as at launch, so the dialog can say it before the Run button is
         // pressed: the compiler's own complaint about a barrel run as an app is unreadable.
         val isBarrel = model.manifest(root)?.isBarrel ?: return
@@ -87,7 +104,40 @@ class MonkeyCRunConfiguration(
             )
         }
         if (!isBarrel && options.kind.barrel) {
-            throw RuntimeConfigurationError("This project is an app, not a barrel.")
+            throw RuntimeConfigurationError(
+                "This project is an app, not a barrel: its manifest declares an application, " +
+                    "so there is no <iq:barrel> to build.",
+            )
         }
     }
+
+    private fun checkEnvironment(model: MonkeyCProject, root: java.nio.file.Path) {
+        val openSdkManager = Runnable { OpenSdkManager.invoke(project) }
+
+        if (ConnectIqSdkService.getInstance().sdk == null) {
+            throw RuntimeConfigurationError(
+                "No Connect IQ SDK found. The compiler, the simulator and the devices all come " +
+                    "from it.",
+                openSdkManager,
+            )
+        }
+
+        if (options.kind.buildKind.needsDevice && model.buildableDevices(root).isEmpty()) {
+            throw RuntimeConfigurationError(
+                "None of the devices this project declares is downloaded, and an app is built " +
+                    "for one device.",
+                openSdkManager,
+            )
+        }
+
+        if (options.kind.buildKind.needsDeveloperKey) {
+            model.developerKeyProblem()?.let { problem ->
+                val openSettings = Runnable {
+                    ShowSettingsUtil.getInstance().showSettingsDialog(project, MonkeyCConfigurable::class.java)
+                }
+                throw RuntimeConfigurationError(problem, openSettings)
+            }
+        }
+    }
+
 }
