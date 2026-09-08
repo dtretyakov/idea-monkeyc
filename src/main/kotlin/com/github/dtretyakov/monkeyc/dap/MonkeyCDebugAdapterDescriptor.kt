@@ -3,6 +3,7 @@ package com.github.dtretyakov.monkeyc.dap
 import com.github.dtretyakov.monkeyc.lang.MonkeyCFileType
 import com.github.dtretyakov.monkeyc.lsp.SdkServerCommands
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
+import com.github.dtretyakov.monkeyc.project.ProjectLayout
 import com.github.dtretyakov.monkeyc.run.MonkeyCDeviceTarget
 import com.github.dtretyakov.monkeyc.run.MonkeyCLaunch
 import com.github.dtretyakov.monkeyc.run.MonkeyCRunOptions
@@ -87,6 +88,11 @@ class MonkeyCDebugAdapterDescriptor(
                 monkeyCOptions.testName.takeIf { it.isNotEmpty() }?.let { put("tests", listOf(it)) }
             }
             if (monkeyCOptions.runNativePairing) put("runNativePairing", true)
+            // A complication pair: the simulator loads both, and the debugger stops in either.
+            prepared.paired?.let {
+                put("additionalPrg", it.output.toString())
+                put("additionalPrgDebugXml", ProjectLayout.debugXml(it.output).toString())
+            }
             // App settings the build produced, so the simulator starts with them already set.
             prepared.settingsJson?.let { put("settingsJson", it.toString()) }
         }.toMutableMap()

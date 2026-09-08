@@ -1,5 +1,6 @@
 package com.github.dtretyakov.monkeyc.run
 
+import com.github.dtretyakov.monkeyc.build.BuildKind
 import com.github.dtretyakov.monkeyc.build.BuildSpec
 import com.github.dtretyakov.monkeyc.build.MonkeyCBuildSession
 import com.github.dtretyakov.monkeyc.build.MonkeyCBuilder
@@ -32,6 +33,8 @@ data class PreparedLaunch(
     val prg: Path,
     val debugXml: Path,
     val settingsJson: Path?,
+    /** The other half of a complication pair, built for the same device. */
+    val paired: BuiltArtifact? = null,
 )
 
 /**
@@ -99,6 +102,50 @@ object MonkeyCLaunch {
         return BuiltArtifact(sdk, root, device, output, result.upToDate)
     }
 
+    /**
+     * The other app of a complication pair, built for the same device.
+     *
+     * A complication is two apps that only make sense together — one publishes a value, the other
+     * shows it — and the simulator can hold both at once. The second one is a whole Connect IQ
+     * project of its own, so it is compiled the same way the first was.
+     */
+    private fun buildPaired(
+        project: Project,
+        options: MonkeyCRunOptions,
+        device: String,
+        onProgress: (String) -> Unit,
+    ): BuiltArtifact? {
+        val configured = options.pairedProject.trim().takeIf { it.isNotEmpty() } ?: return null
+        val root = Path.of(configured)
+        if (!ProjectLayout.isProjectRoot(root)) {
+            throw ExecutionException("The paired app at $root has no manifest.xml, so it is not a Connect IQ project.")
+        }
+
+        val sdk = ConnectIqSdkService.getInstance().sdk ?: throw ExecutionException("No Connect IQ SDK found.")
+        val model = MonkeyCProject.getInstance(project)
+        val output = ProjectLayout.appPrg(root, root.name)
+
+        onProgress("Building the paired app ${root.name} for $device...")
+        val result = MonkeyCBuildSession.run(
+            project,
+            BuildSpec(
+                kind = BuildKind.APP,
+                root = root,
+                output = output,
+                jungleFiles = ProjectLayout.jungleFiles(root, null),
+                device = device,
+                simulator = true,
+                developerKey = model.developerKey(),
+            ),
+            title = "Building ${root.name} for $device",
+        )
+        if (!result.succeeded) {
+            throw ExecutionException("The paired app did not build: ${MonkeyCBuilder.describeFailure(result)}")
+        }
+
+        return BuiltArtifact(sdk, root, device, output, result.upToDate)
+    }
+
     /** Compiles, then makes sure there is a simulator to push the result into. */
     fun prepare(
         project: Project,
@@ -107,6 +154,7 @@ object MonkeyCLaunch {
         onProgress: (String) -> Unit,
     ): PreparedLaunch {
         val built = build(project, options, target, onProgress)
+        val paired = buildPaired(project, options, built.device, onProgress)
 
         if (options.forDevice) {
             throw ExecutionException(
@@ -130,6 +178,7 @@ object MonkeyCLaunch {
             prg = built.output,
             debugXml = ProjectLayout.debugXml(built.output),
             settingsJson = ProjectLayout.settingsJson(built.output),
+            paired = paired,
         )
     }
 

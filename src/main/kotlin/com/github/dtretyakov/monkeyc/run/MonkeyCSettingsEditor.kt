@@ -28,6 +28,7 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
     private lateinit var deviceBuildRow: Row
     private lateinit var deviceRow: Row
     private lateinit var outputRow: Row
+    private lateinit var pairedRow: Row
 
     private var device: String = ""
     private var testName: String = ""
@@ -36,6 +37,7 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
     private var forDevice: Boolean = false
     private var compilerArguments: String = ""
     private var outputPath: String = ""
+    private var pairedProject: String = ""
 
     override fun createEditor(): JComponent {
         val model = MonkeyCProject.getInstance(project)
@@ -72,6 +74,17 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
                             "A watch build will not start in the simulator, and the other way round.",
                     )
             }
+            pairedRow = row("Paired app:") {
+                textFieldWithBrowseButton(
+                    com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
+                        .createSingleFolderDescriptor()
+                        .withTitle("Paired Connect IQ Project")
+                        .withDescription("The other half of a complication pair: a directory holding a manifest.xml"),
+                )
+                    .align(AlignX.FILL)
+                    .bindText({ pairedProject }, { pairedProject = it })
+                    .comment("Runs a second app in the same simulator. Debug only.")
+            }
             outputRow = row("Output:") {
                 textFieldWithBrowseButton(
                     com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
@@ -98,6 +111,7 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
         forDevice = options.forDevice
         compilerArguments = options.compilerArguments
         outputPath = options.outputPath
+        pairedProject = options.pairedProject
 
         val kind = options.kind
         testRow.visible(kind.isTests)
@@ -106,6 +120,7 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
         deviceBuildRow.visible(kind == MonkeyCRunKind.BUILD)
         deviceRow.visible(kind.buildKind.needsDevice)
         outputRow.visible(kind == MonkeyCRunKind.EXPORT || kind == MonkeyCRunKind.BARREL)
+        pairedRow.visible(kind == MonkeyCRunKind.APP)
 
         panel.reset()
     }
@@ -120,6 +135,7 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
         options.forDevice = forDevice
         options.compilerArguments = compilerArguments
         options.outputPath = outputPath
+        options.pairedProject = pairedProject
     }
 
     /**

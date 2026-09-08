@@ -20,6 +20,7 @@ class MonkeyCRunOptions : DAPRunConfigurationOptionsBase() {
     private val forDeviceOption = property(false).provideDelegate(this, "forDevice")
     private val compilerArgumentsOption = string("").provideDelegate(this, "compilerArguments")
     private val outputPathOption = string("").provideDelegate(this, "outputPath")
+    private val pairedProjectOption = string("").provideDelegate(this, "pairedProject")
 
     var kind: MonkeyCRunKind
         get() = MonkeyCRunKind.of(kindOption.getValue(this))
@@ -70,4 +71,15 @@ class MonkeyCRunOptions : DAPRunConfigurationOptionsBase() {
     var outputPath: String
         get() = outputPathOption.getValue(this).orEmpty()
         set(value) = outputPathOption.setValue(this, value)
+
+    /**
+     * The other half of a complication pair: a second Connect IQ project, run alongside this one.
+     *
+     * A complication is two apps that only mean anything together — one publishes a value, the
+     * other displays it — and testing either alone tests nothing. The simulator can hold both,
+     * but only the debug adapter knows how to put them there.
+     */
+    var pairedProject: String
+        get() = pairedProjectOption.getValue(this).orEmpty()
+        set(value) = pairedProjectOption.setValue(this, value)
 }

@@ -125,10 +125,28 @@
         <action
             id="MonkeyC.Export"
             class="com.github.dtretyakov.monkeyc.ui.ExportAction"
-            text="Export Connect IQ App..."
+            text="Export Connect IQ App"
             description="Builds a signed .iq for the Connect IQ Store, for every device the manifest declares">
             <add-to-group group-id="BuildMenu" anchor="last"/>
         </action>
+
+        <!--
+          The simulator is started by a run and never closed by one, which is right: it holds the
+          state being looked at. Closing it is therefore something only the user can ask for.
+        -->
+        <group id="MonkeyC.Simulator" text="Connect IQ Simulator" popup="true">
+            <action
+                id="MonkeyC.RestartSimulator"
+                class="com.github.dtretyakov.monkeyc.ui.RestartSimulatorAction"
+                text="Restart Simulator"
+                description="Closes the Connect IQ simulator and starts it again"/>
+            <action
+                id="MonkeyC.StopSimulator"
+                class="com.github.dtretyakov.monkeyc.ui.StopSimulatorAction"
+                text="Stop Simulator"
+                description="Closes the Connect IQ simulator"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </group>
     </actions>
 
     <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">

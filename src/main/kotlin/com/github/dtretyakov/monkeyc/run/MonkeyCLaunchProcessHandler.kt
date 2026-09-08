@@ -94,6 +94,15 @@ class MonkeyCLaunchProcessHandler(
     }
 
     private fun runInSimulator() {
+        if (options.pairedProject.isNotEmpty()) {
+            // `monkeydo` pushes one app and has no second slot; only the debug adapter takes an
+            // additionalPrg. Saying so beats silently running half of a complication.
+            throw ExecutionException(
+                "A complication pair can only be started under the debugger: monkeydo takes one " +
+                    "app. Use Debug, or clear the paired app in this configuration.",
+            )
+        }
+
         val prepared = MonkeyCLaunch.prepare(project, options, target, ::report)
         if (stopped) return
 
