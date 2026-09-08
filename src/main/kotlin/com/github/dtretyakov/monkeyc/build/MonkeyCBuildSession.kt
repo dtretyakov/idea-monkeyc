@@ -16,6 +16,8 @@ import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.intellij.openapi.project.Project
 import java.nio.file.Path
+import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * Runs a build and reports it in the Build tool window.
@@ -94,6 +96,14 @@ object MonkeyCBuildSession {
             }
         }
 
+        // How long it took, in the window where it happened. On its own this is a nicety; beside
+        // the JVM named in the setup checklist it is the pair of facts a developer on the forums
+        // had to assemble by hand before finding that changing the JRE took their export from four
+        // hours to two minutes.
+        if (result.succeeded) {
+            view.onEvent(id, OutputBuildEventImpl(id, "Took ${elapsed(System.currentTimeMillis() - started)}\n", true))
+        }
+
         view.onEvent(
             id,
             FinishBuildEventImpl(
@@ -106,6 +116,16 @@ object MonkeyCBuildSession {
         )
 
         return result
+    }
+
+    /** A duration in the coarsest unit that still says something: 0.8 s, 12 s, 4 min 30 s. */
+    internal fun elapsed(millis: Long): String {
+        val seconds = millis / 1000.0
+        return when {
+            seconds < 10 -> "%.1f s".format(Locale.ROOT, seconds)
+            seconds < 90 -> "${seconds.roundToInt()} s"
+            else -> "${(seconds / 60).toInt()} min ${(seconds % 60).roundToInt()} s"
+        }
     }
 
     /**

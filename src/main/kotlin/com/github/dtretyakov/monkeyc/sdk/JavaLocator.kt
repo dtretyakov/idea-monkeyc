@@ -1,6 +1,7 @@
 package com.github.dtretyakov.monkeyc.sdk
 
 import java.nio.file.Path
+import java.util.concurrent.TimeUnit
 import kotlin.io.path.exists
 import kotlin.io.path.isExecutable
 
@@ -39,4 +40,27 @@ object JavaLocator {
 
     private val executableName: String
         get() = if (System.getProperty("os.name").startsWith("Windows")) "java.exe" else "java"
+
+    /**
+     * The version string this `java` reports, or null when it will not say.
+     *
+     * Worth knowing, and worth showing, because the JVM is the largest unmarked performance
+     * variable on this platform: a developer on the forums had a full export take four hours and
+     * got it down to two minutes by changing nothing but the JRE. Nobody would look there, because
+     * nothing tells them to. This does not judge the answer — the fast and slow versions are not a
+     * range anyone has mapped, and a rule invented here would be wrong on someone's machine — it
+     * only makes the variable visible next to the build times beside it.
+     */
+    fun version(java: Path, timeoutSeconds: Long = 5): String? = runCatching {
+        val process = ProcessBuilder(java.toString(), "-version")
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            return null
+        }
+        // `java -version` writes three lines to standard error; the first carries the version.
+        output.lineSequence().firstOrNull { it.isNotBlank() }?.trim()
+    }.getOrNull()
 }

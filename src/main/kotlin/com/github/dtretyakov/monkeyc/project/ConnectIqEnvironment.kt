@@ -59,7 +59,7 @@ object ConnectIqEnvironment {
             }
             add(devices(service.devices().size, sdk != null, service.unreadableDevices()))
             add(developerKey(project))
-            add(java(service.java()))
+            add(java(service.java(), service.javaVersion()))
         }
     }
 
@@ -168,7 +168,20 @@ object ConnectIqEnvironment {
         return Item("Developer key", Status.MISSING, problem, Fix.GENERATE_KEY)
     }
 
-    private fun java(java: Path) = Item("Java", Status.READY, shorten(java))
+    /**
+     * The JVM, and which one it is.
+     *
+     * The version is here because it is the largest unmarked performance variable on this
+     * platform — a full export on the forums went from four hours to two minutes on nothing but a
+     * change of JRE — and because nobody would think to look at it unless something said it
+     * mattered. No judgement is offered on the answer; the build times in the Build window are
+     * what make it mean something.
+     */
+    internal fun java(java: Path, version: String?) = Item(
+        "Java",
+        Status.READY,
+        shorten(java) + (version?.let { " — $it" } ?: ""),
+    )
 
     private fun shorten(path: Path): String = FileUtil.getLocationRelativeToUserHome(path.toString())
 }

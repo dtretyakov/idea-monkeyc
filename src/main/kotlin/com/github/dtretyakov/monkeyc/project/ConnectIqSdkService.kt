@@ -45,9 +45,27 @@ class ConnectIqSdkService {
     /** The `java` that runs the SDK's jars. */
     fun java(): Path = JavaLocator.resolve(MonkeyCAppSettings.getInstance().javaPath)
 
+    /**
+     * What that `java` reports as its version, or null when it will not say.
+     *
+     * Cached against the path it was asked about, because answering means starting a process and
+     * the checklist that shows it is rebuilt whenever an editor tab changes.
+     */
+    fun javaVersion(): String? {
+        val java = java()
+        javaVersion?.let { (path, version) -> if (path == java) return version }
+        val version = JavaLocator.version(java)
+        javaVersion = java to version
+        return version
+    }
+
+    @Volatile
+    private var javaVersion: Pair<Path, String?>? = null
+
     /** Forces a re-read; for the settings dialog and the "reload" action. */
     fun refresh() {
         snapshot = null
+        javaVersion = null
         current()
         ApplicationManager.getApplication().messageBus.syncPublisher(TOPIC).sdkChanged(sdk)
     }
