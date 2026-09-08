@@ -50,7 +50,9 @@ class MonkeyCDebugAdapterDescriptor(
      */
     override fun startServer(): ProcessHandler {
         val monkeyCOptions = options as? MonkeyCRunOptions
-            ?: throw ExecutionException("This debug configuration is not a Connect IQ one.")
+            ?: throw ExecutionException(
+                "Only a Connect IQ run configuration can be debugged with the Connect IQ debugger.",
+            )
 
         val indicator = ProgressManager.getInstance().progressIndicator
         prepared = MonkeyCLaunch.prepare(environment.project, monkeyCOptions) { step ->

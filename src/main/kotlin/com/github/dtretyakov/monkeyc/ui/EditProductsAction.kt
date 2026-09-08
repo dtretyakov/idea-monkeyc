@@ -125,7 +125,7 @@ private class ProductsDialog(
 
     init {
         title = "Connect IQ Products"
-        setOKButtonText("Apply")
+        setOKButtonText("Save")
         init()
     }
 

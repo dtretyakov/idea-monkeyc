@@ -66,7 +66,8 @@ class MonkeyCLaunchProcessHandler(
             // Everything, not only ExecutionException: a build can fail on a read-only directory
             // or a full disk, and an escaping exception would leave the Run window showing a live
             // process with an empty console and no way to see why.
-            notifyTextAvailable("\n${e.message ?: e.javaClass.simpleName}\n", ProcessOutputTypes.STDERR)
+            val reason = e.message ?: "The run stopped with ${e.javaClass.simpleName} and no message."
+            notifyTextAvailable("\n$reason\n", ProcessOutputTypes.STDERR)
             if (e !is ExecutionException) LOG.warn("Could not run the Connect IQ app", e)
             notifyProcessTerminated(1)
         }

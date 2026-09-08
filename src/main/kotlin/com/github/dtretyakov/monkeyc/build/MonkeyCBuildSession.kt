@@ -71,7 +71,10 @@ object MonkeyCBuildSession {
                 },
             )
         } catch (e: Throwable) {
-            view.onEvent(id, FinishBuildEventImpl(id, null, System.currentTimeMillis(), e.message.orEmpty(), FailureResultImpl()))
+            // Not orEmpty(): an exception with no message would leave the Build window reporting a
+            // failure with nothing written next to it.
+            val reason = e.message ?: "the build stopped with ${e.javaClass.simpleName}"
+            view.onEvent(id, FinishBuildEventImpl(id, null, System.currentTimeMillis(), reason, FailureResultImpl()))
             throw e
         }
 

@@ -89,8 +89,8 @@ class MonkeyCProjectSetup : ProjectActivity {
      */
     private fun ignoreManifestNamespace(project: Project) {
         val resources = ExternalResourceManagerEx.getInstanceEx()
-        if (resources.isIgnoredResource(CONNECT_IQ_NAMESPACE)) return
-        runCatching { resources.addIgnoredResources(listOf(CONNECT_IQ_NAMESPACE), project) }
+        if (resources.isIgnoredResource(ManifestFile.NAMESPACE)) return
+        runCatching { resources.addIgnoredResources(listOf(ManifestFile.NAMESPACE), project) }
             .onFailure { LOG.warn("Could not ignore the Connect IQ namespace", it) }
     }
 
@@ -130,7 +130,6 @@ class MonkeyCProjectSetup : ProjectActivity {
     }
 
     private companion object {
-        const val CONNECT_IQ_NAMESPACE = "http://www.garmin.com/xml/connectiq"
         val LOG = logger<MonkeyCProjectSetup>()
     }
 }

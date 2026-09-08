@@ -105,4 +105,23 @@ class ManifestFileTest {
         path.writeText(xml.trimIndent())
         return ManifestFile.parse(path)!!
     }
+
+    @Test
+    fun `a Connect IQ manifest is recognised by its namespace`() {
+        val manifest = """
+            <iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
+                <iq:application id="a" type="watchface" name="@Strings.AppName" entry="App"/>
+            </iq:manifest>
+        """.trimIndent()
+
+        assertTrue(ManifestFile.isConnectIqManifest(manifest))
+    }
+
+    @Test
+    fun `somebody else's manifest is not one`() {
+        // manifest.xml is not a Connect IQ invention, and the form editor must not offer itself
+        // for a file it cannot edit.
+        assertFalse(ManifestFile.isConnectIqManifest("<manifest package=\"com.example\"/>"))
+        assertFalse(ManifestFile.isConnectIqManifest(""))
+    }
 }

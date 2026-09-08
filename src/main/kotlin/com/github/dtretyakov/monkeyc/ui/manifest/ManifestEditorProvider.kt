@@ -19,9 +19,11 @@ class ManifestEditorProvider : FileEditorProvider, DumbAware {
 
     override fun accept(project: Project, file: VirtualFile): Boolean {
         if (file.name != ManifestFile.FILE_NAME) return false
-        // `manifest.xml` is not a Connect IQ invention. A jungle file beside it is what makes this
-        // one a Connect IQ project rather than somebody else's build.
-        return file.parent?.children.orEmpty().any { it.extension == "jungle" }
+        // `manifest.xml` is not a Connect IQ invention, so the namespace decides. A `.jungle` file
+        // beside it used to, which was a proxy rather than an answer — a project whose jungle is
+        // named something else got no form, while the rest of the plugin treated it as its own.
+        return runCatching { ManifestFile.isConnectIqManifest(String(file.contentsToByteArray())) }
+            .getOrDefault(false)
     }
 
     override fun createEditor(project: Project, file: VirtualFile): FileEditor =

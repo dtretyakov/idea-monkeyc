@@ -31,6 +31,19 @@ data class ManifestFile(
     companion object {
         const val FILE_NAME = "manifest.xml"
 
+        /** What makes a `manifest.xml` Garmin's rather than somebody else's. */
+        const val NAMESPACE = "http://www.garmin.com/xml/connectiq"
+
+        /**
+         * Whether this file is a Connect IQ manifest, judged by its namespace.
+         *
+         * `manifest.xml` is not a Connect IQ invention, so something has to tell them apart. A
+         * `.jungle` file beside it used to serve, which was a proxy rather than an answer: it made
+         * the form editor absent from projects the rest of the plugin was happily treating as its
+         * own. The namespace is the thing itself.
+         */
+        fun isConnectIqManifest(text: String): Boolean = text.contains(NAMESPACE)
+
         fun parse(path: Path): ManifestFile? {
             if (!path.exists()) return null
             return runCatching { path.toFile().readText() }.getOrNull()?.let { parseText(it) }
