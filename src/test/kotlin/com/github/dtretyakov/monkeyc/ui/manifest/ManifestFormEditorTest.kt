@@ -193,4 +193,28 @@ class ManifestFormEditorTest : IdeTestCase() {
             com.intellij.openapi.util.Disposer.dispose(editor)
         }
     }
+    fun testProductsAreATableWithTheColumnsThatDecideTheChoice() {
+        // The tab used to be a list of ticked names, which answers "is this watch in the list" and
+        // hides everything that decides whether it should be.
+        myFixture.addFileToProject("monkey.jungle", "project.manifest = manifest.xml")
+        val manifest = myFixture.addFileToProject(ManifestFile.FILE_NAME, manifestXml)
+        val editor = ManifestFormEditor(project, manifest.virtualFile)
+
+        try {
+            val table = editor.component.descendants().filterIsInstance<javax.swing.JTable>().firstOrNull()
+            assertNotNull("the Products tab should hold a table", table)
+
+            val headings = (0 until table!!.columnModel.columnCount)
+                .map { table.columnModel.getColumn(it).headerValue?.toString().orEmpty() }
+            listOf("Device", "Screen", "Colours", "Input", "Memory").forEach {
+                assertTrue("no $it column, only $headings", headings.contains(it))
+            }
+        } finally {
+            com.intellij.openapi.util.Disposer.dispose(editor)
+        }
+    }
+
+    private fun java.awt.Container.descendants(): List<java.awt.Component> =
+        components.flatMap { listOf(it) + if (it is java.awt.Container) it.descendants() else emptyList() }
+
 }

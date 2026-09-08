@@ -4,6 +4,7 @@ import com.github.dtretyakov.monkeyc.project.ManifestFile
 import com.github.dtretyakov.monkeyc.sdk.AppType
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
 import com.github.dtretyakov.monkeyc.ui.DeviceSelectionSummary
+import com.github.dtretyakov.monkeyc.ui.ProductTable
 import com.github.dtretyakov.monkeyc.sdk.ProjectInfo
 import com.github.dtretyakov.monkeyc.ui.MonkeyCConfigurable
 import com.intellij.icons.AllIcons
@@ -52,11 +53,6 @@ internal class ManifestForm(
 ) : Disposable {
 
     private val appTypes: List<AppType> = info?.appTypes.orEmpty()
-
-    private val productChoices = choices(
-        installed = devices.map { it.id to "${it.displayName}  (${it.id})" },
-        inManifest = manifest.devices,
-    )
 
     private val permissionChoices = choices(
         installed = info?.permissionsFor(manifest.appType).orEmpty().map { it.id to it.name },
@@ -234,28 +230,31 @@ internal class ManifestForm(
             tabs.addTab("$title  ${choices.count { it.selected }}", list.panel(help))
         }
 
-        // Declared before the list so its own change handler can reach it: the handler updates the
-        // line underneath, which belongs to the list it is reporting on.
-        lateinit var products: ChoiceList
-        products = ChoiceList(
-            choices = productChoices,
-            searchable = true,
-            actions = listOf(
-                "All" to { _: String -> true },
-                "None" to { _: String -> false },
-                "Compatible" to { id: String -> id in compatibleDevices },
-            ),
-        ) { ids ->
+        // Products get a table rather than a list of ticked names. The four things that decide
+        // whether a device belongs in the manifest — the screen a layout has to fit, the colour
+        // depth artwork has to survive, whether there is a touchscreen, and the memory the code
+        // has to fit — are otherwise looked up one device at a time on Garmin's website.
+        val products = ProductTable(devices, manifest.devices.toSet(), manifest.appType)
+        val productSummary = ComponentPanelBuilder.createCommentComponent(" ", true)
+        products.onChanged = {
+            val ids = products.selected()
             edit { model -> model.setDevices(ids) }
-            showSelectionSummary(products, ids)
+            productSummary.text = DeviceSelectionSummary.of(products.selectedDevices(), manifest.appType)
+                ?: PRODUCTS_HELP
+            tabs.setTitleAt(PRODUCTS_TAB, "Products  ${ids.size}")
         }
-        tab(
-            "Products",
-            productChoices,
-            "A build produces one executable per device. The buttons act on what is shown.",
-            products,
+        productSummary.text = DeviceSelectionSummary.of(products.selectedDevices(), manifest.appType) ?: PRODUCTS_HELP
+        tabs.addTab(
+            "Products  ${manifest.devices.size}",
+            products.panel(
+                actions = listOf(
+                    "All" to { _: ConnectIqDevice -> true },
+                    "None" to { _: ConnectIqDevice -> false },
+                    "Compatible" to { device: ConnectIqDevice -> device.id in compatibleDevices },
+                ),
+                footer = productSummary,
+            ),
         )
-        showSelectionSummary(products, productChoices.filter { it.selected }.map { it.id })
 
         if (!manifest.isBarrel) {
             tab(
@@ -407,6 +406,12 @@ internal class ManifestForm(
     private class Choice(val id: String, val label: String, val selected: Boolean)
 
     private companion object {
+        /** Shown until a selection has something to say about itself. */
+        const val PRODUCTS_HELP = "A build produces one executable per device."
+
+        /** Products is added first, so it is tab zero. */
+        const val PRODUCTS_TAB = 0
+
         const val TABS_WIDTH = 460
         const val TABS_HEIGHT = 340
     }
@@ -416,20 +421,6 @@ internal class ManifestForm(
      * not. Leaving those out would be worse than showing them — the form replaces the whole list
      * when it writes, so an entry it never displayed would be silently dropped.
      */
-    /**
-     * Replaces the Products tab's help line with what the ticks actually commit the project to.
-     *
-     * The static sentence is true and says nothing that changes; this says how many resource
-     * families the selection signs you up to draw and the smallest memory budget the code now has
-     * to fit, which is the number that constrains it. Neither is shown anywhere else.
-     */
-    private fun showSelectionSummary(list: ChoiceList, ids: List<String>) {
-        val footer = list.footer as? JLabel ?: return
-        val chosen = devices.filter { it.id in ids }
-        footer.text = DeviceSelectionSummary.of(chosen, manifest.appType)
-            ?: "A build produces one executable per device. The buttons act on what is shown."
-    }
-
     private fun choices(installed: List<Pair<String, String>>, inManifest: List<String>): List<Choice> {
         val known = installed.map { (id, label) -> Choice(id, label, id in inManifest) }
         val unknown = inManifest.filterNot { id -> installed.any { it.first == id } }

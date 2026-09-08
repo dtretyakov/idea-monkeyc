@@ -1,7 +1,17 @@
 package com.github.dtretyakov.monkeyc.ui
 
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
+import com.intellij.ui.DocumentAdapter
+import com.intellij.ui.SearchTextField
+import com.intellij.ui.components.ActionLink
+import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.table.TableView
+import com.intellij.util.ui.JBUI
+import java.awt.BorderLayout
+import java.awt.FlowLayout
+import javax.swing.JComponent
+import javax.swing.JPanel
+import javax.swing.event.DocumentEvent
 import com.intellij.util.ui.ColumnInfo
 import com.intellij.util.ui.ListTableModel
 import java.util.Locale
@@ -49,6 +59,31 @@ class ProductTable(devices: List<ConnectIqDevice>, selected: Set<String>, appTyp
     }
 
     fun selected(): List<String> = rows.filter { it.selected }.map { it.device.id }
+
+    /**
+     * Narrows the rows shown, keeping the ticks of the ones hidden.
+     *
+     * The ticks live on the rows rather than in the table, for the same reason a filtered checkbox
+     * list has to keep them apart from the widget: filtering empties and refills what is on screen,
+     * and reading the state off it would forget everything not currently visible.
+     */
+    fun filter(text: String) {
+        val needle = text.trim().lowercase()
+        model.items = if (needle.isEmpty()) {
+            rows
+        } else {
+            rows.filter { row ->
+                needle in row.device.id.lowercase() || needle in row.device.displayName.lowercase()
+            }
+        }
+    }
+
+    /** Ticks or unticks every row currently shown, which is what a bulk action means. */
+    fun setVisible(wanted: (ConnectIqDevice) -> Boolean) {
+        model.items.forEach { it.selected = wanted(it.device) }
+        model.fireTableDataChanged()
+        onChanged()
+    }
 
     fun selectedDevices(): List<ConnectIqDevice> = rows.filter { it.selected }.map { it.device }
 
@@ -101,8 +136,43 @@ class ProductTable(devices: List<ConnectIqDevice>, selected: Set<String>, appTyp
         override fun getWidth(table: javax.swing.JTable): Int = MEMORY_WIDTH
     }
 
-    /** Set by the dialog so the summary line can follow the ticks. */
+    /** Set by the caller so the summary line and the tab title can follow the ticks. */
     var onChanged: () -> Unit = {}
+
+    /**
+     * The whole control: bulk actions, a search box, the table, and the line that says what the
+     * selection costs.
+     *
+     * Laid out the way the neighbouring lists already are, so the Products tab does not look like
+     * a different application from the Permissions one beside it.
+     */
+    fun panel(actions: List<Pair<String, (ConnectIqDevice) -> Boolean>>, footer: JComponent): JComponent =
+        JPanel(BorderLayout(0, JBUI.scale(4))).apply {
+            border = JBUI.Borders.empty(8)
+
+            val header = JPanel(BorderLayout(0, JBUI.scale(4)))
+            if (actions.isNotEmpty()) {
+                header.add(
+                    JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0)).apply {
+                        actions.forEach { (title, wanted) -> add(ActionLink(title) { setVisible(wanted) }) }
+                    },
+                    BorderLayout.NORTH,
+                )
+            }
+            header.add(
+                SearchTextField(false).also { search ->
+                    search.addDocumentListener(
+                        object : DocumentAdapter() {
+                            override fun textChanged(event: DocumentEvent) = filter(search.text)
+                        },
+                    )
+                },
+                BorderLayout.CENTER,
+            )
+            add(header, BorderLayout.NORTH)
+            add(JBScrollPane(table), BorderLayout.CENTER)
+            add(footer, BorderLayout.SOUTH)
+        }
 
     private companion object {
         const val CHECKBOX_WIDTH = 28
