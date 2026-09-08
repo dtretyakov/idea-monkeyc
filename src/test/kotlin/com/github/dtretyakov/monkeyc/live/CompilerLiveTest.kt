@@ -90,31 +90,6 @@ class CompilerLiveTest {
         assertTrue(arguments.contains("fenix7_sim"), "a simulator build asks for the _sim variant")
     }
 
-    private class Output(val exitCode: Int, val text: String)
-
-    private fun build(sdk: ConnectIqSdk, project: Path, device: String, settings: MonkeyCSettings): Output {
-        val prg = ProjectLayout.appPrg(project, project.fileName.toString())
-        val arguments = CompilerCommand.arguments(
-            sdk,
-            JavaLocator.resolve(null),
-            settings,
-            BuildSpec(
-                kind = BuildKind.APP,
-                root = project,
-                output = prg,
-                jungleFiles = ProjectLayout.jungleFiles(project, null),
-                device = device,
-                simulator = true,
-                developerKey = sdk.defaultDeveloperKey,
-            ),
-        )
-
-        val process = ProcessBuilder(arguments)
-            .directory(project.toFile())
-            .redirectErrorStream(true)
-            .start()
-        val text = process.inputStream.bufferedReader().readText()
-        check(process.waitFor(5, TimeUnit.MINUTES)) { "the compiler did not finish" }
-        return Output(process.exitValue(), text)
-    }
+    private fun build(sdk: ConnectIqSdk, project: Path, device: String, settings: MonkeyCSettings) =
+        LiveBuild.run(sdk, project, device, settings)
 }
