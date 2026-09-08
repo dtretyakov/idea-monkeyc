@@ -2,13 +2,27 @@
     <vendor url="https://github.com/dtretyakov">Dmitry Tretyakov</vendor>
 
     <description><![CDATA[
-        Garmin Connect IQ development in IntelliJ IDEA: Monkey C editing, building, running in the
-        Connect IQ simulator and debugging.
+        Garmin Connect IQ development in IntelliJ IDEA: writing Monkey C, building, running in the
+        Connect IQ simulator, and debugging — for watch faces, watch apps, data fields, widgets and
+        barrels, on Garmin smartwatches and Edge devices.
         <p>
-        The plugin brings no language model of its own. Code intelligence comes from the language
-        server Garmin ships in the Connect IQ SDK, and building, running and debugging drive the
-        SDK's own tools, so everything stays in step with the SDK the user has installed.
+        The plugin brings no language model of its own. Code intelligence — completion,
+        diagnostics, go to definition, hover, rename, symbols, type and call hierarchies — comes
+        from the language server Garmin ships in the Connect IQ SDK, and building, running and
+        debugging drive the SDK's own tools. Everything therefore stays in step with the SDK the
+        user has installed, rather than falling behind it.
         </p>
+        <ul>
+            <li>Run configurations for the app, its unit tests, an export to <code>.iq</code>, and
+                barrels; a build for the watch, with an offer to install it over USB.</li>
+            <li>Breakpoints, stepping and variables through the SDK's debug adapter.</li>
+            <li>Every build measured against the target device's memory limit, which is the
+                constraint that shapes Connect IQ development.</li>
+            <li>A form editor for <code>manifest.xml</code>, a new project wizard built on the
+                SDK's own templates, and developer key generation without openssl.</li>
+            <li>Syntax highlighting for <code>.mc</code>, <code>.jungle</code> and
+                <code>.mss</code>.</li>
+        </ul>
         <p>Requires the Connect IQ SDK, installed with Garmin's SDK Manager.</p>
     ]]></description>
 
