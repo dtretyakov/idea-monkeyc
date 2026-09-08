@@ -40,6 +40,9 @@ class MonkeyCLexerTest {
         assertEquals("BLOCK_COMMENT:/* plain */", lex("/* plain */"))
         assertEquals("BLOCK_COMMENT:/**/", lex("/**/"))
         assertEquals("LINE_COMMENT:// to the end", lex("// to the end"))
+        // `//!` is Garmin's own doc form - it is what the whole Toybox API is written in, and what
+        // the SDK's doc generator reads.
+        assertEquals("DOC_COMMENT://! documents what follows", lex("//! documents what follows"))
     }
 
     @Test

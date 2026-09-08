@@ -22,8 +22,11 @@ class MonkeyCLexer : ScanningLexer() {
             }
 
             c == '/' && peek(1) == '/' -> {
+                // `//!` documents the declaration below it, the way `/** */` does. It is the form
+                // Garmin's own API is written in, and the SDK's doc generator reads it.
+                val isDoc = peek(2) == '!'
                 skipToLineEnd()
-                MonkeyCTokens.LINE_COMMENT
+                if (isDoc) MonkeyCTokens.DOC_COMMENT else MonkeyCTokens.LINE_COMMENT
             }
 
             c == '/' && peek(1) == '*' -> {

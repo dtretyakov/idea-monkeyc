@@ -69,6 +69,8 @@ class MonkeyCColorSettingsPage : ColorSettingsPage {
             AttributesDescriptor("Constant", MonkeyCColors.CONSTANT),
             AttributesDescriptor("Symbol", MonkeyCColors.SYMBOL),
             AttributesDescriptor("String", MonkeyCColors.STRING),
+            AttributesDescriptor("Escape sequence//Valid", MonkeyCColors.VALID_ESCAPE),
+            AttributesDescriptor("Escape sequence//Invalid", MonkeyCColors.INVALID_ESCAPE),
             AttributesDescriptor("Number", MonkeyCColors.NUMBER),
             AttributesDescriptor("Operator", MonkeyCColors.OPERATOR),
             AttributesDescriptor("Braces and operators//Braces", MonkeyCColors.BRACES),

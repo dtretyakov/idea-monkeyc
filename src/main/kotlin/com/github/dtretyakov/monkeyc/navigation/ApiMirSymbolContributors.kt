@@ -30,7 +30,13 @@ abstract class ApiMirContributor : ChooseByNameContributorEx {
 
     override fun processNames(processor: Processor<in String>, scope: GlobalSearchScope, filter: IdFilter?) {
         val index = ApiMirService.getInstance().index() ?: return
-        index.all().forEach { if (accepts(it.kind) && !processor.process(it.simpleName)) return }
+        // Distinct: `initialize` is declared on most classes in the API, and the chooser asks for
+        // each name once.
+        index.all().asSequence()
+            .filter { accepts(it.kind) }
+            .map { it.simpleName }
+            .distinct()
+            .forEach { if (!processor.process(it)) return }
     }
 
     override fun processElementsWithName(

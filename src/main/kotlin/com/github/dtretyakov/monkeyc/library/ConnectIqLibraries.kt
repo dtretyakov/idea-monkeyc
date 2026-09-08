@@ -9,6 +9,7 @@ import com.github.dtretyakov.monkeyc.ui.MonkeyCConfigurable
 import com.github.dtretyakov.monkeyc.ui.MonkeyCIcons
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.WriteAction
+import com.intellij.openapi.application.runReadActionBlocking
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.options.ShowSettingsUtil
@@ -59,42 +60,44 @@ class ConnectIqLibraries(private val project: Project) {
     /**
      * Drops the cache and tells the platform to re-render and re-index.
      *
-     * Deferred into a write action on purpose, and for two reasons at once.
-     * `fireAdditionalLibraryChanged` asserts write access, so it cannot be called from the settings
-     * dialog where the SDK is switched; and the other caller is a VFS listener, which runs inside
-     * the platform's own write action and is the one place a VFS refresh must not happen. Doing the
-     * work later satisfies both.
+     * All of it is deferred, and each hop is deferred for its own reason. The work starts on a
+     * pooled thread because bringing the SDK into the VFS is a synchronous refresh, which must not
+     * happen on the EDT and must not happen at all inside a VFS listener — and a VFS listener is
+     * one of the two callers. Recomputing needs a read action. And `fireAdditionalLibraryChanged`
+     * asserts write access, which the other caller, the settings dialog, does not hold.
      */
     fun invalidate() {
         val before = cached?.second?.flatMap { it.sourceRoots }.orEmpty()
         generation.incrementAndGet()
 
-        ApplicationManager.getApplication().invokeLater(
-            {
-                if (project.isDisposed) return@invokeLater
+        ApplicationManager.getApplication().executeOnPooledThread {
+            if (project.isDisposed) return@executeOnPooledThread
 
-                // The SDK sits outside every content root, so nothing else in the IDE has a reason
-                // to look at it; without this a freshly installed SDK has no VirtualFile at all.
-                refreshSdkIntoVfs()
+            // The SDK sits outside every content root, so nothing else in the IDE has a reason to
+            // look at it; without this a freshly installed SDK has no VirtualFile at all.
+            refreshSdkIntoVfs()
 
-                val after = libraries().flatMap { it.sourceRoots }
-                if (before == after) return@invokeLater
+            val after = runReadActionBlocking { libraries().flatMap { it.sourceRoots } }
+            if (before == after) return@executeOnPooledThread
 
-                WriteAction.run<RuntimeException> {
-                    AdditionalLibraryRootsListener.fireAdditionalLibraryChanged(
-                        project,
-                        SDK_NAME,
-                        before,
-                        after,
-                        SDK_NAME,
-                    )
-                }
-            },
-            project.disposed,
-        )
+            ApplicationManager.getApplication().invokeLater(
+                {
+                    if (project.isDisposed) return@invokeLater
+                    WriteAction.run<RuntimeException> {
+                        AdditionalLibraryRootsListener.fireAdditionalLibraryChanged(
+                            project,
+                            SDK_NAME,
+                            before,
+                            after,
+                            SDK_NAME,
+                        )
+                    }
+                },
+                project.disposed,
+            )
+        }
     }
 
-    /** Asynchronous on purpose: this can run while the IDE is doing something else. */
     private fun refreshSdkIntoVfs() {
         val bin = ConnectIqSdkService.getInstance().sdk?.root?.resolve("bin") ?: return
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(bin)

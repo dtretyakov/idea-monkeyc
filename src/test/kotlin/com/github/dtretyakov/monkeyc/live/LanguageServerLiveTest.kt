@@ -125,6 +125,7 @@ class LanguageServerLiveTest {
 
             assertMalformedDefinitionUri(server, document, after(text, "new FixtureView", 6), source)
             assertOnlyHierarchyReachesTheApi(server, document, after(text, "dc.setColor", 5), sdk.root)
+            assertNoSemanticTokens(client)
             assertSignatureHelpNeedsTheFilter(server, document, after(text, "dc.drawText(", 12))
         } catch (e: Throwable) {
             // The server reports its own failures on stderr, and they say far more than
@@ -164,6 +165,21 @@ class LanguageServerLiveTest {
         assertTrue(
             Path.of(java.net.URI(MonkeyCFileUriSupport.repair(uri))).toRealPath() == source.toRealPath(),
             "the repaired URI must point at the source file, but was $uri",
+        )
+    }
+
+    /**
+     * That the server still offers no semantic tokens.
+     *
+     * Colouring in this plugin is syntactic — a lexer and a handful of positional rules — because
+     * there is nothing better on offer. The day there is, LSP4IJ's own highlighter takes over on
+     * its own, with no registration from us, and the annotator would then be painting on top of
+     * it. Nothing else in the project would notice, so this is the tripwire.
+     */
+    private fun assertNoSemanticTokens(client: RecordingClient) {
+        assertFalse(
+            client.registered.any { it.contains("semanticTokens", ignoreCase = true) },
+            "the server now offers semantic tokens; MonkeyCAnnotator must step aside for LSP4IJ",
         )
     }
 
@@ -331,10 +347,15 @@ class LanguageServerLiveTest {
         override fun showMessageRequest(params: ShowMessageRequestParams?): CompletableFuture<MessageActionItem> =
             CompletableFuture.completedFuture(null)
 
+        /** Everything the server registered dynamically, which is how it registers everything. */
+        val registered = mutableListOf<String>()
+
         // The server registers every one of its capabilities dynamically and asks for its
         // configuration; lsp4j's defaults throw, which aborts the whole registration.
-        override fun registerCapability(params: RegistrationParams?): CompletableFuture<Void> =
-            CompletableFuture.completedFuture(null)
+        override fun registerCapability(params: RegistrationParams?): CompletableFuture<Void> {
+            params?.registrations?.forEach { registered += it.method }
+            return CompletableFuture.completedFuture(null)
+        }
 
         override fun unregisterCapability(params: UnregistrationParams?): CompletableFuture<Void> =
             CompletableFuture.completedFuture(null)

@@ -17,6 +17,8 @@ First release.
 - Go to definition, Go to Symbol and Go to Class reach the whole Toybox API, which the SDK's own
   language server declines to resolve.
 - Shift+F1 opens Garmin's page for the symbol under the caret, from the installed SDK, offline.
+- `//!` is a documentation comment, escape sequences inside a literal are coloured apart from the
+  text around them, and a qualified constructor reads as the type it is.
 - Source, resource and output directories marked in the project tree; file-type icons.
 
 ### Building and running

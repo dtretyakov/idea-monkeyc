@@ -109,6 +109,9 @@ class ApiMirIndex private constructor(
          * `Graphics.ColorValue.COLOR_WHITE` to write — enum members are hoisted into the scope
          * around the enum. Keeping a placeholder on the stack keeps indentation and scope depth in
          * step while leaving the enum's name out of every qualified name built from it.
+         *
+         * The angle brackets make it a name no declaration can collide with: the grammar allows
+         * only letters, digits and underscores.
          */
         private const val ENUM_LEVEL = "<enum>"
 

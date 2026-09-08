@@ -39,6 +39,8 @@ object MonkeyCColors {
     val PARENTHESES = key("MONKEYC_PARENTHESES", Default.PARENTHESES)
     val BRACES = key("MONKEYC_BRACES", Default.BRACES)
     val BRACKETS = key("MONKEYC_BRACKETS", Default.BRACKETS)
+    val VALID_ESCAPE = key("MONKEYC_VALID_ESCAPE", Default.VALID_STRING_ESCAPE)
+    val INVALID_ESCAPE = key("MONKEYC_INVALID_ESCAPE", Default.INVALID_STRING_ESCAPE)
     val BAD_CHARACTER = key("MONKEYC_BAD_CHARACTER", com.intellij.openapi.editor.HighlighterColors.BAD_CHARACTER)
 
     val JUNGLE_COMMENT = key("JUNGLE_COMMENT", Default.LINE_COMMENT)
