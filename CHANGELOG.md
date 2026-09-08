@@ -67,7 +67,9 @@ First release.
 
 - A setup checklist that names the JVM and its version: the JRE is the largest unmarked
   performance variable on this platform, and nothing anywhere suggests looking at it.
-- A new project wizard built on the SDK's own templates.
+- A new project wizard built on the SDK's own templates, which refuses a device and a minimum API
+  level that contradict each other rather than generating a project the compiler rejects. Every
+  template it offers — the barrel included — is generated and compiled by a live test.
 - Developer key generation, without needing openssl.
 - A project can pin the SDK it builds with, instead of following whichever the SDK Manager has
   made current. A pin the machine cannot honour falls back rather than failing, and says so.

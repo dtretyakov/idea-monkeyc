@@ -109,6 +109,12 @@ class ConnectIqWizardStep(parent: NewProjectWizardStep) : AbstractNewProjectWiza
                         "More can be added to <code>manifest.xml</code> later."
                     },
                 )
+                // The device and the API level are chosen separately and can contradict each
+                // other, and the contradiction was invisible until the first build: the device
+                // went into the manifest unchecked, and the compiler answered "does not support
+                // API Level". Wizards that produce something the compiler rejects are the worst
+                // kind, because the user has no reason to suspect the wizard.
+                .validationOnApply { field -> incompatible(field.item?.toString())?.let { error(it) } }
             if (devices.isEmpty()) {
                 cell(ActionLink(OpenSdkManager.label()) { OpenSdkManager.invoke(null) })
             }
@@ -142,12 +148,46 @@ class ConnectIqWizardStep(parent: NewProjectWizardStep) : AbstractNewProjectWiza
 
     private fun selected(): Choice? = choices.firstOrNull { it.label == choice } ?: choices.firstOrNull()
 
-    private fun targets(level: SdkVersion): List<String> =
-        if (allCompatibleDevices) {
-            devices.filter { it.sdkVersion == null || it.sdkVersion >= level }.map { it.id }
+    /**
+     * The devices to declare, kept to the ones that can actually run this.
+     *
+     * Filtered in both branches. The single-device branch used not to be, so a device chosen
+     * before the API level was raised went into the manifest anyway and the first build failed on
+     * it.
+     */
+    private fun targets(level: SdkVersion): List<String> {
+        val appType = selected()?.appType?.id
+        val eligible = devices.filter { runs(it, level, appType) }
+        return if (allCompatibleDevices) {
+            eligible.map { it.id }
         } else {
-            listOf(device).filter { it.isNotEmpty() }
+            eligible.map { it.id }.filter { it == device }
         }
+    }
+
+    private fun runs(candidate: ConnectIqDevice, level: SdkVersion, appType: String?): Boolean =
+        (candidate.sdkVersion == null || candidate.sdkVersion >= level) &&
+            (appType == null || appType == "barrel" || candidate.supports(appType))
+
+    /** Why the chosen device cannot be declared alongside the chosen API level, or null. */
+    private fun incompatible(chosen: String?): String? {
+        val info = this.info ?: return null
+        val candidate = devices.firstOrNull { it.id == chosen } ?: return null
+        val appType = selected()?.appType
+        val level = SdkVersion.parse(apiLevel)
+            ?: SdkVersion.parse(defaultApiLevel(info, appType))
+            ?: return null
+
+        if (candidate.sdkVersion != null && candidate.sdkVersion < level) {
+            return "${candidate.displayName} supports API level ${candidate.sdkVersion}, " +
+                "not $level. Lower the minimum, or choose another device."
+        }
+        val id = appType?.id
+        if (id != null && id != "barrel" && !candidate.supports(id)) {
+            return "${candidate.displayName} does not run a $id. Choose another device."
+        }
+        return null
+    }
 
     /** The newest level the SDK offers: a new project has no reason to start with an old one. */
     private fun defaultApiLevel(info: ProjectInfo, appType: AppType?): String =
