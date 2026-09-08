@@ -19,7 +19,6 @@ import com.intellij.lang.folding.FoldingBuilderEx
 import com.intellij.lang.folding.FoldingDescriptor
 import com.intellij.navigation.ItemPresentation
 import com.intellij.openapi.editor.Document
-import com.intellij.openapi.editor.FoldingGroup
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
@@ -77,22 +76,24 @@ private class ApiMirRoot(private val file: PsiFile, private val index: ApiMirInd
         override fun getIcon(unused: Boolean): Icon = AllIcons.Nodes.Package
     }
 
-    override fun getChildren(): Array<TreeElement> = index.membersOf("")
-        .plus(index.exact(ROOT_MODULE)?.let { index.membersOf(it.qualifiedName) }.orEmpty())
-        .map { ApiMirNode(file, index, it) }
-        .toTypedArray()
+    /**
+     * `Toybox` is skipped as a level rather than shown.
+     *
+     * Everything in the file is inside it, so a tree whose only root is `Toybox` costs the reader
+     * a click and tells them nothing. Anything that somehow sits outside it is still listed, since
+     * silently dropping declarations is worse than an odd-looking row.
+     */
+    override fun getChildren(): Array<TreeElement> =
+        (index.membersOf(ROOT_MODULE) + index.membersOf("").filterNot { it.qualifiedName == ROOT_MODULE })
+            .map { ApiMirNode(file, index, it) }
+            .toTypedArray()
 
     override fun navigate(requestFocus: Boolean) = Unit
     override fun canNavigate(): Boolean = false
     override fun canNavigateToSource(): Boolean = false
 }
 
-/**
- * One declaration.
- *
- * `Toybox` itself is skipped as a level: everything is inside it, so a tree whose only root is
- * `Toybox` costs the reader one click and tells them nothing.
- */
+/** One declaration; a module or a class also carries what is inside it. */
 private class ApiMirNode(
     private val file: PsiFile,
     private val index: ApiMirIndex,
@@ -124,7 +125,7 @@ private class ApiMirNode(
     override fun canNavigateToSource(): Boolean = canNavigate()
 }
 
-/** Folds every module and class body, so the file opens as an outline rather than a wall. */
+/** A fold region for every module and class body, so the file can be read as an outline. */
 class ApiMirFoldingBuilder : FoldingBuilderEx() {
 
     override fun buildFoldRegions(root: PsiElement, document: Document, quick: Boolean): Array<FoldingDescriptor> {
@@ -143,19 +144,21 @@ class ApiMirFoldingBuilder : FoldingBuilderEx() {
                 val start = declaration.offset + declaration.simpleName.length
                 if (end <= start) return@mapNotNull null
 
-                FoldingDescriptor(
-                    node,
-                    TextRange(start, end),
-                    FoldingGroup.newGroup(declaration.qualifiedName),
-                    " { … }",
-                )
+                // No folding group: a group ties regions that fold together, and each of these
+                // is its own.
+                FoldingDescriptor(node, TextRange(start, end), null, " { … }")
             }
             .toTypedArray()
     }
 
     override fun getPlaceholderText(node: ASTNode): String = " { … }"
 
-    /** Collapsed on opening: the point is to see the shape of the API, not its first module. */
+    /**
+     * Left expanded, and Collapse All is one keystroke away.
+     *
+     * Every region here hangs off the same root node, so this is one answer for all of them: it
+     * cannot collapse the modules and leave a method the user has just arrived at open.
+     */
     override fun isCollapsedByDefault(node: ASTNode): Boolean = false
 
     override fun isDumbAware(): Boolean = true

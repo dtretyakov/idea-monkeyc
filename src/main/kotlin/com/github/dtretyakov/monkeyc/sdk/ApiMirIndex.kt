@@ -24,6 +24,7 @@ import kotlin.io.path.readText
 class ApiMirIndex private constructor(
     private val byQualifiedName: Map<String, Declaration>,
     private val bySimpleName: Map<String, List<Declaration>>,
+    private val byContainer: Map<String, List<Declaration>>,
 ) {
 
     enum class Kind { MODULE, CLASS, FUNCTION, VARIABLE, CONSTANT, TYPE }
@@ -74,9 +75,13 @@ class ApiMirIndex private constructor(
             .filter { it.qualifiedName.endsWith(suffix) }
     }
 
-    /** Everything declared directly inside a scope. */
-    fun membersOf(qualifiedName: String): List<Declaration> =
-        byQualifiedName.values.filter { it.container == qualifiedName }
+    /**
+     * Everything declared directly inside a scope, in the order the file declares it.
+     *
+     * Grouped up front rather than filtered on demand: the structure view asks this once per node
+     * it expands, and a scan of all three and a half thousand declarations each time adds up.
+     */
+    fun membersOf(qualifiedName: String): List<Declaration> = byContainer[qualifiedName].orEmpty()
 
     companion object {
 
@@ -212,6 +217,7 @@ class ApiMirIndex private constructor(
             return ApiMirIndex(
                 byQualifiedName = declarations,
                 bySimpleName = declarations.values.groupBy { it.simpleName },
+                byContainer = declarations.values.groupBy { it.container },
             )
         }
 
