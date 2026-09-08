@@ -3,6 +3,7 @@ package com.github.dtretyakov.monkeyc.run
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
 import java.net.ServerSocket
 import kotlin.io.path.createTempDirectory
 
@@ -15,8 +16,11 @@ import kotlin.io.path.createTempDirectory
  */
 class SimulatorPortTest {
 
-    /** A directory with no SDKs in it, so no process can ever be traced to a simulator. */
-    private val noSdks = createTempDirectory("monkeyc-no-sdks")
+    /**
+     * An SDK nothing was ever started from, under a data root holding no SDKs at all — so no
+     * running process can be traced to it, whatever is on this machine.
+     */
+    private val unknownSdk = createTempDirectory("monkeyc-no-sdks").let { ConnectIqSdk.at(it.resolve("sdk"), it) }
 
     @Test
     fun `a stranger on the port is reported as a stranger`() {
@@ -26,8 +30,8 @@ class SimulatorPortTest {
         ServerSocket(port).use {
             assertTrue(Simulator.isReady(), "the port answers")
             assertTrue(
-                Simulator.strangerHoldsPort(noSdks),
-                "nothing under $noSdks could be a simulator, so whatever answers is a stranger",
+                Simulator.strangerHoldsPort(unknownSdk),
+                "no simulator could have come from ${unknownSdk.root}, so whatever answers is a stranger",
             )
         }
     }
@@ -36,7 +40,7 @@ class SimulatorPortTest {
     fun `a silent port range is not a stranger`() {
         if (Simulator.isReady()) return // Something real is listening; this machine cannot say.
 
-        assertFalse(Simulator.strangerHoldsPort(noSdks), "nothing is listening, so nobody holds it")
+        assertFalse(Simulator.strangerHoldsPort(unknownSdk), "nothing is listening, so nobody holds it")
     }
 
     private fun isFree(port: Int): Boolean =

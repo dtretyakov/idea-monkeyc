@@ -80,12 +80,17 @@ class MonkeyCServerHealth(private val project: Project) {
      * What "Start it again" means. A user who has just fixed something — downloaded the device,
      * moved the project off a path the server could not read — is beginning a new attempt, and
      * carrying the old count into it would report their first hiccup as a continuing crisis.
+     *
+     * A stop already declared expected stays expected. This used to clear that too, which made the
+     * restart path order-dependent in a way nothing on reading it would suggest: forgetting after
+     * declaring cancelled the declaration, so every settings change stopped the server, counted it
+     * as a crash, and told the user their code intelligence had fallen over. The history and the
+     * next stop are different questions, and only one of them is being forgotten here.
      */
     @Synchronized
     fun forget() {
         crashes.clear()
         wasRunning = false
-        stopExpected = false
     }
 
     @Synchronized

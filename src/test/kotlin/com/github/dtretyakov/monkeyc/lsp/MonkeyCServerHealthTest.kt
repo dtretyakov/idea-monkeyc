@@ -80,4 +80,24 @@ class MonkeyCServerHealthTest : IdeTestCase() {
 
         assertTrue(health.statusChanged(ServerStatus.stopped) is MonkeyCServerHealth.Verdict.Crashed)
     }
+    fun `test forgetting does not cancel a stop already declared expected`() {
+        // Both orders, because the restart path does both and the order it does them in should not
+        // matter. It used to: forgetting cleared the expectation, so every settings change stopped
+        // the server, counted it as a crash, and told the user their code intelligence had fallen
+        // over.
+        health.statusChanged(ServerStatus.started)
+        health.expectStop()
+        health.forget()
+
+        assertNull("the stop was asked for", health.statusChanged(ServerStatus.stopped))
+        assertEquals(0, health.crashesInWindow())
+
+        health.statusChanged(ServerStatus.started)
+        health.forget()
+        health.expectStop()
+
+        assertNull("and the other way round", health.statusChanged(ServerStatus.stopped))
+        assertEquals(0, health.crashesInWindow())
+    }
+
 }

@@ -41,8 +41,8 @@ object Simulator {
      * the forums through a fourteen-reply thread before finding that Hyper-V had reserved the
      * range. Guessing wrong here is cheap: the caller warns, it does not refuse.
      */
-    fun strangerHoldsPort(dataRoot: Path = ConnectIqSdk.dataRoot()): Boolean =
-        isReady() && running(dataRoot).isEmpty()
+    fun strangerHoldsPort(sdk: ConnectIqSdk): Boolean =
+        isReady() && running(sdk.dataRoot, sdk.root).isEmpty()
 
     /**
      * Every running Connect IQ simulator, from whichever SDK started it.
@@ -53,8 +53,8 @@ object Simulator {
      * nothing and said so while the window sat there, and Start saw the port taken and did
      * nothing. Two SDKs deliberately running side by side is far rarer than upgrading one.
      */
-    fun running(dataRoot: Path = ConnectIqSdk.dataRoot()): List<ProcessHandle> {
-        val prefixes = simulatorPrefixes(dataRoot)
+    fun running(dataRoot: Path = ConnectIqSdk.dataRoot(), vararg also: Path): List<ProcessHandle> {
+        val prefixes = simulatorPrefixes(dataRoot, also.toList())
         return ProcessHandle.allProcesses()
             .filter { handle -> handle.simulatorRoot(prefixes) != null }
             .toList()
@@ -67,8 +67,8 @@ object Simulator {
      * and a `.prg` built by one SDK pushed into another's simulator fails in ways that read as a
      * broken plugin.
      */
-    fun runningSdk(dataRoot: Path = ConnectIqSdk.dataRoot()): Path? {
-        val prefixes = simulatorPrefixes(dataRoot)
+    fun runningSdk(dataRoot: Path = ConnectIqSdk.dataRoot(), vararg also: Path): Path? {
+        val prefixes = simulatorPrefixes(dataRoot, also.toList())
         return ProcessHandle.allProcesses()
             .map { it.simulatorRoot(prefixes) }
             .filter { it != null }
@@ -79,13 +79,21 @@ object Simulator {
     /** An SDK other than [sdk] whose simulator holds the port, or null when there is no conflict. */
     fun conflictingSdk(sdk: ConnectIqSdk): Path? {
         if (!isReady()) return null
-        val live = runningSdk(sdk.dataRoot) ?: return null
+        val live = runningSdk(sdk.dataRoot, sdk.root) ?: return null
         return live.takeIf { !it.sameAs(sdk.root) }
     }
 
-    /** Every unpacked SDK's `bin`, in both spellings, since a process reports where it really started. */
-    private fun simulatorPrefixes(dataRoot: Path): List<String> =
-        (ConnectIqSdk.installed(dataRoot) + listOfNotNull(ConnectIqSdk.detect(dataRoot)?.root))
+    /**
+     * Every unpacked SDK's `bin`, in both spellings, since a process reports where it really
+     * started.
+     *
+     * [also] is how an SDK that is none of the SDK Manager's business gets in: a project can pin
+     * one, and the settings can point at one, and neither is under `Sdks` or named by
+     * `current-sdk.cfg`. Without it a simulator started from that SDK matches nothing, and the
+     * caller concludes a stranger holds the port while the user's own simulator is on the screen.
+     */
+    private fun simulatorPrefixes(dataRoot: Path, also: List<Path> = emptyList()): List<String> =
+        (ConnectIqSdk.installed(dataRoot) + listOfNotNull(ConnectIqSdk.detect(dataRoot)?.root) + also)
             .distinct()
             .flatMap { root ->
                 val bin = root.resolve("bin")

@@ -60,6 +60,11 @@ class MonkeyCLaunchProcessHandler(
             } else {
                 buildOnly()
             }
+            // Whatever the branch above did, the run has to be over when it returns. Both branches
+            // end it themselves and say so in their own words; this is the backstop, because the
+            // failure it prevents is silent and permanent — a Run window holding a live process
+            // with a spinning Stop button for the rest of the session, no error, nothing to click.
+            finish(STOPPED)
         } catch (e: ProcessCanceledException) {
             throw e
         } catch (e: Throwable) {
@@ -69,7 +74,7 @@ class MonkeyCLaunchProcessHandler(
             val reason = e.message ?: "The run stopped with ${e.javaClass.simpleName} and no message."
             notifyTextAvailable("\n$reason\n", ProcessOutputTypes.STDERR)
             if (e !is ExecutionException) LOG.warn("Could not run the Connect IQ app", e)
-            notifyProcessTerminated(1)
+            finish(1)
         }
     }
 
@@ -85,7 +90,7 @@ class MonkeyCLaunchProcessHandler(
             notifyTextAvailable("\n$verb ${built.output}\n", ProcessOutputTypes.SYSTEM)
         }
         if (options.forDevice) offerToInstall(built)
-        notifyProcessTerminated(0)
+        finish(0)
     }
 
     /**
@@ -136,15 +141,17 @@ class MonkeyCLaunchProcessHandler(
         // the bug, and a run that quietly works the second time is the whole difference between
         // "flaky plugin" and "no, that is the SDK".
         repeat(ATTEMPTS) { index ->
-            if (stopped) return
+            if (stopped) return finish(STOPPED)
             val attempt = pushToSimulator(prepared, java)
-            if (stopped) return
+            // Stop is the one exit that has to be spelled out. The process is killed by
+            // destroyProcessImpl, which cannot end the run itself — the run is this loop, and it
+            // may have another attempt to make — so the ending happens here, and leaving it out
+            // is a Run window with a live process in it for the rest of the session.
+            if (stopped) return finish(attempt.exitCode)
 
             val last = index == ATTEMPTS - 1
-            if (!attempt.simulatorRefused || last) {
-                finish(attempt.exitCode)
-                return
-            }
+            if (!attempt.simulatorRefused || last) return finish(attempt.exitCode)
+
             recover(prepared, attemptsSoFar = index + 1)
         }
     }
@@ -214,8 +221,15 @@ class MonkeyCLaunchProcessHandler(
         }
     }
 
-    /** Closes the test tree, if there is one, and ends the run. */
+    /**
+     * Closes the test tree, if there is one, and ends the run.
+     *
+     * Safe to call twice. Stopping before anything was launched ends the run inside
+     * [destroyProcessImpl], because there is no process there to end it, and the loop then reaches
+     * here as well — and a second `notifyProcessTerminated` is an error in the platform's log.
+     */
     private fun finish(exitCode: Int) {
+        if (isProcessTerminated || isProcessTerminating) return
         // A test still open here never reported a result, and the tree would show it running for
         // ever; this is the last chance to close it.
         testMessages?.flush()
@@ -239,7 +253,7 @@ class MonkeyCLaunchProcessHandler(
                     "nothing will be started when it does.\n",
                 ProcessOutputTypes.SYSTEM,
             )
-            notifyProcessTerminated(1)
+            finish(1)
         } else {
             handler.destroyProcess()
         }
@@ -263,5 +277,8 @@ class MonkeyCLaunchProcessHandler(
          * restart is a different problem, and looping on it would only hide it.
          */
         const val ATTEMPTS = 3
+
+        /** What a run that the user stopped exits with, when nothing else has an answer. */
+        const val STOPPED = 1
     }
 }

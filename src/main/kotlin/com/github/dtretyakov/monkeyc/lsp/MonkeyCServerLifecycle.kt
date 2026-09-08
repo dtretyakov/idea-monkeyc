@@ -41,9 +41,15 @@ class MonkeyCServerLifecycle : ProjectActivity {
         val manager = LanguageServerManager.getInstance(project)
         val health = MonkeyCServerHealth.getInstance(project)
 
+        // A restart is a fresh start, so whatever was wrong before it is forgotten — and only then
+        // is the coming stop declared expected. The other order looks equivalent and is not:
+        // forgetting also clears the expectation, so every settings change would stop the server,
+        // count that as a crash, and tell the user their code intelligence had fallen over.
+        health.forget()
+
         // Every stop from here is one we asked for. Without saying so, our own restarts — and the
         // server restarts on every settings change, because it reads them once at initialize —
-        // would be counted as crashes and reported to the user as the server falling over.
+        // would be counted as crashes.
         health.expectStop()
 
         // Turning live analysis off has to actually stop the second JVM, not merely stop asking it
@@ -59,10 +65,6 @@ class MonkeyCServerLifecycle : ProjectActivity {
         // Asked here rather than at startup: a manifest can appear after the project is open, and
         // the answer then has to be the current one.
         if (runReadActionBlocking { MonkeyCProject.getInstance(project).roots() }.isEmpty()) return
-
-        // A restart the user set in motion is a fresh start, not a continuation of whatever was
-        // wrong before it.
-        health.forget()
 
         manager.stop(
             MonkeyCLanguageServerFactory.SERVER_ID,

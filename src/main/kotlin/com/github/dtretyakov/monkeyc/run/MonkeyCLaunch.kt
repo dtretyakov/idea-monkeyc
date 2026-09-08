@@ -185,7 +185,7 @@ object MonkeyCLaunch {
         // The port answering is not the same as the simulator answering, and the difference is
         // invisible from here on: whatever holds it will not speak the debug shell's protocol, so
         // the failure surfaces as the app refusing to launch. Said now, while it is still cheap.
-        if (Simulator.strangerHoldsPort(built.sdk.dataRoot)) {
+        if (Simulator.strangerHoldsPort(built.sdk)) {
             onProgress(
                 "Something is listening on the simulator's port range (1234-1238) and it is not a " +
                     "Connect IQ simulator. If the run fails to launch, that is where to look.",

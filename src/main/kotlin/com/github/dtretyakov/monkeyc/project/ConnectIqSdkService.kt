@@ -46,12 +46,33 @@ class ConnectIqSdkService {
     fun sdkFor(project: Project?): ConnectIqSdk? {
         val pinned = project?.let { MonkeyCSettings.getInstance(it).sdkPath.trim() }.orEmpty()
         if (pinned.isEmpty()) return sdk
+
+        // Cached, because this is asked on paths that run constantly — folding rebuilds on every
+        // document change, and it goes through here. Building a ConnectIqSdk is not free: the
+        // constructor reads bin/version.txt, so an uncached answer would be a file read per
+        // keystroke for a pinned project and nothing at all for an unpinned one.
+        pinnedSdk?.let { (path, resolved) -> if (path == pinned) return resolved }
+
         // A pin that is not there falls back rather than failing. These settings are committed, so
         // the path is as likely to have come from a colleague's machine as from this one, and a
         // project that refuses to build until the path is fixed would be a worse answer than one
         // that builds with the current SDK and says so on the checklist.
-        return Path.of(pinned).takeIf { it.resolve("bin").exists() }?.let { ConnectIqSdk.at(it) } ?: sdk
+        val resolved = Path.of(pinned).takeIf { it.resolve("bin").exists() }?.let { ConnectIqSdk.at(it) }
+            ?: return sdk // Not cached: the SDK may be installed at that path later.
+        pinnedSdk = pinned to resolved
+        return resolved
     }
+
+    /**
+     * The last pin resolved, by the path it was asked about.
+     *
+     * One entry: an IDE window holds one project, and two windows on two pinned SDKs would resolve
+     * again on each switch — which costs one file read and is rarer than the folding pass this
+     * exists to keep off the disk. Only successful resolutions are kept, so a pin whose SDK is
+     * installed later starts working without a refresh.
+     */
+    @Volatile
+    private var pinnedSdk: Pair<String, ConnectIqSdk>? = null
 
     /** Whether this project asked for an SDK that is not on this machine. */
     fun pinnedButMissing(project: Project?): String? {
@@ -95,6 +116,7 @@ class ConnectIqSdkService {
     fun refresh() {
         snapshot = null
         javaVersion = null
+        pinnedSdk = null
         current()
         ApplicationManager.getApplication().messageBus.syncPublisher(TOPIC).sdkChanged(sdk)
     }
