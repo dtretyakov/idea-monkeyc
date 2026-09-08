@@ -42,25 +42,45 @@ before it can answer `initialize`.
 * **Editing** — completion over the whole Toybox API, diagnostics, go-to-definition, hover with
   documentation, rename, find usages, document and workspace symbols, folding, type and call
   hierarchies. Syntax highlighting, commenting and bracket matching for `.mc`, `.jungle` and `.mss`.
-* **Building** — in the Build tool window, with the compiler's errors as something to click.
-* **Running** — Run and Debug configurations for the app and for its unit tests, a target device in
-  the status bar, and an Export action that produces the `.iq` for the store.
-* **Debugging** — breakpoints, stepping, variables, and evaluate-on-hover.
+* **Building** — in the Build tool window, with the compiler's errors as something to click, and
+  the compiler skipped entirely when the output already matches the sources and the flags.
+* **Running** — six run configurations: the app, its unit tests, a build that runs nothing, an
+  export to `.iq`, a barrel, and a barrel's tests. The build that runs nothing can target the watch
+  rather than the simulator, which is the only way to get a `.prg` to copy to `GARMIN/APPS`. The
+  device is chosen beside the Run button and defaults to the first product the manifest declares.
+* **Tests** — in a test tree, with a green arrow beside every `(:test)` function, the tests of one
+  file or directory from its context menu, and every test in the project from its root.
+* **Debugging** — breakpoints, stepping, variables, evaluate-on-hover, and a complication pair: a
+  second project run alongside the first.
+* **The simulator** — started when a run needs one, and stopped or restarted from
+  `Tools | Connect IQ Simulator` when it wedges, which after a few hours it does.
 
-### Three things the server does that a client has to work around
+### What the SDK's own tools do that a client has to work around
 
-All three were confirmed against SDK 9.1.0, and each has a live test that will go red when Garmin
-fixes it:
+All of it was confirmed against SDK 9.1.0, and most of it has a live test that will go red when
+Garmin fixes it:
 
+* The language server unboxes booleans the protocol says are optional. Seventeen
+  `dynamicRegistration` flags and `foldingRange.lineFoldingOnly`, all absent from what LSP4IJ sends,
+  each an NPE inside `initialize` — which is to say the server never starts and nothing works.
+  `RequiredFieldsFilter` fills them in on the wire, along with the `signatureHelp` context the
+  server dereferences without checking.
 * `textDocument/definition` answers with `file:/abs/path` — one slash, no authority — so nothing
   downstream resolves it. Repaired in `MonkeyCFileUriSupport`.
-* `textDocument/signatureHelp` dereferences a context the protocol says is optional, and throws an
-  NPE without one. LSP4IJ builds that request and exposes no hook for altering it, so the context is
-  added on the wire by `SignatureHelpContextFilter`.
 * The server matches an open document against the files the compiler resolved, and the compiler
   resolves through symlinks. A project reached by another name gets `Could not find file context`
   for everything — no completion, no navigation, and no error anywhere. `CanonicalPaths` resolves
   symlinks out of both the workspace root and the document URIs, which is what it takes.
+* `barreltest` refuses the `_sim` device suffix that `monkeyc` requires, though the `.prg` it
+  produces is the one the simulator runs; and `barrelbuild` refuses anything outside the barrel's
+  own namespace, so a top-level `(:test)` function breaks the barrel rather than merely failing to
+  run.
+* Unit tests cannot be debugged by anything. The adapter's `entry` reads
+  `if (!mRunTests && isForegroundApp) mClient.initialized();`, and a DAP client registers
+  breakpoints only after `initialized` — so a test run has no moment at which a breakpoint can be
+  set, and `stopAtLaunch` is ignored there too. A test configuration therefore does not offer
+  Debug, and a live test asserts the absence of that event so the refusal can be lifted the day it
+  arrives.
 
 ## Requirements
 
@@ -118,6 +138,7 @@ lang/      lexers, file types, colouring, commenting, bracket matching
 lsp/       the language server client and the workarounds it needs
 build/     the compiler, and its output turned into build events
 run/       run configurations, the simulator, monkeydo
+run/test/  the test runner's output, turned into a test tree
 dap/       the debug adapter client
-ui/        settings, the device widget, export, the wizard, the manifest form, the self-check
+ui/        settings, the device selector, export, the wizard, the manifest form, the self-check
 ```

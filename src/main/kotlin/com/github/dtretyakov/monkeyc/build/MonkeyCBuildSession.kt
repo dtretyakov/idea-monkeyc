@@ -9,6 +9,7 @@ import com.intellij.build.events.impl.FileMessageEventImpl
 import com.intellij.build.events.impl.FinishBuildEventImpl
 import com.intellij.build.events.impl.MessageEventImpl
 import com.intellij.build.events.impl.OutputBuildEventImpl
+import com.intellij.build.events.impl.ProgressBuildEventImpl
 import com.intellij.build.events.impl.StartBuildEventImpl
 import com.intellij.build.events.impl.SuccessResultImpl
 import com.intellij.openapi.project.Project
@@ -50,9 +51,25 @@ object MonkeyCBuildSession {
         )
 
         val result = try {
-            MonkeyCBuilder.run(project, spec) { text, isError ->
-                view.onEvent(id, OutputBuildEventImpl(id, text, !isError))
-            }
+            MonkeyCBuilder.run(
+                project,
+                spec,
+                onOutput = { text, isError -> view.onEvent(id, OutputBuildEventImpl(id, text, !isError)) },
+                onProgress = { progress ->
+                    view.onEvent(
+                        id,
+                        ProgressBuildEventImpl(
+                            Any(),
+                            id,
+                            System.currentTimeMillis(),
+                            "${progress.built} of ${progress.total} devices built",
+                            progress.total.toLong(),
+                            progress.built.toLong(),
+                            "devices",
+                        ),
+                    )
+                },
+            )
         } catch (e: Throwable) {
             view.onEvent(id, FinishBuildEventImpl(id, null, System.currentTimeMillis(), e.message.orEmpty(), FailureResultImpl()))
             throw e

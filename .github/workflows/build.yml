@@ -1,0 +1,68 @@
+# The checks a change has to pass. Live tests are not among them: they drive a real Connect IQ SDK
+# and a real simulator, neither of which a runner has, and they opt in with -PliveTests so a build
+# without one is green rather than red for reporting the machine.
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: ./gradlew build buildPlugin
+
+      - name: Keep the test report when something fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/test
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin
+          path: build/distributions/*.zip
+
+  verify:
+    name: Verify against the IDEs JetBrains recommends
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # A job of its own because it downloads an IDE or two on top of the one the build already
+      # needs: worth waiting for, not worth confusing with a failing test.
+      - name: Verify plugin
+        run: ./gradlew verifyPlugin
+
+      - name: Keep the verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-report
+          path: build/reports/pluginVerifier

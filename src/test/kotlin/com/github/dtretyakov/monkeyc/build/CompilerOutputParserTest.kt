@@ -75,4 +75,19 @@ class CompilerOutputParserTest {
         assertEquals(2, messages.size)
         assertEquals(listOf(Severity.WARNING, Severity.ERROR), messages.map { it.severity })
     }
+
+    @Test
+    fun `an export reports how many devices it has built`() {
+        val progress = CompilerOutputParser.progressOf("2 OUT OF 6 DEVICES BUILT")
+
+        assertEquals(BuildProgress(2, 6), progress)
+    }
+
+    @Test
+    fun `a line that merely mentions devices is not progress`() {
+        // The compiler says plenty about devices; only this one shape is a count.
+        assertNull(CompilerOutputParser.progressOf("Building 6 DEVICES"))
+        assertNull(CompilerOutputParser.progressOf("WARNING: fenix7: 2 OUT OF 6 DEVICES BUILT"))
+        assertNull(CompilerOutputParser.progressOf("BUILD SUCCESSFUL"))
+    }
 }

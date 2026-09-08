@@ -1,5 +1,8 @@
 package com.github.dtretyakov.monkeyc.build
 
+/** How far an export has got: it builds for every device the manifest declares, one at a time. */
+data class BuildProgress(val built: Int, val total: Int)
+
 /** One diagnostic the Connect IQ compiler printed. */
 data class CompilerMessage(
     val severity: Severity,
@@ -55,4 +58,20 @@ object CompilerOutputParser {
 
     fun parse(output: String): List<CompilerMessage> =
         output.lineSequence().mapNotNull { parseLine(it) }.toList()
+
+    /**
+     * The one line an export prints that says how far it has got.
+     *
+     * An export builds for every device the manifest declares and takes minutes; without this the
+     * Build window can only show an indeterminate bar, which for a six-device project says nothing
+     * about whether to wait or go and do something else.
+     */
+    fun progressOf(line: String): BuildProgress? {
+        val match = PROGRESS.matchEntire(line.trim()) ?: return null
+        val built = match.groupValues[1].toIntOrNull() ?: return null
+        val total = match.groupValues[2].toIntOrNull() ?: return null
+        return BuildProgress(built, total)
+    }
+
+    private val PROGRESS = Regex("""^(\d+) OUT OF (\d+) DEVICES BUILT$""")
 }

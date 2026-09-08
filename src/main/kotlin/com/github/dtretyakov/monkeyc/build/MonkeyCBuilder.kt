@@ -54,6 +54,7 @@ object MonkeyCBuilder {
         project: Project,
         spec: BuildSpec,
         onOutput: (text: String, isError: Boolean) -> Unit,
+        onProgress: (BuildProgress) -> Unit = {},
     ): BuildResult {
         val sdkService = ConnectIqSdkService.getInstance()
         // A failed result rather than an exception: every caller already knows how to report a
@@ -81,22 +82,30 @@ object MonkeyCBuilder {
         handler.addProcessListener(
             object : ProcessListener {
                 private val partialErrorLine = StringBuilder()
+                private val partialOutputLine = StringBuilder()
 
                 override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
                     val isError = outputType === com.intellij.execution.process.ProcessOutputTypes.STDERR
                     onOutput(event.text, isError)
-                    if (isError) collectDiagnostics(event.text)
+                    if (isError) {
+                        eachLine(partialErrorLine, event.text) { line ->
+                            CompilerOutputParser.parseLine(line)?.let { messages += it }
+                        }
+                    } else {
+                        eachLine(partialOutputLine, event.text) { line ->
+                            CompilerOutputParser.progressOf(line)?.let(onProgress)
+                        }
+                    }
                 }
 
-                /** Standard error arrives in chunks, and a diagnostic is only readable whole. */
-                private fun collectDiagnostics(text: String) {
-                    partialErrorLine.append(text)
-                    var newline = partialErrorLine.indexOf("\n")
+                /** Output arrives in chunks, and a diagnostic or a progress line is only readable whole. */
+                private fun eachLine(pending: StringBuilder, text: String, action: (String) -> Unit) {
+                    pending.append(text)
+                    var newline = pending.indexOf("\n")
                     while (newline >= 0) {
-                        CompilerOutputParser.parseLine(partialErrorLine.substring(0, newline))
-                            ?.let { messages += it }
-                        partialErrorLine.delete(0, newline + 1)
-                        newline = partialErrorLine.indexOf("\n")
+                        action(pending.substring(0, newline))
+                        pending.delete(0, newline + 1)
+                        newline = pending.indexOf("\n")
                     }
                 }
 

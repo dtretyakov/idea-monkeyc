@@ -1,0 +1,10 @@
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    The same drawing as the file-type icons, at Marketplace size: a watch, because that is what a
+    Connect IQ project ends up on, and a hand to say it is running rather than sitting in a drawer.
+  -->
+  <rect x="9" y="10" width="22" height="22" rx="6" stroke="#6C707E" stroke-width="2"/>
+  <path d="M14.5 10V5.5h11V10" stroke="#6C707E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14.5 32v4.5h11V32" stroke="#6C707E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M20 16v5.5l4 2.5" stroke="#3574F0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

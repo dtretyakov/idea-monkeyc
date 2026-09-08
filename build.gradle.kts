@@ -83,6 +83,10 @@ intellijPlatform {
         name = "Monkey C (Garmin Connect IQ)"
         version = project.version.toString()
 
+        // The top section of CHANGELOG.md, so the release notes are written once and in the place
+        // a reader of the repository looks for them.
+        changeNotes = provider { latestChangeNotes(file("CHANGELOG.md")) }
+
         ideaVersion {
             sinceBuild = "252"
             // Deliberately open-ended: the plugin uses no unstable platform API,
@@ -131,3 +135,58 @@ intellijPlatformTesting {
         }
     }
 }
+
+/**
+ * The most recent section of a keep-a-changelog file, as the HTML the Marketplace renders.
+ *
+ * Only what the plugin descriptor allows: headings, lists and inline code. A Markdown library for
+ * four constructs would be a dependency for the sake of one string.
+ */
+fun latestChangeNotes(changelog: File): String {
+    if (!changelog.exists()) return ""
+
+    val lines = changelog.readLines()
+    val start = lines.indexOfFirst { it.startsWith("## ") }
+    if (start < 0) return ""
+    val end = lines.drop(start + 1).indexOfFirst { it.startsWith("## " ) }
+        .let { if (it < 0) lines.size else start + 1 + it }
+
+    val html = StringBuilder()
+    var inList = false
+
+    fun closeList() {
+        if (inList) {
+            html.append("</ul>")
+            inList = false
+        }
+    }
+
+    // A bullet may be wrapped over several lines; each continuation belongs to the item above it.
+    lines.subList(start + 1, end).forEach { raw ->
+        val line = raw.trim()
+        when {
+            line.isEmpty() -> Unit
+            line.startsWith("### ") -> {
+                closeList()
+                html.append("<h4>").append(inlineHtml(line.removePrefix("### "))).append("</h4>")
+            }
+            line.startsWith("- ") -> {
+                if (!inList) {
+                    html.append("<ul>")
+                    inList = true
+                }
+                html.append("<li>").append(inlineHtml(line.removePrefix("- ")))
+            }
+            inList -> html.append(' ').append(inlineHtml(line))
+            else -> html.append("<p>").append(inlineHtml(line)).append("</p>")
+        }
+    }
+    closeList()
+    return html.toString()
+}
+
+fun inlineHtml(text: String): String =
+    text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace(Regex("`([^`]+)`"), "<code>$1</code>")

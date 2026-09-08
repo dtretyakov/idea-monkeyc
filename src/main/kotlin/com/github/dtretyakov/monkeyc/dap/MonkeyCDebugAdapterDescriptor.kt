@@ -5,14 +5,22 @@ import com.github.dtretyakov.monkeyc.lsp.SdkServerCommands
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.project.ProjectLayout
 import com.github.dtretyakov.monkeyc.run.MonkeyCLaunch
+import com.github.dtretyakov.monkeyc.run.Simulator
 import com.github.dtretyakov.monkeyc.run.MonkeyCRunOptions
 import com.github.dtretyakov.monkeyc.run.PreparedLaunch
 import com.intellij.execution.ExecutionException
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.configurations.RunConfigurationOptions
+import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessHandler
+import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.runners.ExecutionEnvironment
+import com.intellij.notification.NotificationAction
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileTypes.FileType
+import com.intellij.openapi.util.Key
 import com.intellij.openapi.progress.ProgressManager
 import com.redhat.devtools.lsp4ij.dap.definitions.DebugAdapterServerDefinition
 import com.redhat.devtools.lsp4ij.dap.descriptors.DebugAdapterDescriptor
@@ -61,6 +69,40 @@ class MonkeyCDebugAdapterDescriptor(
         return startServer(
             GeneralCommandLine(SdkServerCommands.debugAdapter(sdk, ConnectIqSdkService.getInstance().java()))
                 .withWorkingDirectory(prepared.root),
+        ).also { watchForAWedgedSimulator(it) }
+    }
+
+    /**
+     * Turns the adapter's least helpful sentence into something to act on.
+     *
+     * A simulator left open for hours keeps its port bound and stops answering, and the only sign
+     * of it is one red line — "Failed to connect to the simulator: Timeout" — from which nothing
+     * follows. Restarting the simulator fixes it every time, so the notification says so and
+     * offers to do it.
+     */
+    private fun watchForAWedgedSimulator(handler: ProcessHandler) {
+        handler.addProcessListener(
+            object : ProcessListener {
+                override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
+                    if (!event.text.contains(CANNOT_CONNECT)) return
+                    NotificationGroupManager.getInstance()
+                        .getNotificationGroup("Monkey C")
+                        .createNotification(
+                            "The debugger could not reach the Connect IQ simulator",
+                            "A simulator that has been open for a long time keeps its port but stops " +
+                                "answering. Restarting it usually settles this.",
+                            NotificationType.WARNING,
+                        )
+                        .addAction(
+                            NotificationAction.createSimpleExpiring("Restart Simulator") {
+                                ApplicationManager.getApplication().executeOnPooledThread {
+                                    ConnectIqSdkService.getInstance().sdk?.let { Simulator.restart(it) }
+                                }
+                            },
+                        )
+                        .notify(environment.project)
+                }
+            },
         )
     }
 
@@ -96,4 +138,9 @@ class MonkeyCDebugAdapterDescriptor(
     }
 
     override fun getFileType(): FileType = MonkeyCFileType
+
+    private companion object {
+        /** The adapter's own wording, from `DebugServer`. */
+        const val CANNOT_CONNECT = "Failed to connect to the simulator"
+    }
 }
