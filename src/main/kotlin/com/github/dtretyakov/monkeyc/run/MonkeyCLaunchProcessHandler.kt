@@ -231,9 +231,15 @@ class MonkeyCLaunchProcessHandler(
      * Safe to call twice. Stopping before anything was launched ends the run inside
      * [destroyProcessImpl], because there is no process there to end it, and the loop then reaches
      * here as well — and a second `notifyProcessTerminated` is an error in the platform's log.
+     * Terminating while already terminating is not that: it is the normal end of a stopped run.
      */
     private fun finish(exitCode: Int) {
-        if (isProcessTerminated || isProcessTerminating) return
+        // Only `isProcessTerminated`. Guarding on `isProcessTerminating` as well looks like the
+        // same thing and is the opposite: the platform sets that state the moment Stop is pressed,
+        // before it calls `destroyProcessImpl`, so the guard fired in exactly the case this has to
+        // run — and the handler stayed TERMINATING for ever while the IDE showed "Waiting for
+        // process detach" and refused to close the project.
+        if (isProcessTerminated) return
         // A test still open here never reported a result, and the tree would show it running for
         // ever; this is the last chance to close it.
         testMessages?.flush()
