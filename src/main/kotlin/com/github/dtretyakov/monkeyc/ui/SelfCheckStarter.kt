@@ -8,12 +8,19 @@ import com.github.dtretyakov.monkeyc.lsp.MonkeyCLanguageServerFactory
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.run.MonkeyCRunConfigurationType
 import com.intellij.execution.configurations.ConfigurationTypeUtil
+import com.intellij.ide.highlighter.ArchiveFileType
 import com.intellij.ide.wizard.GeneratorNewProjectWizard
 import com.intellij.openapi.application.ModernApplicationStarter
 import com.intellij.openapi.fileEditor.FileEditorProvider
 import com.intellij.lang.LanguageExtensionPoint
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.fileTypes.FileTypeManager
+import com.intellij.openapi.vfs.JarFileSystem
+import com.intellij.openapi.vfs.LocalFileSystem
+import java.nio.file.Files
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+import com.intellij.openapi.roots.AdditionalLibraryRootsProvider
 import com.redhat.devtools.lsp4ij.dap.DebugAdapterManager
 import com.redhat.devtools.lsp4ij.LanguageServersRegistry
 import kotlin.system.exitProcess
@@ -47,6 +54,8 @@ class SelfCheckStarter : ModernApplicationStarter() {
         }
         println("[self-check] file types: .mc .mcgen .jungle .mss")
 
+        problems += barrelProblems()
+
         val runConfiguration = ConfigurationTypeUtil.findConfigurationType(MonkeyCRunConfigurationType::class.java)
         println("[self-check] run configurations: ${runConfiguration.configurationFactories.joinToString(", ") { it.name }}")
 
@@ -73,6 +82,14 @@ class SelfCheckStarter : ModernApplicationStarter() {
 
         problems += editorFeatureProblems()
 
+        val libraries = AdditionalLibraryRootsProvider.EP_NAME.extensionList
+            .firstOrNull { it is com.github.dtretyakov.monkeyc.library.ConnectIqLibraryProvider }
+        if (libraries == null) {
+            problems += "the Connect IQ library provider is not registered"
+        } else {
+            println("[self-check] library provider: ${libraries.javaClass.simpleName}")
+        }
+
         val debugAdapter = DebugAdapterManager.getInstance()
             .getDebugAdapterServerById(MonkeyCDebugAdapterFactory.SERVER_ID)
         if (debugAdapter == null) {
@@ -95,6 +112,45 @@ class SelfCheckStarter : ModernApplicationStarter() {
         problems.forEach { println("[self-check] PROBLEM: $it") }
         println(if (problems.isEmpty()) "[self-check] OK" else "[self-check] FAILED")
         exitProcess(if (problems.isEmpty()) 0 else 1)
+    }
+
+    /**
+     * That a `.barrel` can actually be opened as what it is: a zip of Monkey C source.
+     *
+     * The library node shows barrels by mounting them through `JarFileSystem`, and whether that
+     * works for an extension the platform has never heard of is not something a registration can
+     * be read to confirm — it depends on the file type association having taken. So this builds a
+     * barrel-shaped zip and mounts it. If the answer is no, every barrel in the tree is one
+     * unreadable binary file and nothing anywhere says why.
+     */
+    private fun barrelProblems(): List<String> {
+        val fileType = FileTypeManager.getInstance().getFileTypeByExtension("barrel")
+        if (fileType !is ArchiveFileType) return listOf(".barrel is $fileType, expected an archive")
+
+        val probe = Files.createTempFile("monkeyc-selfcheck", ".barrel")
+        try {
+            ZipOutputStream(Files.newOutputStream(probe)).use { zip ->
+                zip.putNextEntry(ZipEntry("content/source/Probe.mc"))
+                zip.write("module Probe {}".toByteArray())
+                zip.closeEntry()
+            }
+
+            val local = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(probe)
+                ?: return listOf("a .barrel on disk has no VirtualFile")
+            val root = JarFileSystem.getInstance().getJarRootForLocalFile(local)
+                ?: return listOf("a .barrel cannot be mounted, so barrels would show as one binary file")
+            val source = root.findFileByRelativePath("content/source/Probe.mc")
+                ?: return listOf("a mounted .barrel has no ${root.children.size} readable children")
+
+            println("[self-check] barrels: mounted, and ${source.name} is ${source.fileType.name}")
+            return if (source.fileType == MonkeyCFileType) {
+                emptyList()
+            } else {
+                listOf("source inside a barrel is ${source.fileType.name}, expected Monkey C")
+            }
+        } finally {
+            Files.deleteIfExists(probe)
+        }
     }
 
     /**

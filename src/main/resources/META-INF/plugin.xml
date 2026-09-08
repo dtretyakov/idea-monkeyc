@@ -41,6 +41,18 @@
             implementationClass="com.github.dtretyakov.monkeyc.lang.MssFileType"
             fieldName="INSTANCE"/>
 
+        <!--
+          A `.barrel` is a zip. `barrelbuild` packs the barrel's unmodified source under
+          `content/`, so telling the platform it is an archive is what lets JarFileSystem mount it
+          and the library node show real Monkey C rather than one opaque binary file.
+
+          Name and extensions only: this adds an extension to a file type that already exists, and
+          repeating its `implementationClass` here would make it a second registration of ARCHIVE,
+          which the platform drops without a word. The self-check mounts a probe barrel rather than
+          trusting this line.
+        -->
+        <fileType name="ARCHIVE" extensions="barrel"/>
+
         <lang.parserDefinition
             language="MonkeyC"
             implementationClass="com.github.dtretyakov.monkeyc.lang.MonkeyCParserDefinition"/>
@@ -101,6 +113,13 @@
 
         <editorNotificationProvider
             implementation="com.github.dtretyakov.monkeyc.ui.MissingSdkNotification"/>
+
+        <!--
+          The SDK and the project's barrels, under External Libraries. Everything a Monkey C
+          project depends on lives outside it, and until now none of it was visible to the IDE.
+        -->
+        <additionalLibraryRootsProvider
+            implementation="com.github.dtretyakov.monkeyc.library.ConnectIqLibraryProvider"/>
 
         <appStarter
             id="monkeyCSelfCheck"
@@ -170,6 +189,20 @@
             language="MonkeyC"
             implementationClass="com.redhat.devtools.lsp4ij.features.callHierarchy.LSPCallHierarchyProvider"/>
     </extensions>
+
+    <applicationListeners>
+        <!--
+          Both signals are application-wide: the SDK is chosen once for the machine, and the VFS
+          has one bus. Listening once and telling every open project beats a subscription per
+          project.
+        -->
+        <listener
+            class="com.github.dtretyakov.monkeyc.library.ConnectIqLibraryWatcher"
+            topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
+        <listener
+            class="com.github.dtretyakov.monkeyc.library.ConnectIqLibraryWatcher"
+            topic="com.github.dtretyakov.monkeyc.project.ConnectIqSdkListener"/>
+    </applicationListeners>
 
     <actions>
         <action
