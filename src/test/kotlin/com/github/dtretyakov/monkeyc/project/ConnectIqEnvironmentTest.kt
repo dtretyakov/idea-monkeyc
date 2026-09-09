@@ -2,6 +2,7 @@ package com.github.dtretyakov.monkeyc.project
 
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
 import com.github.dtretyakov.monkeyc.project.ConnectIqEnvironment.Fix
+import com.github.dtretyakov.monkeyc.project.ConnectIqEnvironment.Concern
 import com.github.dtretyakov.monkeyc.project.ConnectIqEnvironment.Item
 import com.github.dtretyakov.monkeyc.project.ConnectIqEnvironment.Status
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -66,9 +67,9 @@ class ConnectIqEnvironmentTest {
     @Test
     fun `the first blocking problem is the one to report, in list order`() {
         val items = listOf(
-            Item("SDK Manager", Status.MISSING, "informational", Fix.SDK_MANAGER, blocking = false),
-            Item("Connect IQ SDK", Status.MISSING, "the real problem", Fix.SDK_MANAGER),
-            Item("Devices", Status.MISSING, "a consequence of the one above", Fix.SDK_MANAGER),
+            Item(Concern.SDK_MANAGER, "SDK Manager", Status.MISSING, "informational", Fix.SDK_MANAGER, blocking = false),
+            Item(Concern.SDK, "Connect IQ SDK", Status.MISSING, "the real problem", Fix.SDK_MANAGER),
+            Item(Concern.DEVICES, "Devices", Status.MISSING, "a consequence of the one above", Fix.SDK_MANAGER),
         )
 
         assertEquals("Connect IQ SDK", ConnectIqEnvironment.firstProblem(items)?.name)
@@ -78,8 +79,8 @@ class ConnectIqEnvironmentTest {
     @Test
     fun `an environment whose only complaint is informational counts as ready`() {
         val items = listOf(
-            Item("SDK Manager", Status.MISSING, "informational", Fix.SDK_MANAGER, blocking = false),
-            Item("Connect IQ SDK", Status.READY, "9.1.0"),
+            Item(Concern.SDK_MANAGER, "SDK Manager", Status.MISSING, "informational", Fix.SDK_MANAGER, blocking = false),
+            Item(Concern.SDK, "Connect IQ SDK", Status.READY, "9.1.0"),
         )
 
         assertTrue(ConnectIqEnvironment.isReady(items))

@@ -49,39 +49,25 @@ class MonkeyCConfigurable(private val project: Project) :
         val sdkService = ConnectIqSdkService.getInstance()
 
         val sdk = sdkService.sdk
+        // The environment, read once and quoted field by field. It used to be rendered as a
+        // checklist of its own at the top of this page — six lines that mostly said everything was
+        // fine, sitting where the controls should be, and repeating what four fields below already
+        // had a place to say. Each line now belongs to the control that fixes it.
+        val environment = ConnectIqEnvironment.check(project)
+        fun status(concern: ConnectIqEnvironment.Concern): String =
+            ConnectIqEnvironment.of(environment, concern)?.detail.orEmpty()
+
         val sdkChoices = SdkChoices(ConnectIqSdk.installed(), settings.sdkPath, ConnectIqSdk.detect()?.root)
 
-        lateinit var environment: EnvironmentPanel
-
         return panel {
-            // Collapsed when there is nothing wrong, and it usually is. A checklist of six green
-            // ticks at the top of a settings page is a paragraph of reassurance in the place where
-            // the controls should be — it earns the room only while something is missing, which is
-            // exactly when it opens itself and says how many.
-            val problems = ConnectIqEnvironment.check(project).count { it.status != ConnectIqEnvironment.Status.READY }
-            collapsibleGroup(if (problems == 0) "Setup" else "Setup  —  $problems to fix") {
-                row {
-                    // The whole checklist rather than a one-line summary: the six things that have
-                    // to be in place are met one at a time by a newcomer, and meeting them one at a
-                    // time is exactly what makes a first run feel like a series of refusals.
-                    environment = EnvironmentPanel(project) { generateDeveloperKey(project) }
-                    cell(environment)
-                }
-                row {
-                    button("Reload") {
-                        sdkService.refresh()
-                        environment.refresh()
-                    }
-                }
-            }.apply { expanded = problems > 0 }
-
             group("SDK (This Computer)") {
                 row {
-                    // Beside the SDK rather than beside Reload. Reload re-reads what is already
-                    // here; this is how more of it arrives — SDKs and the devices they hold both
-                    // come from the manager, and neither is visible to the IDE until a re-read.
+                    // Where SDKs and devices come from, with what it says about itself under it,
+                    // and Reload beside it because nothing the manager changes reaches the IDE
+                    // until something re-reads.
                     link(OpenSdkManager.label()) { OpenSdkManager.invoke(project) }
-                }
+                    button("Reload") { sdkService.refresh() }
+                }.rowComment(status(ConnectIqEnvironment.Concern.SDK_MANAGER))
                 row("Location:") {
                     textFieldWithBrowseButton(
                         FileChooserDescriptorFactory.createSingleFolderDescriptor()
@@ -90,9 +76,14 @@ class MonkeyCConfigurable(private val project: Project) :
                     )
                         .columns(COLUMNS_LARGE)
                         .bindText(app::sdkPath)
+                        // What is actually in use, not only how to change it. This is the line
+                        // the checklist used to carry, and it is more use here: the field it
+                        // describes is the field that fixes it.
                         .comment(
-                            "Leave empty to follow the SDK Manager's own choice, which it records " +
-                                "in <code>current-sdk.cfg</code>.",
+                            "${status(ConnectIqEnvironment.Concern.SDK)}<br/>" +
+                                "${status(ConnectIqEnvironment.Concern.DEVICES)}. Leave empty to " +
+                                "follow the SDK Manager's own choice, which it records in " +
+                                "<code>current-sdk.cfg</code>.",
                         )
                         // Without this a typo is indistinguishable from having no SDK at all: every
                         // surface says "No Connect IQ SDK found" and none of them says where it looked.
@@ -156,7 +147,10 @@ class MonkeyCConfigurable(private val project: Project) :
                     )
                         .columns(COLUMNS_LARGE)
                         .bindText(settings::developerKeyPath)
-                        .comment("Leave empty to use the key the SDK Manager generated")
+                        .comment(
+                            "${status(ConnectIqEnvironment.Concern.DEVELOPER_KEY)}. Leave empty to " +
+                                "use the key the SDK Manager generated",
+                        )
                         .validationOnApply { field ->
                             val given = field.text.trim().takeIf { it.isNotEmpty() }
                             given?.let { path ->
@@ -190,7 +184,8 @@ class MonkeyCConfigurable(private val project: Project) :
                     checkBox("Analyse the project as it is edited")
                         .bindSelected(settings::liveAnalysis)
                         .comment(
-                            "Runs the language server the SDK ships, which is what completion, " +
+                            "${status(ConnectIqEnvironment.Concern.LANGUAGE_SERVER)}. Runs the " +
+                                "language server the SDK ships, which is what completion, " +
                                 "diagnostics and navigation come from. It is a second JVM that " +
                                 "compiles the whole project in the background; turning it off " +
                                 "leaves building, running, debugging and highlighting untouched.",

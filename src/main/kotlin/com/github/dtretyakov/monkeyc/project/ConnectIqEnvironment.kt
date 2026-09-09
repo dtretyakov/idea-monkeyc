@@ -27,7 +27,17 @@ object ConnectIqEnvironment {
     /** What to offer when something is missing. Null means there is nothing the plugin can do. */
     enum class Fix { SDK_MANAGER, GENERATE_KEY }
 
+    /**
+     * Which prerequisite an item is about.
+     *
+     * So a settings field can ask for its own line without matching on the display name, which is
+     * text and therefore free to change. The settings page shows each of these beside the control
+     * that fixes it rather than as a checklist of its own.
+     */
+    enum class Concern { SDK_MANAGER, SDK, LANGUAGE_SERVER, LIVE_ANALYSIS, DEVICES, DEVELOPER_KEY, JAVA }
+
     data class Item(
+        val concern: Concern,
         val name: String,
         val status: Status,
         val detail: String,
@@ -44,6 +54,9 @@ object ConnectIqEnvironment {
 
     /** True when nothing stands in the way of a build. */
     fun isReady(items: List<Item>): Boolean = items.none { it.status == Status.MISSING && it.blocking }
+
+    /** The line about one prerequisite, for the control that fixes it. */
+    fun of(items: List<Item>, concern: Concern): Item? = items.firstOrNull { it.concern == concern }
 
     /** The first thing actually in the way, or null when nothing is. */
     fun firstProblem(items: List<Item>): Item? =
@@ -75,8 +88,9 @@ object ConnectIqEnvironment {
      */
     internal fun sdkManager(where: Path?, hasSdk: Boolean): Item =
         when {
-            where != null -> Item("SDK Manager", Status.READY, shorten(where))
+            where != null -> Item(Concern.SDK_MANAGER, "SDK Manager", Status.READY, shorten(where))
             hasSdk -> Item(
+                Concern.SDK_MANAGER,
                 "SDK Manager",
                 Status.MISSING,
                 "Not installed. The SDK is here without it, but new SDKs and devices come through it.",
@@ -84,6 +98,7 @@ object ConnectIqEnvironment {
                 blocking = false,
             )
             else -> Item(
+                Concern.SDK_MANAGER,
                 "SDK Manager",
                 Status.MISSING,
                 "Not installed. Garmin ships the SDK and the devices through it and nowhere else.",
@@ -101,9 +116,10 @@ object ConnectIqEnvironment {
      */
     internal fun sdk(sdk: ConnectIqSdk?, pinnedButMissing: String? = null): Item = when {
         sdk == null ->
-            Item("Connect IQ SDK", Status.MISSING, "Not found. Install one with the SDK Manager.", Fix.SDK_MANAGER)
+            Item(Concern.SDK, "Connect IQ SDK", Status.MISSING, "Not found. Install one with the SDK Manager.", Fix.SDK_MANAGER)
 
         pinnedButMissing != null -> Item(
+            Concern.SDK,
             "Connect IQ SDK",
             Status.MISSING,
             "${sdk.version ?: "unknown version"} at ${shorten(sdk.root)}, but this project asks for " +
@@ -113,7 +129,7 @@ object ConnectIqEnvironment {
             blocking = false,
         )
 
-        else -> Item("Connect IQ SDK", Status.READY, "${sdk.version ?: "unknown version"} at ${shorten(sdk.root)}")
+        else -> Item(Concern.SDK, "Connect IQ SDK", Status.READY, "${sdk.version ?: "unknown version"} at ${shorten(sdk.root)}")
     }
 
     /**
@@ -121,9 +137,10 @@ object ConnectIqEnvironment {
      * in 8.1.0, and everything else — building, running, debugging — works without it.
      */
     private fun languageServer(sdk: ConnectIqSdk): Item = if (sdk.hasLanguageServer) {
-        Item("Language server", Status.READY, "Included in this SDK")
+        Item(Concern.LANGUAGE_SERVER, "Language server", Status.READY, "Included in this SDK")
     } else {
         Item(
+            Concern.LANGUAGE_SERVER,
             "Language server",
             Status.MISSING,
             "This SDK has none, so there is no code intelligence. " +
@@ -141,9 +158,10 @@ object ConnectIqEnvironment {
      * exists to prevent, and "I turned it off three weeks ago" is a cause like any other.
      */
     internal fun liveAnalysis(enabled: Boolean): Item = if (enabled) {
-        Item("Live analysis", Status.READY, "The language server runs while you edit")
+        Item(Concern.LIVE_ANALYSIS, "Live analysis", Status.READY, "The language server runs while you edit")
     } else {
         Item(
+            Concern.LIVE_ANALYSIS,
             "Live analysis",
             Status.MISSING,
             "Turned off for this project, so there is no completion, no diagnostics and no " +
@@ -157,6 +175,7 @@ object ConnectIqEnvironment {
         // tinguishable from one that was never downloaded, and only one of the two is fixable
         // by downloading it again.
         count > 0 && unreadable.isNotEmpty() -> Item(
+            Concern.DEVICES,
             "Devices",
             Status.MISSING,
             "$count downloaded, and ${unreadable.size} that could not be read " +
@@ -165,9 +184,10 @@ object ConnectIqEnvironment {
             blocking = false,
         )
 
-        count > 0 -> Item("Devices", Status.READY, "$count downloaded")
-        !hasSdk -> Item("Devices", Status.MISSING, "None, and no SDK to hold them.", Fix.SDK_MANAGER)
+        count > 0 -> Item(Concern.DEVICES, "Devices", Status.READY, "$count downloaded")
+        !hasSdk -> Item(Concern.DEVICES, "Devices", Status.MISSING, "None, and no SDK to hold them.", Fix.SDK_MANAGER)
         else -> Item(
+            Concern.DEVICES,
             "Devices",
             Status.MISSING,
             "None downloaded. An app is built for one device, so there is nothing to build for yet.",
@@ -181,20 +201,20 @@ object ConnectIqEnvironment {
      * not on this machine.
      */
     private fun developerKey(project: Project?): Item {
-        if (project == null) return Item("Developer key", Status.READY, "Chosen per project")
+        if (project == null) return Item(Concern.DEVELOPER_KEY, "Developer key", Status.READY, "Chosen per project")
 
         val model = MonkeyCProject.getInstance(project)
         val problem = model.developerKeyProblem()
-        if (problem != null) return Item("Developer key", Status.MISSING, problem, Fix.GENERATE_KEY)
+        if (problem != null) return Item(Concern.DEVELOPER_KEY, "Developer key", Status.MISSING, problem, Fix.GENERATE_KEY)
 
         val key = model.developerKey()!!
         val location = DeveloperKeyLocation.check(key, model.roots(), isIgnored(project, key))
         if (location is DeveloperKeyLocation.Verdict.Committable) {
             // Not blocking: the build works perfectly well, and this is about what happens later.
-            return Item("Developer key", Status.MISSING, DeveloperKeyLocation.describe(location), blocking = false)
+            return Item(Concern.DEVELOPER_KEY, "Developer key", Status.MISSING, DeveloperKeyLocation.describe(location), blocking = false)
         }
 
-        return Item("Developer key", Status.READY, shorten(key))
+        return Item(Concern.DEVELOPER_KEY, "Developer key", Status.READY, shorten(key))
     }
 
     /**
@@ -224,6 +244,7 @@ object ConnectIqEnvironment {
      * what make it mean something.
      */
     internal fun java(java: Path, version: String?) = Item(
+        Concern.JAVA,
         "Java",
         Status.READY,
         shorten(java) + (version?.let { " — $it" } ?: ""),
