@@ -405,6 +405,11 @@
                 text="Stop Simulator"
                 description="Closes the Connect IQ simulator"/>
             <action
+                id="MonkeyC.ShowSimulatorLog"
+                class="com.github.dtretyakov.monkeyc.ui.ShowSimulatorLogAction"
+                text="Show Simulator Log"
+                description="Shows what the simulator has printed since this IDE started it"/>
+            <action
                 id="MonkeyC.ClearSimulatorData"
                 class="com.github.dtretyakov.monkeyc.ui.ClearSimulatorDataAction"
                 text="Clear Stored App Data"

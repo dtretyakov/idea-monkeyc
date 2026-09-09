@@ -63,6 +63,20 @@ class ConnectIqSdk(
     val simulator: Path
         get() = if (isMac) root.resolve("bin/ConnectIQ.app") else root.resolve("bin/simulator")
 
+    /**
+     * The program inside the bundle, which is what gets executed.
+     *
+     * Running this rather than opening the bundle is what makes the simulator a child process with
+     * pipes on it: `open` hands the app to LaunchServices and returns, leaving nothing to read, to
+     * wait on, or to kill. On every platform but macOS the two are the same file.
+     */
+    val simulatorExecutable: Path
+        get() = when {
+            isMac -> root.resolve("bin/ConnectIQ.app/Contents/MacOS/simulator")
+            isWindows -> root.resolve("bin/simulator.exe")
+            else -> root.resolve("bin/simulator")
+        }
+
     override fun toString(): String = "$root${version?.let { " ($it)" } ?: ""}"
 
     companion object {

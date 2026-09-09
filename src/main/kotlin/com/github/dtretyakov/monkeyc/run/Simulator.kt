@@ -3,6 +3,7 @@ package com.github.dtretyakov.monkeyc.run
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.OSProcessHandler
+import com.intellij.openapi.diagnostic.logger
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.nio.file.Path
@@ -118,6 +119,13 @@ object Simulator {
      * it gets into states — a hung app, a device left half-loaded — that only a restart clears.
      */
     fun stop(sdk: ConnectIqSdk, timeoutMillis: Long = 10_000): Boolean {
+        // Ours first, because for it there is a handle and no guessing. The search below is for a
+        // simulator somebody else started, which is a perfectly ordinary thing to find.
+        if (SimulatorProcess.getInstance().stop(sdk, timeoutMillis)) {
+            awaitClosed()
+            if (running(sdk.dataRoot).isEmpty()) return true
+        }
+
         val processes = running(sdk.dataRoot)
         if (processes.isEmpty()) return true
 
@@ -156,24 +164,43 @@ object Simulator {
         }
     }
 
-    /** Starts the simulator if it is not already up, and returns once it answers. */
+    /**
+     * Starts the simulator if it is not already up, and returns once it answers.
+     *
+     * The program inside the bundle is executed directly rather than handed to `open`. This used to
+     * say the opposite — that running the inner binary leaves macOS refusing it a window server
+     * connection — and that is not what happens: it opens its window, listens on the debug port,
+     * accepts an app from `monkeydo`, runs the unit tests, and does not take the focus away from
+     * the IDE while doing it. What `open` costs is everything a child process gives: there is no
+     * handle to wait on, nothing to read, and stopping it means searching the machine for it.
+     *
+     * `open` remains the fallback rather than the default. If some SDK build turns out to need it,
+     * the simulator still starts — a slower path with less information, not a broken plugin.
+     */
     fun start(sdk: ConnectIqSdk, timeoutMillis: Long = 40_000): Boolean {
         if (isReady()) return true
 
-        val command = if (System.getProperty("os.name").startsWith("Mac")) {
-            // The bundle has to be opened, not executed: run the inner binary directly and macOS
-            // gives it no window server connection.
-            GeneralCommandLine("open", "-a", sdk.simulator.toString())
-        } else {
-            GeneralCommandLine(sdk.simulator.toString())
-                .withWorkingDirectory(sdk.simulator.parent)
-        }
+        if (SimulatorProcess.getInstance().start(sdk) && await(timeoutMillis)) return true
 
-        // Nothing consumes the output; the simulator's own window is where it reports.
-        OSProcessHandler(command).startNotify()
+        // Either it could not be launched at all, or it launched and never listened. Both are worth
+        // one attempt through LaunchServices before giving up on the user's behalf.
+        if (isReady()) return true
+        LOG.info("The simulator did not come up when executed directly; falling back to `open`.")
+        runCatching { OSProcessHandler(openCommand(sdk)).startNotify() }
+            .onFailure { LOG.warn("Could not open ${sdk.simulator}", it) }
 
         return await(timeoutMillis)
     }
+
+    /** How the simulator was started before it was a child process, kept as the fallback. */
+    private fun openCommand(sdk: ConnectIqSdk): GeneralCommandLine =
+        if (System.getProperty("os.name").startsWith("Mac")) {
+            // `-g` so the fallback does not do what the direct launch avoids: steal the focus.
+            GeneralCommandLine("open", "-g", "-a", sdk.simulator.toString())
+        } else {
+            GeneralCommandLine(sdk.simulatorExecutable.toString())
+                .withWorkingDirectory(sdk.simulatorExecutable.parent)
+        }
 
     private fun await(timeoutMillis: Long): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMillis
@@ -191,6 +218,8 @@ object Simulator {
                 true
             }
         }.getOrDefault(false)
+
+    private val LOG = logger<Simulator>()
 
     private const val POLL_MILLIS = 200L
 

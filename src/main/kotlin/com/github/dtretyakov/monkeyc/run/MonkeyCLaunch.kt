@@ -215,10 +215,23 @@ object MonkeyCLaunch {
 
         onProgress("Starting the Connect IQ simulator...")
         if (!Simulator.start(built.sdk)) {
+            // What the simulator itself said, when we started it and it therefore had somewhere to
+            // say it. Three guesses about why it might not have listened are worth less than one
+            // line of its own output, and until the simulator became a child process there was
+            // none to quote.
+            val said = SimulatorProcess.getInstance().tail(built.sdk)
             throw ExecutionException(
-                "The Connect IQ simulator did not start listening on 1234-1238. " +
-                    "Either it failed to start — try it by hand from the SDK's bin directory — or " +
-                    "something else holds those ports.",
+                buildString {
+                    append("The Connect IQ simulator did not start listening on 1234-1238. ")
+                    if (said.isBlank()) {
+                        append(
+                            "Either it failed to start — try it by hand from the SDK's bin " +
+                                "directory — or something else holds those ports.",
+                        )
+                    } else {
+                        append("It said:\n\n").append(said)
+                    }
+                },
             )
         }
 

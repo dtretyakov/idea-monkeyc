@@ -2,6 +2,7 @@ package com.github.dtretyakov.monkeyc.ui
 
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.run.Simulator
+import com.github.dtretyakov.monkeyc.run.SimulatorProcess
 import com.github.dtretyakov.monkeyc.run.SimulatorStorage
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
 import com.intellij.notification.NotificationGroupManager
@@ -12,7 +13,11 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.project.Project
+import com.intellij.testFramework.LightVirtualFile
 
 /**
  * Closing and reopening the simulator by hand.
@@ -63,10 +68,25 @@ class StopSimulatorAction : SimulatorAction() {
 
     override val progressTitle: String = "Stopping the Connect IQ simulator"
 
-    override fun act(sdk: ConnectIqSdk): Pair<String, NotificationType> = when {
-        Simulator.running(sdk.dataRoot).isEmpty() -> "The Connect IQ simulator was not running." to NotificationType.INFORMATION
-        Simulator.stop(sdk) -> "The Connect IQ simulator has been stopped." to NotificationType.INFORMATION
-        else -> "The Connect IQ simulator did not stop." to NotificationType.WARNING
+    override fun act(sdk: ConnectIqSdk): Pair<String, NotificationType> {
+        // Asked before stopping, because stopping is what makes the answer false.
+        val ours = SimulatorProcess.getInstance().owns(sdk)
+        return when {
+            Simulator.running(sdk.dataRoot).isEmpty() ->
+                "The Connect IQ simulator was not running." to NotificationType.INFORMATION
+
+            Simulator.stop(sdk) -> if (ours) {
+                "The Connect IQ simulator has been stopped." to NotificationType.INFORMATION
+            } else {
+                // Worth distinguishing: this one was started outside the IDE — from the SDK
+                // Manager, or by a previous session — and the developer may well want to know that
+                // what just closed was not something this window opened.
+                "The Connect IQ simulator has been stopped. It was started outside this IDE." to
+                    NotificationType.INFORMATION
+            }
+
+            else -> "The Connect IQ simulator did not stop." to NotificationType.WARNING
+        }
     }
 }
 
@@ -117,3 +137,50 @@ class ClearSimulatorDataAction : SimulatorAction() {
             "The defaults in properties.xml apply again on the next run." to NotificationType.INFORMATION
     }
 }
+
+/**
+ * Shows what the simulator has printed since it started.
+ *
+ * There is no other way to see it. The simulator narrates its ANT and BLE stack continuously, so
+ * the plugin keeps the output rather than showing it — and this is the door to it for the times
+ * when something is wrong in a way the run console cannot explain: a device that will not load, a
+ * crash that leaves the window standing, a port that closes by itself.
+ *
+ * Only for a simulator this IDE started. One found running was launched somewhere with a console
+ * of its own, and inventing an empty panel for it would suggest we had looked and found nothing.
+ */
+class ShowSimulatorLogAction : AnAction() {
+
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+
+    override fun update(event: AnActionEvent) {
+        val sdk = event.project?.let { ConnectIqSdkService.getInstance().sdkFor(it) }
+        event.presentation.isEnabledAndVisible = sdk != null && SimulatorProcess.getInstance().owns(sdk)
+    }
+
+    override fun actionPerformed(event: AnActionEvent) {
+        val project = event.project ?: return
+        val sdk = ConnectIqSdkService.getInstance().sdkFor(project) ?: return
+        val log = SimulatorProcess.getInstance().log(sdk)
+
+        if (log.isBlank()) {
+            NotificationGroupManager.getInstance()
+                .getNotificationGroup("Monkey C")
+                .createNotification(
+                    "The Connect IQ simulator has printed nothing yet.",
+                    NotificationType.INFORMATION,
+                )
+                .notify(project)
+            return
+        }
+
+        ApplicationManager.getApplication().invokeLater {
+            // A read-only editor rather than a message box: this is output, it is long, and it is
+            // worth being able to scroll and copy out of.
+            val file = LightVirtualFile("Connect IQ Simulator.log", PlainTextFileType.INSTANCE, log)
+            file.isWritable = false
+            FileEditorManager.getInstance(project).openFile(file, true)
+        }
+    }
+}
+

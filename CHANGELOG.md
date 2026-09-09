@@ -99,6 +99,11 @@ First release.
 - Under it, what a selection commits the project to: how many resource families have to be drawn
   and kept working, the smallest memory budget the code now has to fit, how many devices have no
   touchscreen, and the poorest colour depth the artwork has to survive.
+- The simulator is started as a child process rather than handed to the system's launcher, so the
+  plugin knows when it dies, stops the one it started without searching the machine for it, and can
+  quote what it printed when it refuses to come up. A simulator started elsewhere — the SDK Manager,
+  a previous session — is still found and still stops. Run | Connect IQ Simulator | Show Simulator
+  Log shows the output, which has nowhere else to go.
 - Stopping and restarting the Connect IQ simulator, and clearing the app data it keeps between
   runs — which is what makes an edited default in `properties.xml` take effect, since a value there
   applies only while the property does not yet exist.
