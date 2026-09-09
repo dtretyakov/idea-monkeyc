@@ -1,5 +1,6 @@
 package com.github.dtretyakov.monkeyc.ui
 
+import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.project.MonkeyCTarget
@@ -8,6 +9,7 @@ import com.github.dtretyakov.monkeyc.run.MonkeyCRunConfiguration
 import com.intellij.execution.RunManager
 import com.intellij.execution.ui.TogglePopupAction
 import com.intellij.openapi.actionSystem.ActionGroup
+import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -86,16 +88,21 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
 
         val devices = model.buildableDevices(root)
 
-        // The popup is also where a device is acquired, not only where one is picked — the same
-        // shape Flutter's device selector uses, where "Open iOS Simulator" sits below the list.
-        // Without it the empty state is a dead end at exactly the moment the user is looking.
-        val acquire = Acquire(project)
+        // The popup is also where the list is changed, not only where one of it is picked — the
+        // same shape Flutter's device selector uses, where "Open iOS Simulator" sits below the
+        // list. Without it the empty state is a dead end at exactly the moment the user is looking.
+        // Which door to offer is [DeviceMenu]'s question: this list comes from the manifest, so
+        // Edit Products is always the way to change it and the SDK Manager only sometimes is.
+        val offer = DeviceMenu.of(
+            declared = model.manifest(root)?.devices.orEmpty(),
+            installed = ConnectIqSdkService.getInstance().devices(),
+            buildable = devices,
+        )
+        val trailing = listOfNotNull(EditProducts(), Acquire(project).takeIf { offer.sdkManager })
 
         if (devices.isEmpty()) {
             return DefaultActionGroup(
-                Unavailable("No devices are downloaded"),
-                Separator.getInstance(),
-                acquire,
+                listOf(Unavailable(offer.empty ?: "No devices are downloaded"), Separator.getInstance()) + trailing,
             )
         }
 
@@ -121,12 +128,12 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
 
         // One section needs no heading; two do.
         if (watch.isEmpty()) {
-            return DefaultActionGroup(simulator + listOf(Separator.getInstance(), acquire))
+            return DefaultActionGroup(simulator + listOf(Separator.getInstance()) + trailing)
         }
         return DefaultActionGroup(
             listOf(Separator("Simulator")) + simulator +
                 listOf(Separator("Connected watch")) + watch +
-                listOf(Separator.getInstance(), acquire),
+                listOf(Separator.getInstance()) + trailing,
         )
     }
 
@@ -187,6 +194,20 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
     }
 
     /** The way out of an empty list: the application that downloads devices. */
+    /**
+     * The door to the list itself, which is the manifest.
+     *
+     * Delegating to the registered action rather than opening the dialog here: it is the same
+     * command as Build | Edit Products, and two entry points that construct the dialog separately
+     * are two places to fix when it changes.
+     */
+    private class EditProducts : AnAction("Edit Products...") {
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+        override fun actionPerformed(event: AnActionEvent) {
+            ActionManager.getInstance().getAction("MonkeyC.EditProducts")?.actionPerformed(event)
+        }
+    }
+
     private class Acquire(private val project: Project) : AnAction(OpenSdkManager.label()) {
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
         override fun actionPerformed(event: AnActionEvent) = OpenSdkManager.invoke(project)
