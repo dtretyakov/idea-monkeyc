@@ -58,15 +58,31 @@ class EditProductsAction : AnAction() {
         // A watch that only runs watch faces has no business in a data field's product list. Offering
         // it is the reported behaviour of Garmin's own wizard, and the manifest it writes then fails
         // to build for a device the developer was invited to tick.
-        val eligible = newEnough.filter { it.supports(appType) }
+        val offered = newEnough.filter { it.supports(appType) }
         val selected = model.manifest(root)?.devices.orEmpty().toSet()
+        // Whatever the manifest already declares stays in the table, fit or not: Save writes the
+        // ticks as the whole product list, so a device filtered out here is a device silently
+        // deleted from the manifest by an edit that had nothing to do with it.
+        val eligible = (offered + installed.filter { it.id in selected }).distinctBy { it.id }
+        // And the ones no profile was ever downloaded for, which the table cannot build a row from
+        // and would otherwise drop just as quietly.
+        val undownloaded = selected.filterNot { id -> installed.any { it.id == id } }
 
         val dialog = ProductsDialog(
             project,
             eligible,
             selected,
-            EmptyReason.of(installed.size, newEnough.size, eligible.size, minimum, appType),
+            // Counted together: a table holding nothing but rows the manifest declares is still a
+            // table, and replacing it with "no devices are downloaded" is how Save loses them.
+            EmptyReason.of(
+                installed.size,
+                newEnough.size,
+                eligible.size + undownloaded.size,
+                minimum,
+                appType,
+            ),
             appType,
+            undownloaded = undownloaded,
         )
         if (!dialog.showAndGet()) return
 
@@ -171,9 +187,10 @@ internal class ProductsDialog(
     selected: Set<String>,
     private val empty: EmptyReason,
     private val appType: String?,
+    undownloaded: List<String> = emptyList(),
 ) : DialogWrapper(project) {
 
-    private val products = ProductTable(devices, selected, appType)
+    private val products = ProductTable(devices, selected, appType, undownloaded)
     private val summary = JBLabel()
 
     init {
@@ -192,7 +209,11 @@ internal class ProductsDialog(
      * which is the one that actually constrains it.
      */
     private fun refreshSummary() {
-        summary.text = DeviceSelectionSummary.of(products.selectedDevices(), appType) ?: "Nothing selected"
+        summary.text = DeviceSelectionSummary.of(
+            products.selectedDevices(),
+            appType,
+            products.selected().size,
+        ) ?: "Nothing selected"
     }
 
     override fun createCenterPanel(): JComponent = panel {
@@ -208,9 +229,10 @@ internal class ProductsDialog(
                 row { cell(summary) }
                 row {
                     comment(
-                        "Only devices downloaded with the SDK Manager that support the manifest's " +
-                            "minimum API level and can run this kind of app are listed. Sort by " +
-                            "Memory to find the device the app has to fit inside.",
+                        "Devices downloaded with the SDK Manager that support the manifest's " +
+                            "minimum API level and can run this kind of app, plus whatever the " +
+                            "manifest already declares. Sort by Memory to find the device the " +
+                            "app has to fit inside.",
                     )
                 }
             }

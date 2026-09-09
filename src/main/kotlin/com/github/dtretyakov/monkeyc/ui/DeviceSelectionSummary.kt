@@ -32,12 +32,21 @@ object DeviceSelectionSummary {
      * Each clause is dropped when the data cannot support it rather than shown as a zero: a
      * profile that does not say how many colours a screen has should not be reported as having
      * none.
+     *
+     * [selected] is the devices whose profiles this machine actually has; [total] is how many are
+     * ticked. They differ when the manifest declares a device the SDK Manager never downloaded,
+     * and every clause but the count has to be computed without it — a device we know nothing
+     * about is not a device we know has no touchscreen.
      */
-    fun of(selected: List<ConnectIqDevice>, manifestAppType: String?): String? {
-        if (selected.isEmpty()) return null
+    fun of(
+        selected: List<ConnectIqDevice>,
+        manifestAppType: String?,
+        total: Int = selected.size,
+    ): String? {
+        if (total == 0) return null
 
         val parts = buildList {
-            add("${selected.size} selected")
+            add("$total selected")
             families(selected)?.let { add(it) }
             memory(selected, manifestAppType)?.let { add(it) }
             withoutTouch(selected)?.let { add(it) }

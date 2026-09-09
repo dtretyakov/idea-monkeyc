@@ -98,7 +98,15 @@ class ProductTable(
         onChanged()
     }
 
-    fun selectedDevices(): List<ConnectIqDevice> = rows.filter { it.selected }.map { it.device }
+    /**
+     * The ticked devices we have profiles for.
+     *
+     * A placeholder row is deliberately left out: its `ConnectIqDevice` carries defaults, not
+     * facts, and anything read off it would be asserted about a device this machine has never
+     * seen — "1 without touch" for a watch that may well have one. [selected] is the count.
+     */
+    fun selectedDevices(): List<ConnectIqDevice> =
+        rows.filter { it.selected && it.downloaded }.map { it.device }
 
     /** Ticks or unticks everything currently shown, which is what the bulk buttons act on. */
     fun setAll(matching: (ConnectIqDevice) -> Boolean, value: Boolean) {

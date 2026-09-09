@@ -251,11 +251,17 @@ internal class ManifestForm(
         products.onChanged = {
             val ids = products.selected()
             edit { model -> model.setDevices(ids) }
-            productSummary.text = DeviceSelectionSummary.of(products.selectedDevices(), manifest.appType)
-                ?: PRODUCTS_HELP
+            productSummary.text =
+                DeviceSelectionSummary.of(products.selectedDevices(), manifest.appType, ids.size)
+                    ?: PRODUCTS_HELP
             tabs.setTitleAt(PRODUCTS_TAB, "Products  ${ids.size}")
         }
-        productSummary.text = DeviceSelectionSummary.of(products.selectedDevices(), manifest.appType) ?: PRODUCTS_HELP
+        productSummary.text =
+            DeviceSelectionSummary.of(
+                products.selectedDevices(),
+                manifest.appType,
+                products.selected().size,
+            ) ?: PRODUCTS_HELP
         tabs.addTab(
             "Products  ${manifest.devices.size}",
             products.panel(

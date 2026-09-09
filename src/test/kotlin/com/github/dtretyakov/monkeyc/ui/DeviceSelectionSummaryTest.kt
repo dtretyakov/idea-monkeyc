@@ -119,4 +119,30 @@ class DeviceSelectionSummaryTest {
 
         assertTrue(line == "1 selected", line)
     }
+
+    @Test
+    fun `a device with no profile is counted, and nothing else is claimed about it`() {
+        // The manifest declares two watches and only one of them was ever downloaded. The count
+        // has to include both — it is the size of the product list — while every other clause is
+        // computed from the one profile there is. Saying "1 without touch" of a device this
+        // machine has never seen is asserting a default as a fact.
+        val known = listOf(device("venu2", touch = true))
+
+        val line = DeviceSelectionSummary.of(known, "watch-app", total = 2)!!
+
+        assertTrue(line.startsWith("2 selected"), line)
+        assertTrue(!line.contains("without touch"), line)
+    }
+
+    @Test
+    fun `only devices with no profile at all still says how many there are`() {
+        val line = DeviceSelectionSummary.of(emptyList(), "watch-app", total = 3)!!
+
+        assertTrue(line == "3 selected", line)
+    }
+
+    @Test
+    fun `nothing ticked at all still says nothing`() {
+        assertNull(DeviceSelectionSummary.of(emptyList(), "watch-app", total = 0))
+    }
 }
