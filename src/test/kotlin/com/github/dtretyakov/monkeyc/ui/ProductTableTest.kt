@@ -15,14 +15,14 @@ import org.junit.jupiter.api.Test
  */
 class ProductTableTest {
 
-    private fun device(id: String, touch: Boolean = true) = ConnectIqDevice(
+    private fun device(id: String, touch: Boolean = true, memory: Long = 65_536L) = ConnectIqDevice(
         id = id,
         displayName = id,
         group = null,
         family = "round-240x240",
         isTouch = touch,
         sdkVersion = null,
-        memoryLimits = mapOf("watchApp" to 65_536L),
+        memoryLimits = mapOf("watchApp" to memory),
     )
 
     @Test
@@ -57,5 +57,33 @@ class ProductTableTest {
         )!!
         assertTrue(line.startsWith("2 selected"), line)
         assertTrue(!line.contains("without touch"), line)
+    }
+
+    @Test
+    fun `sorting by memory puts the device the app has to fit inside at the top`() {
+        // The whole argument for a table over a list of checkboxes, and the one the manifest form
+        // and the Marketplace listing both make out loud. A table whose headers do not sort is a
+        // list of checkboxes with columns.
+        val table = ProductTable(
+            devices = listOf(
+                device("roomy", memory = 1024L * 1024),
+                device("tight", memory = 64L * 1024),
+                device("middling", memory = 256L * 1024),
+            ),
+            selected = emptySet(),
+            appType = "watch-app",
+        )
+        val sorter = table.table.rowSorter!!
+
+        sorter.toggleSortOrder(MEMORY_COLUMN)
+
+        val order = (0 until table.table.rowCount)
+            .map { table.model.getItem(table.table.convertRowIndexToModel(it)).device.id }
+        assertEquals(listOf("tight", "middling", "roomy"), order)
+    }
+
+    private companion object {
+        /** Checkbox, Device, Screen, Colours, Panel, Input, Memory. */
+        const val MEMORY_COLUMN = 6
     }
 }
