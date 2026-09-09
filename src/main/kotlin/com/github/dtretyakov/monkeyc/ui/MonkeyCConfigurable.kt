@@ -90,9 +90,13 @@ class MonkeyCConfigurable(private val project: Project) :
                         // The manager goes in the sentence under the control rather than beside
                         // it: it is where more SDKs and devices come from, which is a remark about
                         // the line above and not a second thing to do to it.
+                        // `<a>` without an href: the platform refuses `<a href=''>` outright —
+                        // "empty href like <a href=''> is denied" — and threw a UiDslException
+                        // every time this page was built, which is every time a project window
+                        // opens.
                         .comment(
                             "${status(ConnectIqEnvironment.Concern.DEVICES)}. " +
-                                "<a href=''>${OpenSdkManager.label()}</a>",
+                                "<a>${OpenSdkManager.label()}</a>",
                             action = HyperlinkEventAction { OpenSdkManager.invoke(project) },
                         )
                     // Stays beside the control, because it acts on it: nothing the manager changes

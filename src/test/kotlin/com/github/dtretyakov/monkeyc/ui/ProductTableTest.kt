@@ -82,8 +82,20 @@ class ProductTableTest {
         assertEquals(listOf("tight", "middling", "roomy"), order)
     }
 
+    @Test
+    fun `the table can be made narrower than the widths it would prefer`() {
+        // `ColumnInfo.getWidth` sets a column's minimum as well as its preferred width, so the
+        // widths declared for these seven columns added up to a table that refused to be narrower
+        // than about 900 pixels. In an editor narrower than that the last column — Memory, the one
+        // worth having — was cut off by the edge rather than squeezed, and nothing said so.
+        val table = ProductTable(listOf(device("venu2")), emptySet(), "watch-app")
+
+        val minimum = table.table.columnModel.columns.toList().sumOf { it.minWidth }
+        assertTrue(minimum < 400, "the table cannot be drawn narrower than $minimum px")
+    }
+
     private companion object {
-        /** Checkbox, Device, ID, Screen, Colours, Panel, Input, Memory. */
+        /** Checkbox, ID, Device, Screen, Colours, Panel, Input, Memory. */
         const val MEMORY_COLUMN = 7
     }
 }

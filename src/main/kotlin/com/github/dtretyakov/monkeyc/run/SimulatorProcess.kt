@@ -5,6 +5,7 @@ import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.OSProcessHandler
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessListener
+import com.intellij.util.io.BaseOutputReader
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
@@ -80,7 +81,13 @@ class SimulatorProcess : Disposable {
             .withWorkingDirectory(sdk.simulatorExecutable.parent)
 
         return runCatching {
-            val handle = OSProcessHandler(command)
+            // A GUI application that says almost nothing: the platform's default reader polls it
+            // and then warns in the log that it has seen no output for a long time, on every run.
+            // The warning names its own remedy, which is this.
+            val handle = object : OSProcessHandler(command) {
+                override fun readerOptions(): BaseOutputReader.Options =
+                    BaseOutputReader.Options.forMostlySilentProcess()
+            }
             val log = Tail()
             val entry = Started(handle, log)
             handle.addProcessListener(

@@ -53,8 +53,8 @@ class ProductTable(
     val model: ListTableModel<Row> = ListTableModel(
         arrayOf(
             checkbox(),
-            device(),
             id(),
+            device(),
             text("Screen", 150) { it.screen },
             text("Colours", 80) { it.bitsPerPixel?.let { bits -> "$bits-bit" }.orEmpty() },
             text("Panel", 80) { it.displayType.orEmpty() },
@@ -67,9 +67,17 @@ class ProductTable(
     val table: TableView<Row> = TableView(model).apply {
         setShowGrid(false)
         rowSelectionAllowed = true
-        // Sorted by name to begin with, because that is how someone looks for a watch they own.
-        // Every other order is one click away, and ordering by memory is the interesting one.
-        rowSorter?.toggleSortOrder(NAME_COLUMN)
+        // Sorted by id to begin with, which is the first column and how someone looks for a watch
+        // they own. Every other order is one click away, and ordering by memory is the interesting
+        // one.
+        rowSorter?.toggleSortOrder(ID_COLUMN)
+
+        // `ColumnInfo.getWidth` sets the minimum as well as the preferred width, so the widths
+        // declared below added up to a table that could not be narrower than 900 pixels — and in
+        // an editor narrower than that, the last column was simply cut off by the edge rather than
+        // squeezed. Memory is the last column and the most interesting one. The preferred widths
+        // stay; the minimums come down to something every column can survive.
+        columnModel.columns.toList().drop(1).forEach { it.minWidth = MIN_WIDTH }
     }
 
     fun selected(): List<String> = rows.filter { it.selected }.map { it.device.id }
@@ -231,10 +239,14 @@ class ProductTable(
             memoryLimits = emptyMap(),
         )
 
-        const val DEVICE_WIDTH = 190
-        const val ID_WIDTH = 140
+        const val DEVICE_WIDTH = 180
+        const val ID_WIDTH = 130
         const val CHECKBOX_WIDTH = 28
         const val MEMORY_WIDTH = 90
-        const val NAME_COLUMN = 1
+        /** ID is the first column after the checkbox, and the order the table opens in. */
+        const val ID_COLUMN = 1
+
+        /** Small enough that every column survives a narrow editor rather than being clipped. */
+        const val MIN_WIDTH = 40
     }
 }
