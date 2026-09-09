@@ -1,7 +1,6 @@
 package com.github.dtretyakov.monkeyc.run
 
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
-import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.run.test.MonkeyCTestMessages
 import com.intellij.execution.ExecutionException
 import com.intellij.execution.process.OSProcessHandler
@@ -10,7 +9,6 @@ import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.process.ProcessOutputTypes
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
@@ -39,17 +37,6 @@ class MonkeyCLaunchProcessHandler(
     /** The app in the simulator, once there is one. Until then, there is nothing to kill. */
     @Volatile
     private var running: OSProcessHandler? = null
-
-    /**
-     * What was pushed, so Stop can close it.
-     *
-     * Killing `monkeydo` stops the program that pushed the app and relays its output, and leaves
-     * the app itself running in the simulator — which the next Debug then cannot get past. Kept
-     * here because by the time Stop arrives the launch is over and there is nothing else holding
-     * the sdk and the id.
-     */
-    @Volatile
-    private var pushed: PreparedLaunch? = null
 
     /**
      * Set when the user presses Stop.
@@ -148,10 +135,6 @@ class MonkeyCLaunchProcessHandler(
         val prepared = MonkeyCLaunch.prepare(project, options, ::report)
         if (stopped) return
 
-        // The simulator takes one app and its shell takes one client, so this run has to own both
-        // before it pushes. Whatever held them is ended here rather than raced.
-        SimulatorSession.getInstance().claim(prepared.sdk, applicationId(prepared), this)
-
         val java = ConnectIqSdkService.getInstance().java().toString()
 
         // The simulator leaks two pipes per run and stops accepting connections after a few dozen
@@ -191,7 +174,6 @@ class MonkeyCLaunchProcessHandler(
     private fun pushToSimulator(prepared: PreparedLaunch, java: String): Attempt {
         val handler = OSProcessHandler(MonkeyDo.commandLine(prepared, java, options))
         running = handler
-        pushed = prepared
         val errors = StringBuilder()
 
         handler.addProcessListener(
@@ -258,7 +240,6 @@ class MonkeyCLaunchProcessHandler(
         // run — and the handler stayed TERMINATING for ever while the IDE showed "Waiting for
         // process detach" and refused to close the project.
         if (isProcessTerminated) return
-        SimulatorSession.getInstance().release(this)
         // A test still open here never reported a result, and the tree would show it running for
         // ever; this is the last chance to close it.
         testMessages?.flush()
@@ -285,27 +266,8 @@ class MonkeyCLaunchProcessHandler(
             finish(1)
         } else {
             handler.destroyProcess()
-            closeAppInSimulator()
         }
     }
-
-    /**
-     * Tells the simulator to close the app, which killing `monkeydo` does not.
-     *
-     * On a pooled thread and not waited for: Stop has to feel immediate, and the run is over either
-     * way. Only for a simulator run — a build for the watch never pushed anything, and a test run
-     * ends by itself.
-     */
-    private fun closeAppInSimulator() {
-        val prepared = pushed ?: return
-        val id = applicationId(prepared) ?: return
-        SimulatorApp.closeLater(prepared.sdk, id)
-    }
-
-    /** The id the simulator knows this app by, which is what a close has to name. */
-    private fun applicationId(prepared: PreparedLaunch): String? =
-        runReadAction { MonkeyCProject.getInstance(project).manifest(prepared.root)?.applicationId }
-            ?.takeIf { it.isNotBlank() }
 
     override fun detachProcessImpl() {
         stopped = true
