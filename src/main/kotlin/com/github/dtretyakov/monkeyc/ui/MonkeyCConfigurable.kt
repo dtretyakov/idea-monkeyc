@@ -72,6 +72,14 @@ class MonkeyCConfigurable(private val project: Project) :
                         sdkService.refresh()
                         environment.refresh()
                     }
+                    // Beside Reload rather than only on a broken line. The SDK Manager is where
+                    // devices are downloaded and SDKs are upgraded — both ordinary things to do on
+                    // a machine where nothing is wrong — and until now it appeared only as a repair
+                    // link on a checklist item that had failed. Reload beside it because what the
+                    // manager changed is invisible to the IDE until something re-reads it.
+                    link(OpenSdkManager.label()) {
+                        OpenSdkManager.invoke(project)
+                    }
                 }
             }
 

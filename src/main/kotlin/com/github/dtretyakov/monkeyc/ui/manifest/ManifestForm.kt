@@ -4,6 +4,8 @@ import com.github.dtretyakov.monkeyc.project.ManifestFile
 import com.github.dtretyakov.monkeyc.sdk.AppType
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
 import com.github.dtretyakov.monkeyc.ui.DeviceSelectionSummary
+import com.github.dtretyakov.monkeyc.ui.EmptyReason
+import com.github.dtretyakov.monkeyc.ui.OpenSdkManager
 import com.github.dtretyakov.monkeyc.ui.ProductTable
 import com.github.dtretyakov.monkeyc.sdk.ProjectInfo
 import com.github.dtretyakov.monkeyc.ui.MonkeyCConfigurable
@@ -242,11 +244,12 @@ internal class ManifestForm(
         // given.
         val declared = manifest.devices.toSet()
         val runnable = devices.filter { it.supports(manifest.appType) || it.id in declared }
+        val undownloaded = manifest.devices.filterNot { id -> devices.any { it.id == id } }
         val products = ProductTable(
             devices = runnable,
             selected = declared,
             appType = manifest.appType,
-            undownloaded = manifest.devices.filterNot { id -> devices.any { it.id == id } },
+            undownloaded = undownloaded,
         )
         val productSummary = commentLabel(" ")
         products.onChanged = {
@@ -263,6 +266,23 @@ internal class ManifestForm(
                 manifest.appType,
                 products.selected().size,
             ) ?: PRODUCTS_HELP
+        // Why the list is empty, when it is. Garmin's own VS Code extension has this on file: the
+        // list silently omits a device whose API level is below the manifest's minimum, and the
+        // user is left looking at a shorter list with nothing to explain it. The two causes have
+        // different remedies, so the empty state has to say which one it is — and this is the only
+        // place products are edited now, so it has to say it here.
+        val emptiness = EmptyReason.of(
+            installed = devices.size,
+            newEnough = devices.count { device ->
+                val minimum = manifest.minSdkVersion
+                minimum == null || device.sdkVersion == null || device.sdkVersion >= minimum
+            },
+            // The rows the table will actually have, so "empty" here means what it looks like.
+            eligible = runnable.size + undownloaded.size,
+            minimum = manifest.minSdkVersion,
+            appType = manifest.appType,
+        )
+
         tabs.addTab(
             "Products  ${manifest.devices.size}",
             products.panel(
@@ -271,7 +291,12 @@ internal class ManifestForm(
                     "None" to { _: ConnectIqDevice -> false },
                     "Compatible" to { device: ConnectIqDevice -> device.id in compatibleDevices },
                 ),
-                footer = productSummary,
+                footer = if (emptiness == EmptyReason.None) productSummary else emptyNotice(emptiness),
+                // Downloading a device is an ordinary thing to want while looking at this list —
+                // it is where you find out the watch you meant to support is not on this machine —
+                // and the only door to it used to be a repair link on the settings page, which
+                // shows up only when something is already broken.
+                links = listOf(ActionLink(OpenSdkManager.label()) { OpenSdkManager.invoke(project) }),
             ),
         )
 
@@ -458,6 +483,30 @@ internal class ManifestForm(
  * is to say every time the manifest form is opened there. Three lines of JBLabel is the whole
  * of what the call did.
  */
+/**
+ * What to say in place of the summary when there is nothing in the table.
+ *
+ * The summary line answers "what does this selection cost", which is not a question an empty
+ * selection has. This answers the one it does have — why is it empty — in the words the remedy
+ * follows from.
+ */
+private fun emptyNotice(reason: EmptyReason): JBLabel = commentLabel(
+    when (reason) {
+        EmptyReason.None -> ""
+        EmptyReason.NothingDownloaded ->
+            "No devices are downloaded. A Connect IQ app is built for a device, so there is " +
+                "nothing to choose from yet."
+
+        is EmptyReason.AllBelowMinimum ->
+            "None of the ${reason.installed} downloaded devices supports API level ${reason.minimum}, " +
+                "which is the minimum this manifest asks for. Lower it above, or download a newer device."
+
+        is EmptyReason.NoneRunsThisKind ->
+            "None of the ${reason.installed} downloaded devices runs a ${reason.appType}. Change the " +
+                "type above, or download a device that runs this one."
+    },
+)
+
 private fun commentLabel(text: String): JBLabel =
     JBLabel(text, UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER).apply {
         border = JBUI.Borders.emptyTop(4)

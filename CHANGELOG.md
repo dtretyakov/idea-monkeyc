@@ -98,7 +98,12 @@ First release.
   each one up on Garmin's website.
 - Under it, what a selection commits the project to: how many resource families have to be drawn
   and kept working, the smallest memory budget the code now has to fit, how many devices have no
-  touchscreen, and the poorest colour depth the artwork has to survive.
+  touchscreen, and the poorest colour depth the artwork has to survive. When there is nothing to
+  choose from, it says which of the two reasons it is — nothing downloaded, or nothing downloaded
+  that this manifest can use — because the remedies differ, and the SDK Manager is one click away
+  from the table and from the settings page rather than only from a checklist item that has failed.
+- Products are edited in one place. Build | Edit Products and the target chip both open the manifest
+  there rather than a dialog of their own.
 - The simulator is started as a child process rather than handed to the system's launcher, so the
   plugin knows when it dies, stops the one it started without searching the machine for it, and can
   quote what it printed when it refuses to come up. A simulator started elsewhere — the SDK Manager,
