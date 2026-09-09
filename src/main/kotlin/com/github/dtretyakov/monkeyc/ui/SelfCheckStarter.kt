@@ -9,6 +9,9 @@ import com.github.dtretyakov.monkeyc.lang.MonkeyCFileType
 import com.github.dtretyakov.monkeyc.lang.MssFileType
 import com.github.dtretyakov.monkeyc.lsp.MonkeyCLanguageServerFactory
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
+import com.intellij.ide.plugins.DynamicPlugins
+import com.intellij.ide.plugins.PluginManagerCore
+import com.intellij.openapi.extensions.PluginId
 import com.github.dtretyakov.monkeyc.run.MonkeyCRunConfigurationType
 import com.intellij.execution.configurations.ConfigurationTypeUtil
 import com.github.dtretyakov.monkeyc.navigation.ApiMirGotoClassContributor
@@ -124,6 +127,8 @@ class SelfCheckStarter : ModernApplicationStarter() {
             if (!sdk.hasLanguageServer) println("[self-check] this SDK has no LanguageServer.jar")
         }
 
+        reportUnloadability()
+
         problems.forEach { println("[self-check] PROBLEM: $it") }
         println(if (problems.isEmpty()) "[self-check] OK" else "[self-check] FAILED")
         exitProcess(if (problems.isEmpty()) 0 else 1)
@@ -138,6 +143,51 @@ class SelfCheckStarter : ModernApplicationStarter() {
      * barrel-shaped zip and mounts it. If the answer is no, every barrel in the tree is one
      * unreadable binary file and nothing anywhere says why.
      */
+    /**
+     * Whether the platform would let this plugin be unloaded without restarting the IDE.
+     *
+     * The platform's own verdict rather than a guess of ours: `checkCanUnloadWithoutRestart` is
+     * what the IDE consults before it tries, and it is what turns red the moment somebody adds an
+     * extension point that is not dynamic. That is the regression this guards — the answer today
+     * is yes, and it should keep being yes.
+     *
+     * A yes here does not promise the IDE will manage it. "Failed to unload modified plugins" can
+     * still appear afterwards, from a later step where the platform recomputes the plugin graph and
+     * finds the plugin still in it — which is what happens in the development sandbox, and happens
+     * to LSP4IJ beside us. So this reports and does not fail: what it can prove is ours to keep
+     * right, and what it cannot is not.
+     */
+    private fun reportUnloadability() {
+        val descriptor = PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID))
+        if (descriptor == null) {
+            println("[self-check] dynamic unload: the plugin descriptor could not be found")
+            return
+        }
+
+        // Reflectively, because the method takes a different parameter type in 2026.1 and calling
+        // it directly puts a NoSuchMethodError in the shipped jar for every user on that IDE — for
+        // the sake of a diagnostic that only ever runs from `runSelfCheck` on a developer's
+        // machine. The verifier catches exactly this, which is what `-PverifySince` is for.
+        //
+        // Boolean, and `true` is the good answer. Worth spelling out: the name reads like a method
+        // that returns the reason it cannot, so comparing the result to null compiles, is always
+        // false, and reports every plugin as unloadable-no.
+        val canUnload = runCatching {
+            DynamicPlugins::class.java
+                .methods
+                .first { it.name == "checkCanUnloadWithoutRestart" && it.parameterCount == 1 }
+                .invoke(DynamicPlugins, descriptor) as Boolean
+        }.getOrNull()
+
+        println(
+            when (canUnload) {
+                true -> "[self-check] dynamic unload: yes"
+                false -> "[self-check] dynamic unload: no, an extension point is not dynamic"
+                null -> "[self-check] dynamic unload: this IDE does not answer the question"
+            },
+        )
+    }
+
     private fun barrelProblems(): List<String> {
         val fileType = FileTypeManager.getInstance().getFileTypeByExtension("barrel")
         if (fileType !is ArchiveFileType) return listOf(".barrel is $fileType, expected an archive")
@@ -276,6 +326,9 @@ class SelfCheckStarter : ModernApplicationStarter() {
     }
 
     private companion object {
+        /** Must match `<id>` in plugin.xml; the descriptor is looked up by it. */
+        const val PLUGIN_ID = "com.github.dtretyakov.monkeyc"
+
         /** The command Garmin's server sends after completing a call; see plugin.xml. */
         const val FUNCTION_COMPLETION_COMMAND = "monkeyc.functionCompletion"
 

@@ -102,7 +102,11 @@ would rather install from disk than add a repository.
   gigabytes of IDE downloads; run it on a machine with the disk for it, not in CI.
 - `./gradlew runSelfCheck` — a headless IDE that starts the plugin and checks every extension it
   declares is really registered. A missing registration is silent at run time: the feature simply
-  never happens.
+  never happens. It also prints the platform's verdict on whether the plugin can be unloaded
+  without restarting the IDE; that should stay `yes`, and it turns to `no` the moment an extension
+  point that is not dynamic is added. A `yes` there does not stop the IDE showing "Failed to unload
+  modified plugins" in the development sandbox — that comes from a later step, and LSP4IJ hits it
+  too — but it does keep the half that is ours honest.
 
 Two things the verifier always reports, neither of which is a finding:
 

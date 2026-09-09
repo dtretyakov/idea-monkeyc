@@ -16,6 +16,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.actionSystem.Presentation
+import com.intellij.openapi.actionSystem.ex.ActionUtil
 import com.intellij.openapi.actionSystem.ex.CustomComponentAction
 import com.intellij.openapi.actionSystem.impl.ActionButtonWithText
 import com.intellij.openapi.application.ApplicationManager
@@ -204,7 +205,11 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
     private class EditProducts : AnAction("Edit Products...") {
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
         override fun actionPerformed(event: AnActionEvent) {
-            ActionManager.getInstance().getAction("MonkeyC.EditProducts")?.actionPerformed(event)
+            val products = ActionManager.getInstance().getAction("MonkeyC.EditProducts") ?: return
+            // Through the platform rather than by calling `actionPerformed`, which is annotated
+            // OverrideOnly: it is there to be implemented, not invoked, and calling it skips the
+            // update, the data context and the listeners that make an action an action.
+            ActionUtil.invokeAction(products, event.dataContext, event.place, null, null)
         }
     }
 
