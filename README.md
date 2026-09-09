@@ -148,3 +148,25 @@ run/test/  the test runner's output, turned into a test tree
 dap/       the debug adapter client
 ui/        settings, the device selector, export, the wizard, the manifest form, the self-check
 ```
+
+## Publishing
+
+Released to JetBrains Marketplace as **Monkey C**, from a tag:
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+The workflow builds, tests, verifies against both ends of the IDE range the plugin claims, signs,
+uploads and cuts a GitHub release with the same zip. A version with a `-beta.N` or `-eap.N` suffix
+goes to a channel of that name rather than to everybody. The parts that need an account or a
+secret — the certificate, the Marketplace token, the first upload — are in
+[PUBLISHING.md](PUBLISHING.md).
+
+## Licence
+
+MIT; see [LICENSE](LICENSE).
+
+Garmin, Connect IQ and Monkey C are trademarks of Garmin Ltd. or its subsidiaries. This is an
+independent project, not affiliated with or endorsed by Garmin, and it redistributes nothing of
+theirs: it finds the SDK the user installed and launches its programs.

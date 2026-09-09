@@ -9,7 +9,7 @@ import com.github.dtretyakov.monkeyc.ui.MonkeyCConfigurable
 import com.github.dtretyakov.monkeyc.ui.MonkeyCIcons
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.WriteAction
-import com.intellij.openapi.application.runReadActionBlocking
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.options.ShowSettingsUtil
@@ -77,7 +77,7 @@ class ConnectIqLibraries(private val project: Project) {
             // look at it; without this a freshly installed SDK has no VirtualFile at all.
             refreshSdkIntoVfs()
 
-            val after = runReadActionBlocking { libraries().flatMap { it.sourceRoots } }
+            val after = runReadAction { libraries().flatMap { it.sourceRoots } }
             if (before == after) return@executeOnPooledThread
 
             ApplicationManager.getApplication().invokeLater(

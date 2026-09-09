@@ -172,7 +172,9 @@ object MonkeyCBuildSession {
             null,
             // The Build window counts lines and columns from one; the compiler counts columns
             // from zero, and says nothing at all when it has no column.
-            FilePosition(file, (message.line ?: 1) - 1, message.column ?: 0),
+            // `toFile()`, because the constructor taking a `Path` is newer than the oldest IDE
+            // this plugin supports, and a build that reports one warning would die on it.
+            FilePosition(file.toFile(), (message.line ?: 1) - 1, message.column ?: 0),
         )
     }
 

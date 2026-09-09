@@ -54,7 +54,7 @@ jobs:
           path: build/distributions/*.zip
 
   verify:
-    name: Verify against the IDE it is built on
+    name: Verify against the IDEs it claims
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -71,6 +71,13 @@ jobs:
       # recommends is -PverifyRecommended, and does not fit on a runner's disk.
       - name: Verify plugin
         run: ./gradlew verifyPlugin
+
+      # The other end of the range. `sinceBuild` is a promise made to every user on an older IDE,
+      # and the code is compiled against the newest one — so this is the only thing that can tell
+      # us the promise is still true. Cheap enough to run on every push: one IDE, already the
+      # subject of the check above's cache.
+      - name: Verify against the oldest supported IDE
+        run: ./gradlew verifyPlugin -PverifySince
 
       - name: Keep the verification report
         if: always()

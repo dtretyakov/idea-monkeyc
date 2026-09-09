@@ -12,11 +12,11 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.ui.Messages
-import com.intellij.openapi.ui.panel.ComponentPanelBuilder
 import com.intellij.ui.CheckBoxList
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.SearchTextField
 import com.intellij.ui.components.ActionLink
+import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTabbedPane
 import com.intellij.ui.components.JBTextField
@@ -25,6 +25,7 @@ import com.intellij.ui.dsl.builder.COLUMNS_MEDIUM
 import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
@@ -247,7 +248,7 @@ internal class ManifestForm(
             appType = manifest.appType,
             undownloaded = manifest.devices.filterNot { id -> devices.any { it.id == id } },
         )
-        val productSummary = ComponentPanelBuilder.createCommentComponent(" ", true)
+        val productSummary = commentLabel(" ")
         products.onChanged = {
             val ids = products.selected()
             edit { model -> model.setDevices(ids) }
@@ -350,7 +351,7 @@ internal class ManifestForm(
             if (header.componentCount > 0) add(header, BorderLayout.NORTH)
 
             add(JBScrollPane(list), BorderLayout.CENTER)
-            footer = ComponentPanelBuilder.createCommentComponent(help, true)
+            footer = commentLabel(help)
             add(footer!!, BorderLayout.SOUTH)
         }
 
@@ -446,3 +447,20 @@ internal class ManifestForm(
         return known + unknown
     }
 }
+
+/**
+ * A line of explanation under a control, in the platform's comment style.
+ *
+ * Assembled here rather than taken from `ComponentPanelBuilder.createCommentComponent`, which
+ * is what it used to be. That class is deprecated, and it acquired a Kotlin companion object
+ * along the way — so a Kotlin caller compiled against the newest IDE binds to
+ * `Companion.createCommentComponent` and dies with a NoSuchFieldError on any older one, which
+ * is to say every time the manifest form is opened there. Three lines of JBLabel is the whole
+ * of what the call did.
+ */
+private fun commentLabel(text: String): JBLabel =
+    JBLabel(text, UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER).apply {
+        border = JBUI.Borders.emptyTop(4)
+        setAllowAutoWrapping(true)
+        setCopyable(true)
+    }

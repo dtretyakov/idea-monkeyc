@@ -1,3 +1,4 @@
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -10,7 +11,28 @@ plugins {
 }
 
 group = "com.github.dtretyakov.monkeyc"
-version = "0.1.0-SNAPSHOT"
+version = providers.gradleProperty("pluginVersion").get()
+
+/**
+ * The oldest IDE the plugin promises to run in, spelled as a version rather than a build number.
+ *
+ * It has to agree with `sinceBuild` below: that is the promise, and this is the IDE the promise is
+ * checked against. 2026.1 because that is what the verifier passes on, and no further back:
+ * `com.intellij.build.FilePosition`, `ComponentPanelBuilder`, `ProjectLevelVcsManager` and
+ * `runReadActionBlocking` all changed shape between 2025.2 and here, and `sinceBuild` said 252
+ * for a while — a promise that would have met a user on 2025.2 as a NoSuchMethodError the first
+ * time the compiler reported a warning.
+ */
+val OLDEST_SUPPORTED_IDE = "2026.1"
+
+/**
+ * The same fact as a build number, which is the only spelling `sinceBuild` accepts.
+ *
+ * Derived rather than written twice: the two drifting apart means the plugin promises one IDE and
+ * is checked against another, and nothing would say so.
+ */
+val OLDEST_SUPPORTED_BUILD =
+    OLDEST_SUPPORTED_IDE.split(".").let { (year, release) -> year.takeLast(2) + release }
 
 kotlin {
     jvmToolchain(21)
@@ -75,10 +97,18 @@ intellijPlatform {
             //
             //     ./gradlew verifyPlugin -PverifyRecommended
             //     ./gradlew verifyPlugin -PverifyAgainst=/path/to/idea-2026.2.2   (already unpacked)
+            //
+            // And the one the Marketplace will run whatever we do, because `sinceBuild` promises
+            // it: the oldest IDE the plugin claims to support. It is compiled against the newest,
+            // so nothing but this check can tell us the promise is true.
+            //
+            //     ./gradlew verifyPlugin -PverifySince
             val unpacked = providers.gradleProperty("verifyAgainst").orNull?.takeIf { it.isNotBlank() }
             when {
                 unpacked != null -> local(file(unpacked))
                 providers.gradleProperty("verifyRecommended").isPresent -> recommended()
+                providers.gradleProperty("verifySince").isPresent ->
+                    create(IntelliJPlatformType.IntellijIdeaUltimate, OLDEST_SUPPORTED_IDE)
                 // The IDE the plugin is already compiled against: nothing extra to download, so it
                 // fits on a runner's disk and reuses what the build step has cached.
                 else -> current()
@@ -88,7 +118,12 @@ intellijPlatform {
 
     pluginConfiguration {
         id = "com.github.dtretyakov.monkeyc"
-        name = "Monkey C (Garmin Connect IQ)"
+        // The Marketplace asks for one to four words and at most twenty characters, and it will
+        // not list a name that leans on someone else's trademark. "Monkey C (Garmin Connect IQ)"
+        // failed both: too long, and two of Garmin's marks in it. The language's name alone is how
+        // every other language plugin is named, and what the plugin is for is the description's
+        // job — which is where "Garmin Connect IQ" now says it, as a statement of compatibility.
+        name = "Monkey C"
         version = project.version.toString()
 
         // The top section of CHANGELOG.md, so the release notes are written once and in the place
@@ -96,10 +131,34 @@ intellijPlatform {
         changeNotes = provider { latestChangeNotes(file("CHANGELOG.md")) }
 
         ideaVersion {
-            sinceBuild = "252"
+            sinceBuild = OLDEST_SUPPORTED_BUILD
             // Deliberately open-ended: the plugin uses no unstable platform API,
             // and pinning it would break every IDE upgrade for no reason.
             untilBuild = provider { null }
+        }
+    }
+
+    /**
+     * The signature the IDE checks when the plugin is installed.
+     *
+     * Not required by the Marketplace, which will accept an unsigned upload and sign it with its
+     * own key. Done anyway, because an unsigned plugin installs behind a warning dialog, and the
+     * first thing a developer sees should not be a question about whether to trust it. The
+     * certificate is the author's and lives nowhere in this repository — see PUBLISHING.md.
+     */
+    signing {
+        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
+        privateKey = providers.environmentVariable("PRIVATE_KEY")
+        password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
+    }
+
+    publishing {
+        token = providers.environmentVariable("PUBLISH_TOKEN")
+        // A pre-release goes to a channel of its own, so it reaches the people who added that
+        // channel and nobody else. Garmin ships SDK betas and this plugin has to be able to
+        // follow them without every user waking up to an untested build.
+        channels = providers.gradleProperty("pluginVersion").map { version ->
+            listOf(version.substringAfter('-', "").substringBefore('.').ifEmpty { "default" })
         }
     }
 }

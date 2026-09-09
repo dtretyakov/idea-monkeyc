@@ -6,7 +6,7 @@ import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettingsListener
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.runReadActionBlocking
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import com.redhat.devtools.lsp4ij.LanguageServerManager
@@ -64,7 +64,7 @@ class MonkeyCServerLifecycle : ProjectActivity {
 
         // Asked here rather than at startup: a manifest can appear after the project is open, and
         // the answer then has to be the current one.
-        if (runReadActionBlocking { MonkeyCProject.getInstance(project).roots() }.isEmpty()) return
+        if (runReadAction { MonkeyCProject.getInstance(project).roots() }.isEmpty()) return
 
         manager.stop(
             MonkeyCLanguageServerFactory.SERVER_ID,

@@ -6,7 +6,7 @@ import com.github.dtretyakov.monkeyc.run.MonkeyCRunKind
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.application.runReadActionBlocking
+import com.intellij.openapi.application.runReadAction
 import java.nio.file.Path
 
 /**
@@ -22,7 +22,7 @@ abstract class BuildAction : AnAction() {
 
     override fun update(event: AnActionEvent) {
         val project = event.project
-        val root = project?.let { runReadActionBlocking { MonkeyCProject.getInstance(it).primaryRoot() } }
+        val root = project?.let { runReadAction { MonkeyCProject.getInstance(it).primaryRoot() } }
 
         // Hidden for a barrel: it has no app to build, and the Build menu's export item already
         // relabels itself to "Build Connect IQ Barrel" for that case.

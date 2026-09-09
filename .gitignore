@@ -7,3 +7,9 @@
 /out/
 *.iml
 /.idea/
+
+# The signing certificate and its key, if they are ever generated in the working directory.
+# Nothing here is meant to be committed; this is the backstop for a mistyped path.
+*.pem
+*.crt
+*.p12

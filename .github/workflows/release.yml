@@ -1,0 +1,100 @@
+# Publishing a release to JetBrains Marketplace.
+#
+# Triggered by a tag, so the thing that was tested is the thing that ships: the tag has to name the
+# version in gradle.properties, and the job refuses to publish if it does not. Everything the
+# ordinary build checks runs again here, because a release is the one build nobody re-runs.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # Publishing by hand, for the first upload — which the Marketplace requires to go through the
+  # web form anyway, and which this workflow therefore cannot do.
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: "Build and sign, but do not upload"
+        type: boolean
+        default: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, sign and publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: The tag and the version have to agree
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tagged="${GITHUB_REF_NAME#v}"
+          declared=$(grep -E '^pluginVersion=' gradle.properties | cut -d= -f2)
+          if [ "$tagged" != "$declared" ]; then
+            echo "Tag $GITHUB_REF_NAME says $tagged, gradle.properties says $declared." >&2
+            exit 1
+          fi
+
+      - name: Build and test
+        run: ./gradlew build
+
+      - name: Self-check
+        run: ./gradlew runSelfCheck
+
+      # Both ends of the range the plugin claims to support. The Marketplace runs this itself and
+      # holds the upload until it passes, so failing here costs minutes instead of a review cycle.
+      - name: Verify against the newest supported IDE
+        run: ./gradlew verifyPlugin
+
+      - name: Verify against the oldest supported IDE
+        run: ./gradlew verifyPlugin -PverifySince
+
+      - name: Sign
+        env:
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+        run: ./gradlew signPlugin verifyPluginSignature
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: plugin
+          path: build/distributions/*.zip
+
+      - name: Publish to JetBrains Marketplace
+        if: startsWith(github.ref, 'refs/tags/') && inputs.dryRun != true
+        env:
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+        run: ./gradlew publishPlugin
+
+      # The signed zip, where someone who does not want it from the Marketplace can find it: an
+      # install-from-disk is the whole of the beta story for anyone who will not add a channel.
+      # The signed one and not the plain one, because it is the artifact that installs without a
+      # dialog asking whether to trust it.
+      - name: GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease";; esac
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file <(awk '/^## /{n++} n==1' CHANGELOG.md) \
+            $prerelease \
+            build/distributions/*-signed.zip

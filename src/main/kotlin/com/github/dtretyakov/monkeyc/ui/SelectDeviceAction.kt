@@ -17,7 +17,7 @@ import com.intellij.openapi.actionSystem.Presentation
 import com.intellij.openapi.actionSystem.ex.CustomComponentAction
 import com.intellij.openapi.actionSystem.impl.ActionButtonWithText
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.runReadActionBlocking
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.ui.popup.Balloon
 import com.intellij.ui.GotItTooltip
@@ -60,7 +60,7 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
         // when the popup is actually opened.
         // Under a read action: `update` runs on a background thread, and the content roots this
         // walks are project model state, which may not be read without one.
-        val visible = project != null && runReadActionBlocking { MonkeyCProject.getInstance(project).primaryRoot() != null }
+        val visible = project != null && runReadAction { MonkeyCProject.getInstance(project).primaryRoot() != null }
         presentation.isEnabledAndVisible = visible
         if (!visible) return
 
@@ -82,7 +82,7 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
     override fun getActionGroup(e: AnActionEvent): ActionGroup? {
         val project = e.project ?: return null
         val model = MonkeyCProject.getInstance(project)
-        val root = runReadActionBlocking { model.primaryRoot() } ?: return null
+        val root = runReadAction { model.primaryRoot() } ?: return null
 
         val devices = model.buildableDevices(root)
 

@@ -1,5 +1,5 @@
 <idea-plugin>
-    <vendor url="https://github.com/dtretyakov">Dmitry Tretyakov</vendor>
+    <vendor email="dtretyakov@gmail.com" url="https://github.com/dtretyakov/idea-monkeyc">Dmitry Tretyakov</vendor>
 
     <description><![CDATA[
         Garmin Connect IQ development in IntelliJ IDEA: writing Monkey C, building, running in the
@@ -23,15 +23,41 @@
             <li>Syntax highlighting for <code>.mc</code>, <code>.jungle</code> and
                 <code>.mss</code>.</li>
         </ul>
-        <p>Requires the Connect IQ SDK, installed with Garmin's SDK Manager.</p>
+        <h3>Getting started</h3>
+        <ol>
+            <li>Install the Connect IQ SDK with Garmin's SDK Manager, and download at least one
+                device with it. The plugin finds the SDK on its own; nothing from Garmin is
+                bundled or redistributed.</li>
+            <li><b>New Project | Connect IQ</b>, or open a folder that already has a
+                <code>monkey.jungle</code> in it.</li>
+            <li>Generate a developer key in <b>Settings | Languages &amp; Frameworks |
+                Monkey C</b>, which is what signs every build.</li>
+            <li>Run it. The same settings page carries a setup checklist that names anything
+                still missing, and offers to fix it.</li>
+        </ol>
+        <p>
+            Code intelligence needs <a href="https://plugins.jetbrains.com/plugin/23257-lsp4ij">LSP4IJ</a>,
+            which the IDE installs with this plugin.
+        </p>
+        <p>
+            <em>Garmin, Connect IQ and Monkey C are trademarks of Garmin Ltd. or its subsidiaries,
+            used here only to say what this plugin works with. It is an independent project, not
+            affiliated with, endorsed by or supported by Garmin.</em>
+        </p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.redhat.devtools.lsp4ij</depends>
 
     <dependencies>
-        <!-- The test tree the Connect IQ test runner's output is turned into. -->
-        <module name="intellij.platform.testRunner"/>
+        <!--
+          The test tree the Connect IQ test runner's output is turned into.
+
+          `smRunner` alone. `testRunner` was declared beside it and is the module `smRunner` is
+          built on, but nothing here names a class from it directly — and it is not a module of its
+          own in every IDE this plugin supports, where an unresolvable mandatory dependency is not
+          a warning but a plugin that does not load at all.
+        -->
         <module name="intellij.platform.smRunner"/>
     </dependencies>
 

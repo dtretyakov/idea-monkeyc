@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0
 
 First release.
 
@@ -102,3 +102,5 @@ First release.
 - Stopping and restarting the Connect IQ simulator, and clearing the app data it keeps between
   runs — which is what makes an edited default in `properties.xml` take effect, since a value there
   applies only while the property does not yet exist.
+- Runs in IntelliJ IDEA 2026.1 and later, verified against both ends of that range on every push
+  rather than only against the one it is compiled with.

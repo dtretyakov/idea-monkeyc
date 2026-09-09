@@ -206,7 +206,11 @@ object ConnectIqEnvironment {
      */
     private fun isIgnored(project: Project, key: Path): Boolean? {
         val file = LocalFileSystem.getInstance().findFileByNioFile(key) ?: return null
-        if (!ProjectLevelVcsManager.getInstance(project).hasActiveVcss()) return null
+        // `getService` rather than `ProjectLevelVcsManager.getInstance`, which is what it does:
+        // the class gained a Kotlin companion object, so a Kotlin caller binds to
+        // `Companion.getInstance` and gets a NoSuchFieldError on any IDE that predates it.
+        val vcs = project.getService(ProjectLevelVcsManager::class.java) ?: return null
+        if (!vcs.hasActiveVcss()) return null
         return runCatching { ChangeListManager.getInstance(project).isIgnoredFile(file) }.getOrNull()
     }
 
