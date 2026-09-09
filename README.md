@@ -3,7 +3,7 @@
 Garmin Connect IQ development in IntelliJ IDEA: writing Monkey C, building, running in the Connect
 IQ simulator, and debugging — for watch faces, watch apps, data fields, widgets and barrels.
 
-<!-- docs/images/devices.png -->
+![The devices a project declares, sorted by the memory each one gives the app](docs/images/devices.png)
 
 ## Getting started
 
@@ -23,6 +23,8 @@ If a step is missing, the settings page says so on the control that fixes it: wh
 and how many devices came with it, which developer key is signing, whether this SDK even ships the
 language server.
 
+![The settings page: each prerequisite reported on the control that fixes it](docs/images/settings.png)
+
 ## What it does
 
 **Writing.** Completion over the whole Toybox API, diagnostics, go to definition, hover
@@ -38,13 +40,13 @@ sorting rather than by looking each one up on Garmin's website. Under it, what t
 you to: how many resource families have to be drawn, the smallest memory budget the code now has to
 fit, how many devices have no touchscreen, and the poorest colour depth the artwork has to survive.
 
-<!-- docs/images/manifest.png -->
-
 **Building and running.** Run configurations for the app, its unit tests, a build that runs nothing,
 an export to `.iq`, a barrel and a barrel's tests. Every build reports what it took of the target
 device's memory and what is left — a figure that ranges from 64 KB to 2304 KB across the devices
 Garmin ships, and is the constraint that shapes Connect IQ development. Compiler errors land in the
 Build tool window as something to click.
+
+![A Monkey C source file, and the app it builds running in the Connect IQ simulator](docs/images/simulator.png)
 
 **On the watch.** A build for the hardware rather than the simulator, with an offer to install the
 `.prg` over USB — over MTP for current devices, which appear under no volume at all, and as a file
