@@ -83,7 +83,7 @@ class MonkeyCConfigurable(private val project: Project) :
                 }
             }
 
-            group("SDK (this computer)") {
+            group("SDK (This Computer)") {
                 row("Location:") {
                     textFieldWithBrowseButton(
                         FileChooserDescriptorFactory.createSingleFolderDescriptor()
@@ -136,7 +136,7 @@ class MonkeyCConfigurable(private val project: Project) :
 
             group("Project") {
                 row {
-                    comment("Stored with the project, in <code>.idea/monkeyc.xml</code>.")
+                    comment("Stored with the project, in <code>.idea/monkeyc.xml</code>")
                 }
                 row("SDK:") {
                     comboBox(sdkChoices.labels)
@@ -180,7 +180,7 @@ class MonkeyCConfigurable(private val project: Project) :
                     )
                         .columns(COLUMNS_LARGE)
                         .bindText(settings::developerKeyPath)
-                        .comment("Leave empty to use the key the SDK Manager generated.")
+                        .comment("Leave empty to use the key the SDK Manager generated")
                         .validationOnApply { field ->
                             val given = field.text.trim().takeIf { it.isNotEmpty() }
                             given?.let { path ->
@@ -188,7 +188,7 @@ class MonkeyCConfigurable(private val project: Project) :
                             }
                         }
 
-                    button("Generate...") {
+                    button("Generate…") {
                         generateDeveloperKey(project)?.let { field.component.text = it.toString() }
                     }
                 }
@@ -209,7 +209,7 @@ class MonkeyCConfigurable(private val project: Project) :
                 }
             }.enabled(sdk != null)
 
-            group("Code intelligence") {
+            group("Code Intelligence") {
                 row {
                     checkBox("Analyse the project as it is edited")
                         .bindSelected(settings::liveAnalysis)
@@ -244,7 +244,7 @@ class MonkeyCConfigurable(private val project: Project) :
                 row {
                     checkBox("Report warnings")
                         .bindSelected(settings::compilerWarnings)
-                        .comment("Passes <code>-w</code> to the compiler and asks the server to publish warnings.")
+                        .comment("Passes <code>-w</code> to the compiler and asks the server to publish warnings")
                 }
                 row("Extra arguments:") {
                     textField()

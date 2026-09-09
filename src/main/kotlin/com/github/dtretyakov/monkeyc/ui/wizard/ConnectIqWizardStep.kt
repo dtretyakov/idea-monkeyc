@@ -95,7 +95,7 @@ class ConnectIqWizardStep(parent: NewProjectWizardStep) : AbstractNewProjectWiza
         builder.row("Minimum API level:") {
             comboBox(info.apiLevels.map { it.toString() }.reversed())
                 .bindItem({ apiLevel }, { apiLevel = it.orEmpty() })
-                .comment("The oldest Connect IQ version the app will run on.")
+                .comment("The oldest Connect IQ version the app will run on")
         }
 
         builder.row("Device:") {

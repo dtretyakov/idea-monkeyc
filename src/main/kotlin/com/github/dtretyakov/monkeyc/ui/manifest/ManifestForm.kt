@@ -122,7 +122,7 @@ internal class ManifestForm(
                 row("Module:") {
                     cell(attributeField("module", manifest.module, "Change Module Name"))
                         .align(AlignX.FILL)
-                        .comment("The name other projects import this barrel under.")
+                        .comment("The name other projects import this barrel under")
                 }
 
                 row("Version:") {
@@ -147,13 +147,13 @@ internal class ManifestForm(
                 row("Entry class:") {
                     cell(attributeField("entry", manifest.entry, "Change Entry Class"))
                         .align(AlignX.FILL)
-                        .comment("The class the device starts, which must exist in the source.")
+                        .comment("The class the device starts, which must exist in the source")
                 }
 
                 row("Display name:") {
                     cell(attributeField("name", manifest.displayName, "Change Display Name"))
                         .align(AlignX.FILL)
-                        .comment("Usually a resource, such as <code>@Strings.AppName</code>.")
+                        .comment("Usually a resource, such as <code>@Strings.AppName</code>")
                 }
 
                 row("Launcher icon:") {
@@ -173,7 +173,7 @@ internal class ManifestForm(
                         }
                     }
                     .enabled(levels.isNotEmpty())
-                    .comment("Devices older than this cannot install the app.")
+                    .comment("Devices older than this cannot install the app")
             }
 
             row(if (manifest.isBarrel) "Barrel ID:" else "Application ID:") {
@@ -184,7 +184,7 @@ internal class ManifestForm(
                     // Focus lands here when the tab opens: it is near the top, and typing into it
                     // does nothing. A text field that takes the first keystroke would not do.
                     .also { preferredFocusedComponent = it.component }
-                button("New ID...") { regenerateId() }
+                button("New ID") { regenerateId() }
                     .comment("The store knows this by its ID. A new one is a different thing to it.")
             }
         }
@@ -192,7 +192,7 @@ internal class ManifestForm(
         row {
             cell(lists())
                 .align(AlignX.FILL)
-                .comment("Everything here comes from the SDK: the devices it has downloaded, and what this kind of app may declare.")
+                .comment("Everything here comes from the SDK: the devices it has downloaded, and what this kind of app may declare")
         }
 
     }.apply { border = JBUI.Borders.empty(8) }
@@ -451,7 +451,7 @@ internal class ManifestForm(
 
     private companion object {
         /** Shown until a selection has something to say about itself. */
-        const val PRODUCTS_HELP = "A build produces one executable per device."
+        const val PRODUCTS_HELP = "A build produces one executable per device"
 
         /** Products is added first, so it is tab zero. */
         const val PRODUCTS_TAB = 0

@@ -73,10 +73,10 @@ class StopSimulatorAction : SimulatorAction() {
         val ours = SimulatorProcess.getInstance().owns(sdk)
         return when {
             Simulator.running(sdk.dataRoot).isEmpty() ->
-                "The Connect IQ simulator was not running." to NotificationType.INFORMATION
+                "The Connect IQ simulator was not running" to NotificationType.INFORMATION
 
             Simulator.stop(sdk) -> if (ours) {
-                "The Connect IQ simulator has been stopped." to NotificationType.INFORMATION
+                "The Connect IQ simulator has been stopped" to NotificationType.INFORMATION
             } else {
                 // Worth distinguishing: this one was started outside the IDE — from the SDK
                 // Manager, or by a previous session — and the developer may well want to know that
@@ -85,7 +85,7 @@ class StopSimulatorAction : SimulatorAction() {
                     NotificationType.INFORMATION
             }
 
-            else -> "The Connect IQ simulator did not stop." to NotificationType.WARNING
+            else -> "The Connect IQ simulator did not stop" to NotificationType.WARNING
         }
     }
 }
@@ -96,7 +96,7 @@ class RestartSimulatorAction : SimulatorAction() {
 
     override fun act(sdk: ConnectIqSdk): Pair<String, NotificationType> =
         if (Simulator.restart(sdk)) {
-            "The Connect IQ simulator has been restarted." to NotificationType.INFORMATION
+            "The Connect IQ simulator has been restarted" to NotificationType.INFORMATION
         } else {
             "The Connect IQ simulator did not come back. Start it from the SDK's bin directory." to
                 NotificationType.ERROR
@@ -121,10 +121,10 @@ class ClearSimulatorDataAction : SimulatorAction() {
 
     override fun act(sdk: ConnectIqSdk): Pair<String, NotificationType> {
         if (SimulatorStorage.deviceRoot() == null) {
-            return "The simulator has stored nothing yet on this machine." to NotificationType.INFORMATION
+            return "The simulator has stored nothing yet on this machine" to NotificationType.INFORMATION
         }
         if (!SimulatorStorage.hasPersistedData()) {
-            return "The simulator has no stored app data to clear." to NotificationType.INFORMATION
+            return "The simulator has no stored app data to clear" to NotificationType.INFORMATION
         }
 
         // Stopped first: the simulator holds this directory open, and clearing it underneath a
@@ -167,7 +167,7 @@ class ShowSimulatorLogAction : AnAction() {
             NotificationGroupManager.getInstance()
                 .getNotificationGroup("Monkey C")
                 .createNotification(
-                    "The Connect IQ simulator has printed nothing yet.",
+                    "The Connect IQ simulator has printed nothing yet",
                     NotificationType.INFORMATION,
                 )
                 .notify(project)

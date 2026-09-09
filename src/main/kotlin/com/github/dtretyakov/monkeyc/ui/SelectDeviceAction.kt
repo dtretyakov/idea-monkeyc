@@ -133,7 +133,7 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
         }
         return DefaultActionGroup(
             listOf(Separator("Simulator")) + simulator +
-                listOf(Separator("Connected watch")) + watch +
+                listOf(Separator("Connected Watch")) + watch +
                 listOf(Separator.getInstance()) + trailing,
         )
     }
@@ -202,7 +202,7 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
      * command as Build | Edit Products, and two entry points that construct the dialog separately
      * are two places to fix when it changes.
      */
-    private class EditProducts : AnAction("Edit Products...") {
+    private class EditProducts : AnAction("Edit Products") {
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
         override fun actionPerformed(event: AnActionEvent) {
             val products = ActionManager.getInstance().getAction("MonkeyC.EditProducts") ?: return

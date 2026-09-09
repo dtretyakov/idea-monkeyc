@@ -71,12 +71,12 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
             breakRow = row {
                 checkBox("Break at launch")
                     .bindSelected({ stopAtLaunch }, { stopAtLaunch = it })
-                    .comment("Debug only: stops before the app's first line.")
+                    .comment("Debug only: stops before the app's first line")
             }
             pairingRow = row {
                 checkBox("Native pairing")
                     .bindSelected({ runNativePairing }, { runNativePairing = it })
-                    .comment("Runs the app the way a device that ships it would.")
+                    .comment("Runs the app the way a device that ships it would")
             }
             pairedRow = row("Paired app:") {
                 textFieldWithBrowseButton(
@@ -97,7 +97,7 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
                 )
                     .align(AlignX.FILL)
                     .bindText({ outputPath }, { outputPath = it })
-                    .comment("Empty writes to the project's <code>out</code> directory.")
+                    .comment("Empty writes to the project's <code>out</code> directory")
             }
             row("Compiler arguments:") {
                 textField().align(AlignX.FILL).bindText({ compilerArguments }, { compilerArguments = it })

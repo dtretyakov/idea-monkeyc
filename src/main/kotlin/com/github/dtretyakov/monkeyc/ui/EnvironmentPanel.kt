@@ -56,7 +56,7 @@ class EnvironmentPanel(
             refresh()
         }
 
-        ConnectIqEnvironment.Fix.GENERATE_KEY -> ActionLink("Generate...") {
+        ConnectIqEnvironment.Fix.GENERATE_KEY -> ActionLink("Generate…") {
             onGenerateKey()
             refresh()
         }
