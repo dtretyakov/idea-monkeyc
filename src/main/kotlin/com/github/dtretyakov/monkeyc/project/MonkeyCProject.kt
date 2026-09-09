@@ -3,9 +3,11 @@ package com.github.dtretyakov.monkeyc.project
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.roots.ProjectRootManager
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import java.nio.file.Path
 import kotlin.io.path.exists
@@ -48,7 +50,26 @@ class MonkeyCProject(private val project: Project) {
     /** The single root when there is one, so commands that need "the project" have an answer. */
     fun primaryRoot(): Path? = roots().firstOrNull()
 
-    fun manifest(root: Path): ManifestFile? = ManifestFile.parse(manifestPath(root))
+    /**
+     * The manifest as it stands *now*, edits included.
+     *
+     * Read through the open document when there is one, and off disk when there is not. The form
+     * editor writes into the document — that is what an editor does — and nothing flushes it to
+     * disk until the frame loses focus or a run saves everything. Reading the file meant every
+     * answer derived from the manifest described the state before the last edit: the device chip
+     * offered products that had just been removed, the export preflight checked languages that had
+     * just been added, and the setup checklist reported problems that had just been fixed.
+     *
+     * `getCachedDocument` rather than `getDocument`: it returns one only if the file is already
+     * open, which is exactly when there can be unsaved text, and it neither loads the file nor
+     * needs a read action to answer.
+     */
+    fun manifest(root: Path): ManifestFile? {
+        val path = manifestPath(root)
+        val open = LocalFileSystem.getInstance().findFileByNioFile(path)
+            ?.let { FileDocumentManager.getInstance().getCachedDocument(it) }
+        return open?.let { ManifestFile.parseText(it.text) } ?: ManifestFile.parse(path)
+    }
 
     /**
      * The manifest the build will actually read.
