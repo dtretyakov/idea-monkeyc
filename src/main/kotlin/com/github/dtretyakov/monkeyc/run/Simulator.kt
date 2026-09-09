@@ -180,12 +180,13 @@ object Simulator {
     fun start(sdk: ConnectIqSdk, timeoutMillis: Long = 40_000): Boolean {
         if (isReady()) return true
 
-        if (SimulatorProcess.getInstance().start(sdk) && await(timeoutMillis)) return true
+        // The fallback answers one question only: could the program be launched at all. A process
+        // that started and is merely slow must not be answered by starting a second one — on Linux
+        // and Windows `openCommand` is the same binary, so that is two simulators, two devices, and
+        // a `.prg` pushed into whichever won the port.
+        if (SimulatorProcess.getInstance().start(sdk)) return await(timeoutMillis)
 
-        // Either it could not be launched at all, or it launched and never listened. Both are worth
-        // one attempt through LaunchServices before giving up on the user's behalf.
-        if (isReady()) return true
-        LOG.info("The simulator did not come up when executed directly; falling back to `open`.")
+        LOG.info("The simulator could not be executed directly; falling back to `open`.")
         runCatching { OSProcessHandler(openCommand(sdk)).startNotify() }
             .onFailure { LOG.warn("Could not open ${sdk.simulator}", it) }
 

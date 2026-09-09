@@ -49,9 +49,16 @@ class SimulatorProcessLiveTest {
 
         assumeTrueStarted(Simulator.start(sdk))
 
-        assertTrue(Simulator.stop(sdk), "the simulator did not stop")
-        assertFalse(SimulatorProcess.getInstance().owns(sdk), "it stopped but is still claimed as ours")
-        assertFalse(Simulator.isReady(), "the port is still answering after the simulator stopped")
+        try {
+            assertTrue(Simulator.stop(sdk), "the simulator did not stop")
+            assertFalse(SimulatorProcess.getInstance().owns(sdk), "it stopped but is still claimed as ours")
+            assertFalse(Simulator.isReady(), "the port is still answering after the simulator stopped")
+        } finally {
+            // The assertion above is that stopping works, so a failure here is a simulator left
+            // running — and every later test guards on none being up, which would turn one real
+            // failure into a suite that skips its way to green.
+            Simulator.stop(sdk)
+        }
     }
 
     /**

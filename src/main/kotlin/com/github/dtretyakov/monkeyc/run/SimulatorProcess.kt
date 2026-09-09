@@ -67,12 +67,22 @@ class SimulatorProcess : Disposable {
      * differently to the user.
      */
     fun start(sdk: ConnectIqSdk): Boolean {
+        // One we already have. Overwriting it would drop the handle while the process runs on,
+        // and `dispose` would then leave it holding the port after the IDE has gone — which is
+        // reachable, because a simulator can be alive and no longer accepting connections, and
+        // that is exactly when a caller tries to start another.
+        started[sdk.root]?.takeIf { !it.handle.isProcessTerminated }?.let {
+            LOG.info("A simulator for ${sdk.root} is already running as our child; not starting another")
+            return true
+        }
+
         val command = GeneralCommandLine(sdk.simulatorExecutable.toString())
             .withWorkingDirectory(sdk.simulatorExecutable.parent)
 
         return runCatching {
             val handle = OSProcessHandler(command)
             val log = Tail()
+            val entry = Started(handle, log)
             handle.addProcessListener(
                 object : ProcessListener {
                     override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
@@ -80,17 +90,22 @@ class SimulatorProcess : Disposable {
                     }
 
                     override fun processTerminated(event: ProcessEvent) {
-                        // Dropped rather than kept: a dead handle would make `owns` lie, and the
-                        // next start would think there was already a simulator of ours running.
-                        started.remove(sdk.root)
+                        // By identity, so a listener firing late cannot evict the entry of a
+                        // simulator started after it.
+                        started.remove(sdk.root, entry)
                         LOG.info("The Connect IQ simulator at ${sdk.root} exited with ${event.exitCode}")
                     }
                 },
             )
+            // Recorded before it is started. A program that exits at once — a half-downloaded SDK
+            // does that — otherwise fires `processTerminated` against a map that has no entry yet,
+            // and the dead handle is then written in behind it, leaving `log` handing a later
+            // failure the output of a different process.
+            started[sdk.root] = entry
             handle.startNotify()
-            started[sdk.root] = Started(handle, log)
             true
         }.getOrElse {
+            started.remove(sdk.root)
             LOG.warn("Could not start the Connect IQ simulator at ${sdk.simulatorExecutable}", it)
             false
         }
@@ -133,7 +148,12 @@ class SimulatorProcess : Disposable {
      */
     override fun dispose() {
         started.keys.toList().forEach { root ->
-            started.remove(root)?.handle?.destroyProcess()
+            val ours = started.remove(root) ?: return@forEach
+            ours.handle.destroyProcess()
+            // Waited for, because a child is not killed by the JVM exiting on Unix: signal it and
+            // return, and the simulator outlives the IDE holding the port the next window wants.
+            // Briefly, because shutdown is not the place to hang on a window that will not close.
+            ours.handle.waitFor(SHUTDOWN_MILLIS)
         }
     }
 
@@ -142,6 +162,9 @@ class SimulatorProcess : Disposable {
 
         /** Enough to explain a crash, small enough to forget about. */
         private const val LIMIT = 16 * 1024
+
+        /** How long shutdown waits for the simulator to go before letting the IDE finish. */
+        private const val SHUTDOWN_MILLIS = 3_000L
 
         /**
          * Outside an IDE there is no service container, and one is not needed.
