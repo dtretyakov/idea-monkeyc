@@ -1,5 +1,6 @@
 package com.github.dtretyakov.monkeyc.ui
 
+import com.github.dtretyakov.monkeyc.project.ConnectIqEnvironment
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
 import com.github.dtretyakov.monkeyc.project.DebugLogLevel
@@ -48,18 +49,17 @@ class MonkeyCConfigurable(private val project: Project) :
         val sdkService = ConnectIqSdkService.getInstance()
 
         val sdk = sdkService.sdk
-        // Kept apart on purpose: an empty device list means one thing when there is a project to
-        // read the manifest from and quite another when there is not, and the page used to give
-        // the same advice — go and download devices — for both.
-        val root = model.primaryRoot()
-        val devices = root?.let { model.buildableDevices(it) }.orEmpty()
-        val target = DeviceChoices(devices)
-        val sdkChoices = SdkChoices(ConnectIqSdk.installed(), settings.sdkPath)
+        val sdkChoices = SdkChoices(ConnectIqSdk.installed(), settings.sdkPath, ConnectIqSdk.detect()?.root)
 
         lateinit var environment: EnvironmentPanel
 
         return panel {
-            group("Setup") {
+            // Collapsed when there is nothing wrong, and it usually is. A checklist of six green
+            // ticks at the top of a settings page is a paragraph of reassurance in the place where
+            // the controls should be — it earns the room only while something is missing, which is
+            // exactly when it opens itself and says how many.
+            val problems = ConnectIqEnvironment.check(project).count { it.status != ConnectIqEnvironment.Status.READY }
+            collapsibleGroup(if (problems == 0) "Setup" else "Setup  —  $problems to fix") {
                 row {
                     // The whole checklist rather than a one-line summary: the six things that have
                     // to be in place are met one at a time by a newcomer, and meeting them one at a
@@ -72,18 +72,16 @@ class MonkeyCConfigurable(private val project: Project) :
                         sdkService.refresh()
                         environment.refresh()
                     }
-                    // Beside Reload rather than only on a broken line. The SDK Manager is where
-                    // devices are downloaded and SDKs are upgraded — both ordinary things to do on
-                    // a machine where nothing is wrong — and until now it appeared only as a repair
-                    // link on a checklist item that had failed. Reload beside it because what the
-                    // manager changed is invisible to the IDE until something re-reads it.
-                    link(OpenSdkManager.label()) {
-                        OpenSdkManager.invoke(project)
-                    }
                 }
-            }
+            }.apply { expanded = problems > 0 }
 
             group("SDK (This Computer)") {
+                row {
+                    // Beside the SDK rather than beside Reload. Reload re-reads what is already
+                    // here; this is how more of it arrives — SDKs and the devices they hold both
+                    // come from the manager, and neither is visible to the IDE until a re-read.
+                    link(OpenSdkManager.label()) { OpenSdkManager.invoke(project) }
+                }
                 row("Location:") {
                     textFieldWithBrowseButton(
                         FileChooserDescriptorFactory.createSingleFolderDescriptor()
@@ -145,32 +143,10 @@ class MonkeyCConfigurable(private val project: Project) :
                             { settings.sdkPath = sdkChoices.pathFor(it) },
                         )
                         .comment(
-                            "Which SDK this project builds with. <b>${SdkChoices.FOLLOW}</b> means " +
-                                "whichever the SDK Manager has made current, which changes under you " +
-                                "when it updates. Pinning one keeps a shipped app building the way it " +
-                                "shipped.",
-                        )
-                }
-                row("Target device:") {
-                    comboBox(target.labels)
-                        .bindItem(
-                            { target.labelFor(settings.targetDevice) },
-                            { settings.targetDevice = target.idFor(it) },
-                        )
-                        .enabled(devices.isNotEmpty())
-                        .comment(
-                            when {
-                                root == null ->
-                                    "No Connect IQ project is open, so there is no manifest to read " +
-                                        "the devices from."
-
-                                devices.isEmpty() ->
-                                    "None of the devices this project declares is downloaded. " +
-                                        "Get them with the SDK Manager."
-
-                                else ->
-                                    "What Build and Run target. A run configuration can name a different one."
-                            },
+                            "Which SDK this project builds with. <b>${SdkChoices.FOLLOW}</b> is the " +
+                                "one the SDK Manager has made current, and it changes when the " +
+                                "manager updates. Pinning one keeps a shipped app building the way " +
+                                "it shipped.",
                         )
                 }
                 row("Developer key:") {
@@ -301,7 +277,7 @@ class MonkeyCConfigurable(private val project: Project) :
      * Manager" would make it look as though nobody had pinned anything, and the next save would
      * throw their choice away.
      */
-    internal class SdkChoices(installed: List<Path>, pinned: String) {
+    internal class SdkChoices(installed: List<Path>, pinned: String, current: Path? = null) {
         private val byLabel = installed.associateBy { it.name } +
             (
                 pinned.trim()
@@ -310,15 +286,34 @@ class MonkeyCConfigurable(private val project: Project) :
                     ?: emptyMap()
                 )
 
-        val labels: List<String> = listOf(FOLLOW) + byLabel.keys
+        /**
+         * The first entry names the SDK it currently resolves to, when that is known.
+         *
+         * "Current SDK" alone is a promise about the future; "Current SDK (connectiq-sdk-mac-9.2.0)"
+         * also answers the question the user actually has, which is what they are about to build
+         * with today.
+         */
+        val labels: List<String> = listOf(followLabel(current)) + byLabel.keys
 
         fun labelFor(path: String): String =
-            byLabel.entries.firstOrNull { it.value.toString() == path.trim() }?.key ?: FOLLOW
+            byLabel.entries.firstOrNull { it.value.toString() == path.trim() }?.key ?: labels.first()
 
         fun pathFor(label: String?): String = byLabel[label]?.toString().orEmpty()
 
         companion object {
-            const val FOLLOW = "Follow the SDK Manager"
+            /**
+             * Garmin's own name for it, not ours.
+             *
+             * The SDK Manager calls the SDK it has made active the "Current SDK", and writes it to
+             * `current-sdk.cfg`. This used to read "Follow the SDK Manager", which describes what
+             * the plugin does about it and leaves the user to work out that the two are the same
+             * thing. Borrowing the vocabulary of the tool the user already has open costs nothing
+             * and removes the translation step.
+             */
+            const val FOLLOW = "Current SDK"
+
+            fun followLabel(current: Path?): String =
+                current?.let { "$FOLLOW  (${it.name})" } ?: FOLLOW
         }
     }
 
@@ -328,18 +323,4 @@ class MonkeyCConfigurable(private val project: Project) :
      * The setting stores the id, so the two have to be mapped back and forth — and an unset device
      * is a value of its own rather than a blank line.
      */
-    private class DeviceChoices(devices: List<ConnectIqDevice>) {
-        private val byLabel = devices.associateBy { "${it.displayName}  (${it.id})" }
-
-        val labels: List<String> = listOf(NOT_SET) + byLabel.keys
-
-        fun labelFor(id: String): String =
-            byLabel.entries.firstOrNull { it.value.id == id }?.key ?: NOT_SET
-
-        fun idFor(label: String?): String = byLabel[label]?.id.orEmpty()
-
-        private companion object {
-            const val NOT_SET = "Not set"
-        }
-    }
 }

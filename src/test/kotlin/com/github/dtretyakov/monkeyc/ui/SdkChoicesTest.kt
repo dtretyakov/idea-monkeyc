@@ -53,4 +53,27 @@ class SdkChoicesTest {
 
         assertEquals(3, choices.labels.size, "two SDKs plus following the manager")
     }
+
+    @Test
+    fun `the current SDK is named, because that is the question the user has`() {
+        // "Current SDK" alone is a promise about the future. Which one it is today is what someone
+        // opening this combo is actually asking, and the SDK Manager knows it — so it is shown.
+        val choices = MonkeyCConfigurable.SdkChoices(
+            installed,
+            pinned = "",
+            current = Path.of("/Sdks/connectiq-sdk-mac-9.2.0"),
+        )
+
+        assertEquals("Current SDK  (connectiq-sdk-mac-9.2.0)", choices.labels.first())
+        // Still the entry an empty pin maps to, name or no name.
+        assertEquals(choices.labels.first(), choices.labelFor(""))
+        assertEquals("", choices.pathFor(choices.labels.first()))
+    }
+
+    @Test
+    fun `with no current SDK it is the bare name, not a dangling bracket`() {
+        val choices = MonkeyCConfigurable.SdkChoices(installed, pinned = "", current = null)
+
+        assertEquals("Current SDK", choices.labels.first())
+    }
 }

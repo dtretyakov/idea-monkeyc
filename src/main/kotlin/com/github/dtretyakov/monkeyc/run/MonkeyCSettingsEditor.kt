@@ -53,10 +53,7 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
                             forDevice = choices.onWatchFor(label)
                         },
                     )
-                    .comment(
-                        "Pins this configuration to one target. Otherwise it follows the one chosen " +
-                            "beside the Run button.",
-                    )
+                    .comment("Overrides the target chosen beside Run")
             }
             testRow = row("Tests:") {
                 textField()
@@ -170,7 +167,16 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
         fun onWatchFor(label: String?): Boolean = label != null && watch.containsKey(label)
 
         private companion object {
-            const val FOLLOW_SELECTION = "Whatever is selected beside Run"
+            /**
+             * What the configuration does when it names no target of its own.
+             *
+             * "Project default" rather than a description of the mechanism: the chip beside Run
+             * writes the project's target, so this *is* the project default, and the platform
+             * already uses that wording wherever a configuration can fall back to a project-wide
+             * choice. It replaces "Whatever is selected beside Run", which was both informal and
+             * an explanation of plumbing standing in for the name of a state.
+             */
+            const val FOLLOW_SELECTION = "Project default"
         }
     }
 }

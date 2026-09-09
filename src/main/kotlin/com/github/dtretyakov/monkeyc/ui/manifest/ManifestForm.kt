@@ -194,6 +194,13 @@ internal class ManifestForm(
                 .align(AlignX.FILL)
                 .comment("Everything here comes from the SDK: the devices it has downloaded, and what this kind of app may declare")
         }
+        row {
+            // Under the sentence it answers. It was briefly in the row of All / None / Compatible,
+            // which is a row of filters over the table — three links that move ticks — and this
+            // one launches another application. Reading them as four of a kind is the mistake that
+            // placement invites.
+            link(OpenSdkManager.label()) { OpenSdkManager.invoke(project) }
+        }
 
     }.apply { border = JBUI.Borders.empty(8) }
 
@@ -292,11 +299,6 @@ internal class ManifestForm(
                     "Compatible" to { device: ConnectIqDevice -> device.id in compatibleDevices },
                 ),
                 footer = if (emptiness == EmptyReason.None) productSummary else emptyNotice(emptiness),
-                // Downloading a device is an ordinary thing to want while looking at this list —
-                // it is where you find out the watch you meant to support is not on this machine —
-                // and the only door to it used to be a repair link on the settings page, which
-                // shows up only when something is already broken.
-                links = listOf(ActionLink(OpenSdkManager.label()) { OpenSdkManager.invoke(project) }),
             ),
         )
 

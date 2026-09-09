@@ -178,28 +178,15 @@ class ProductTable(
      * Laid out the way the neighbouring lists already are, so the Products tab does not look like
      * a different application from the Permissions one beside it.
      */
-    fun panel(
-        actions: List<Pair<String, (ConnectIqDevice) -> Boolean>>,
-        footer: JComponent,
-        /**
-         * Links that do something other than tick boxes, shown on the same row.
-         *
-         * The SDK Manager is the one this exists for. Downloading another device is an ordinary
-         * thing to want while looking at this list — it is where you find out that the watch you
-         * meant to support is not on this machine — and until now the only door to it was a
-         * repair link on the settings page, which appears only when something is already wrong.
-         */
-        links: List<JComponent> = emptyList(),
-    ): JComponent =
+    fun panel(actions: List<Pair<String, (ConnectIqDevice) -> Boolean>>, footer: JComponent): JComponent =
         JPanel(BorderLayout(0, JBUI.scale(4))).apply {
             border = JBUI.Borders.empty(8)
 
             val header = JPanel(BorderLayout(0, JBUI.scale(4)))
-            if (actions.isNotEmpty() || links.isNotEmpty()) {
+            if (actions.isNotEmpty()) {
                 header.add(
                     JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0)).apply {
                         actions.forEach { (title, wanted) -> add(ActionLink(title) { setVisible(wanted) }) }
-                        links.forEach { add(it) }
                     },
                     BorderLayout.NORTH,
                 )
