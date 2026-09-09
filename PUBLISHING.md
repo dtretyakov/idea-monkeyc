@@ -57,7 +57,7 @@ PRIVATE_KEY_PASSWORD="…" \
 Upload `build/distributions/Monkey C-0.1.0-signed.zip` at
 <https://plugins.jetbrains.com/plugin/add>. Then, on the listing page:
 
-- **License** — MIT, matching `LICENSE`. The Marketplace will not publish without one.
+- **License** — Apache 2.0, matching `LICENSE`. The Marketplace will not publish without one.
 - **Tags** — the ones that decide whether anybody finds it. `Languages`, `Build`, `Debugging`,
   `Embedded Development`.
 - **Screenshots** — at least 1200×760. The four worth showing are the ones nothing else in the

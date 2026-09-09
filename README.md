@@ -165,7 +165,9 @@ secret — the certificate, the Marketplace token, the first upload — are in
 
 ## Licence
 
-MIT; see [LICENSE](LICENSE).
+Apache License 2.0; see [LICENSE](LICENSE). The same licence as the IntelliJ Platform this is
+compiled against and as JetBrains' own plugin template, and its clause 6 says what the paragraph
+below says anyway: a licence to the code is not a licence to anybody's name.
 
 Garmin, Connect IQ and Monkey C are trademarks of Garmin Ltd. or its subsidiaries. This is an
 independent project, not affiliated with or endorsed by Garmin, and it redistributes nothing of
