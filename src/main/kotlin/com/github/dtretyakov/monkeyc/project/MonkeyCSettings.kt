@@ -9,6 +9,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.util.messages.Topic
 import com.intellij.util.xmlb.XmlSerializerUtil
+import com.intellij.util.xmlb.annotations.Transient
 
 /**
  * Per-project Connect IQ settings.
@@ -113,15 +114,28 @@ class MonkeyCSettings : PersistentStateComponent<MonkeyCSettings> {
      */
     var rootsConfigured: Boolean = false
 
+    // Derived, every one of them, and therefore none of them is state. `getState` returns `this`,
+    // so the serializer walks every public getter on this class and writes what it finds — a
+    // computed property included. `target` taught us what that costs: it was written as an empty
+    // <MonkeyCTarget/> and could not be read back, because the class it names has required
+    // constructor parameters. The whole component then failed to load, which does not fail
+    // loudly — it silently restores defaults, and two of the fields here are what stops an export
+    // going out under the wrong key or the wrong application id.
+    @get:Transient
     val typeCheck: TypeCheckLevel get() = TypeCheckLevel.of(typeCheckLevel)
+
+    @get:Transient
     val optimization: OptimizationLevel get() = OptimizationLevel.of(optimizationLevel)
+
+    @get:Transient
     val debugLog: DebugLogLevel get() = DebugLogLevel.of(debugLogLevel)
 
     override fun getState(): MonkeyCSettings = this
 
     override fun loadState(state: MonkeyCSettings) = XmlSerializerUtil.copyBean(state, this)
 
-    /** What the toolbar says, or null when nothing has been chosen yet. */
+    /** What the toolbar says, or null when nothing has been chosen yet. Derived; see above. */
+    @get:Transient
     val target: MonkeyCTarget?
         get() = targetDevice.takeIf { it.isNotEmpty() }?.let {
             MonkeyCTarget(it, if (targetOnWatch) MonkeyCTarget.Destination.WATCH else MonkeyCTarget.Destination.SIMULATOR)
