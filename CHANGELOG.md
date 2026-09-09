@@ -65,6 +65,10 @@ First release.
   mechanism invites by asking you to edit the id and edit it back.
 - A device the manifest declares but the SDK Manager never downloaded is named before the build
   starts, rather than reported by the compiler as a device it cannot find.
+- One Connect IQ session at a time, because the simulator runs one app and its shell takes one
+  client. A second launch — another run configuration, or a debug beside a run — ends the first
+  rather than fighting it for the same simulator, which is the bargain the IDE already offers for a
+  configuration that cannot run twice.
 - Stop stops the app, not just the program that pushed it. The app used to go on running in the
   simulator after the Run window went red, which the next Debug could not get past — it failed to
   connect while the previous app's output was still arriving in the new console.

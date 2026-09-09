@@ -3,14 +3,17 @@ package com.github.dtretyakov.monkeyc.dap
 import com.github.dtretyakov.monkeyc.lang.MonkeyCFileType
 import com.github.dtretyakov.monkeyc.lsp.SdkServerCommands
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
+import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.project.ProjectLayout
 import com.github.dtretyakov.monkeyc.run.MonkeyCLaunch
 import com.github.dtretyakov.monkeyc.run.Simulator
 import com.github.dtretyakov.monkeyc.run.MonkeyCRunOptions
 import com.github.dtretyakov.monkeyc.run.PreparedLaunch
 import com.github.dtretyakov.monkeyc.run.SimulatorApp
+import com.github.dtretyakov.monkeyc.run.SimulatorSession
 import com.intellij.execution.ExecutionException
 import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.openapi.application.runReadAction
 import com.intellij.execution.configurations.RunConfigurationOptions
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessHandler
@@ -63,9 +66,6 @@ class MonkeyCDebugAdapterDescriptor(
         prepared = ProgressManager.getInstance().runProcessWithProgressSynchronously<PreparedLaunch, ExecutionException>(
             {
                 val indicator = ProgressManager.getInstance().progressIndicator
-                // Same reason as the run path: a close from the last Stop must land before this
-                // session pushes anything, or it lands on this session instead.
-                SimulatorApp.awaitClose()
                 MonkeyCLaunch.prepare(environment.project, monkeyCOptions) { step ->
                     indicator?.text = step
                 }
@@ -87,11 +87,28 @@ class MonkeyCDebugAdapterDescriptor(
         // `.prg` from another fails in ways that read as a broken debugger.
         val sdk = prepared.sdk
 
-        return startServer(
+        val adapter = startServer(
             GeneralCommandLine(SdkServerCommands.debugAdapter(sdk, ConnectIqSdkService.getInstance().java()))
                 .withWorkingDirectory(prepared.root),
-        ).also { watchForAWedgedSimulator(it) }
+        )
+        watchForAWedgedSimulator(adapter)
+
+        // A debug session is one more claimant on a simulator that admits one: whatever was
+        // running there is ended before the adapter pushes, and given up again when it exits.
+        val session = SimulatorSession.getInstance()
+        session.claim(sdk, applicationId(), adapter)
+        adapter.addProcessListener(
+            object : ProcessListener {
+                override fun processTerminated(event: ProcessEvent) = session.release(adapter)
+            },
+        )
+        return adapter
     }
+
+    /** The id the simulator knows this app by, so the session can close it when it is taken over. */
+    private fun applicationId(): String? = runReadAction {
+        MonkeyCProject.getInstance(environment.project).manifest(prepared.root)?.applicationId
+    }?.takeIf { it.isNotBlank() }
 
     /**
      * Turns the adapter's least helpful sentence into something to act on.

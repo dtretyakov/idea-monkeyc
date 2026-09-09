@@ -148,6 +148,10 @@ class MonkeyCLaunchProcessHandler(
         val prepared = MonkeyCLaunch.prepare(project, options, ::report)
         if (stopped) return
 
+        // The simulator takes one app and its shell takes one client, so this run has to own both
+        // before it pushes. Whatever held them is ended here rather than raced.
+        SimulatorSession.getInstance().claim(prepared.sdk, applicationId(prepared), this)
+
         val java = ConnectIqSdkService.getInstance().java().toString()
 
         // The simulator leaks two pipes per run and stops accepting connections after a few dozen
@@ -185,11 +189,6 @@ class MonkeyCLaunchProcessHandler(
      * leave them wondering why a run took twice as long.
      */
     private fun pushToSimulator(prepared: PreparedLaunch, java: String): Attempt {
-        // A close from the previous Stop may still be on its way. It names the same app, so
-        // overtaking it means pushing an app and having it closed a second later by a message
-        // meant for its predecessor.
-        SimulatorApp.awaitClose()
-
         val handler = OSProcessHandler(MonkeyDo.commandLine(prepared, java, options))
         running = handler
         pushed = prepared
@@ -259,6 +258,7 @@ class MonkeyCLaunchProcessHandler(
         // run — and the handler stayed TERMINATING for ever while the IDE showed "Waiting for
         // process detach" and refused to close the project.
         if (isProcessTerminated) return
+        SimulatorSession.getInstance().release(this)
         // A test still open here never reported a result, and the tree would show it running for
         // ever; this is the last chance to close it.
         testMessages?.flush()
@@ -298,11 +298,14 @@ class MonkeyCLaunchProcessHandler(
      */
     private fun closeAppInSimulator() {
         val prepared = pushed ?: return
-        val id = runReadAction { MonkeyCProject.getInstance(project).manifest(prepared.root)?.applicationId }
-            ?.takeIf { it.isNotBlank() } ?: return
-
+        val id = applicationId(prepared) ?: return
         SimulatorApp.closeLater(prepared.sdk, id)
     }
+
+    /** The id the simulator knows this app by, which is what a close has to name. */
+    private fun applicationId(prepared: PreparedLaunch): String? =
+        runReadAction { MonkeyCProject.getInstance(project).manifest(prepared.root)?.applicationId }
+            ?.takeIf { it.isNotBlank() }
 
     override fun detachProcessImpl() {
         stopped = true
