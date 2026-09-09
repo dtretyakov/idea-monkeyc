@@ -26,6 +26,7 @@ import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
+import com.intellij.ui.dsl.builder.HyperlinkEventAction
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.builder.toNullableProperty
 import java.nio.file.Path
@@ -56,7 +57,15 @@ class MonkeyCConfigurable(private val project: Project) :
         fun status(concern: ConnectIqEnvironment.Concern): String =
             ConnectIqEnvironment.of(environment, concern)?.detail.orEmpty()
 
-        val sdkChoices = SdkChoices(ConnectIqSdk.installed(), settings.sdkPath, ConnectIqSdk.detect()?.root)
+        // Read once, when the page opens: a version is a small file, and the alternative is
+        // reading it again on every repaint of a combo.
+        val versions = ConnectIqSdk.installed().associateWith { ConnectIqSdk.at(it).version?.toString() }
+        val sdkChoices = SdkChoices(
+            installed = ConnectIqSdk.installed(),
+            pinned = settings.sdkPath,
+            current = ConnectIqSdk.detect()?.root,
+            version = { versions[it] ?: ConnectIqSdk.at(it).version?.toString() },
+        )
 
         return panel {
             group("Connect IQ") {
@@ -65,7 +74,7 @@ class MonkeyCConfigurable(private val project: Project) :
                 // the SDK" twice and left the user to work out which one won. The combo answers it
                 // once: the manager's current one, any of the installed ones, or one chosen from
                 // disk — which is how the platform's own JDK combo is built.
-                row("Connect IQ:") {
+                row("SDK:") {
                     comboBox(sdkChoices.labels)
                         .bindItem(
                             { sdkChoices.labelFor(settings.sdkPath) },
@@ -77,9 +86,16 @@ class MonkeyCConfigurable(private val project: Project) :
                                 }
                             },
                         )
-                        .comment(status(ConnectIqEnvironment.Concern.DEVICES))
-                    link(OpenSdkManager.label()) { OpenSdkManager.invoke(project) }
-                    // Nothing the manager changes reaches the IDE until something re-reads.
+                        // The manager goes in the sentence under the control rather than beside
+                        // it: it is where more SDKs and devices come from, which is a remark about
+                        // the line above and not a second thing to do to it.
+                        .comment(
+                            "${status(ConnectIqEnvironment.Concern.DEVICES)}. " +
+                                "<a href=''>${OpenSdkManager.label()}</a>",
+                            action = HyperlinkEventAction { OpenSdkManager.invoke(project) },
+                        )
+                    // Stays beside the control, because it acts on it: nothing the manager changes
+                    // reaches the IDE until something re-reads.
                     button("Reload") { sdkService.refresh() }
                 }
                 row("Developer key:") {
@@ -234,8 +250,19 @@ class MonkeyCConfigurable(private val project: Project) :
      * Manager" would make it look as though nobody had pinned anything, and the next save would
      * throw their choice away.
      */
-    internal class SdkChoices(installed: List<Path>, pinned: String, current: Path? = null) {
-        private val byLabel = installed.associateBy { it.name } +
+    internal class SdkChoices(
+        installed: List<Path>,
+        pinned: String,
+        current: Path? = null,
+        /**
+         * The version in an SDK's `bin/version.txt`, or null when it cannot be read.
+         *
+         * Passed in rather than read here so this stays a rule that can be tested without an SDK
+         * on disk — and so the settings page reads each file once, when it opens.
+         */
+        version: (Path) -> String? = { null },
+    ) {
+        private val byLabel = installed.associateBy { describe(it, version(it), installed, version) } +
             (
                 pinned.trim()
                     .takeIf { it.isNotEmpty() && installed.none { sdk -> sdk.toString() == it } }
@@ -250,7 +277,7 @@ class MonkeyCConfigurable(private val project: Project) :
          * also answers the question the user actually has, which is what they are about to build
          * with today.
          */
-        val labels: List<String> = listOf(followLabel(current)) + byLabel.keys + ADD
+        val labels: List<String> = listOf(followLabel(current, version)) + byLabel.keys + ADD
 
         fun labelFor(path: String): String =
             byLabel.entries.firstOrNull { it.value.toString() == path.trim() }?.key ?: labels.first()
@@ -278,8 +305,24 @@ class MonkeyCConfigurable(private val project: Project) :
              */
             const val ADD = "Add SDK…"
 
-            fun followLabel(current: Path?): String =
-                current?.let { "$FOLLOW  (${it.name})" } ?: FOLLOW
+            /**
+             * A version number, because that is what anyone comparing two SDKs is comparing.
+             *
+             * The directory name is what this used to show — `connectiq-sdk-mac-9.2.0-2026-06-09-
+             * 92a1605b2` — which is the version with a date, a platform and a build hash wrapped
+             * around it, and in a combo of that width the version is the part that gets truncated
+             * away. Falls back to the directory name when there is no `version.txt` to read, and
+             * keeps it alongside when two SDKs report the same version, so the list never has two
+             * entries the map cannot tell apart.
+             */
+            fun describe(sdk: Path, version: String?, all: List<Path>, versionOf: (Path) -> String?): String {
+                if (version == null) return sdk.name
+                val sameVersion = all.count { versionOf(it) == version } > 1
+                return if (sameVersion) "$version  (${sdk.name})" else version
+            }
+
+            fun followLabel(current: Path?, version: (Path) -> String? = { null }): String =
+                current?.let { "$FOLLOW  (${version(it) ?: it.name})" } ?: FOLLOW
         }
     }
 

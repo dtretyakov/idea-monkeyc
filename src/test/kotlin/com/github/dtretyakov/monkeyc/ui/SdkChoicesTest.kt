@@ -77,4 +77,36 @@ class SdkChoicesTest {
 
         assertEquals("Current SDK", choices.labels.first())
     }
+
+    @Test
+    fun `an SDK reads as its version, because that is what anyone is comparing`() {
+        // The directory name is the version with a date, a platform and a build hash around it —
+        // and in a combo the width of a settings row, the version is the part truncated away.
+        val choices = MonkeyCConfigurable.SdkChoices(
+            installed,
+            pinned = "",
+            current = installed.first(),
+            version = { mapOf(installed[0] to "9.2.0", installed[1] to "9.1.0")[it] },
+        )
+
+        assertEquals("Current SDK  (9.2.0)", choices.labels.first())
+        assertTrue(choices.labels.contains("9.1.0"), choices.labels.toString())
+        assertEquals(installed[1].toString(), choices.pathFor("9.1.0"))
+    }
+
+    @Test
+    fun `two SDKs reporting one version keep their directory names, so the list stays distinct`() {
+        val choices = MonkeyCConfigurable.SdkChoices(installed, pinned = "", version = { "9.2.0" })
+
+        val entries = choices.labels.filter { it != MonkeyCConfigurable.SdkChoices.ADD && !it.startsWith("Current") }
+        assertEquals(2, entries.toSet().size, "labels collided: $entries")
+        assertEquals(installed[0].toString(), choices.pathFor("9.2.0  (${installed[0].fileName})"))
+    }
+
+    @Test
+    fun `an SDK with no version file still reads as something`() {
+        val choices = MonkeyCConfigurable.SdkChoices(installed, pinned = "", version = { null })
+
+        assertTrue(choices.labels.contains(installed[0].fileName.toString()), choices.labels.toString())
+    }
 }

@@ -156,8 +156,12 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
      * are prefixed rather than grouped, because a combo box has no headings.
      */
     private class DeviceChoices(devices: List<com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice>) {
-        private val simulator = devices.associateBy { "Simulator:  ${it.displayName}  (${it.id})" }
-        private val watch = devices.associateBy { "Watch:  ${it.displayName}  (${it.id})" }
+        // The id, not the display name. The id is what the compiler takes, what the manifest
+        // holds, and what the chip beside Run already shows — while the display name is "Venu® 2",
+        // whose trademark sign is noise and whose length is what a combo this wide truncates
+        // first, leaving "Simulator: Venu® 2 …" and no way to tell 2 from 2S or 2 Plus.
+        private val simulator = devices.associateBy { "Simulator:  ${it.id}" }
+        private val watch = devices.associateBy { "Watch:  ${it.id}" }
 
         val labels: List<String> = listOf(FOLLOW_SELECTION) + simulator.keys + watch.keys
 
