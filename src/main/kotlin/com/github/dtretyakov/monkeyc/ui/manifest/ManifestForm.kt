@@ -193,14 +193,6 @@ internal class ManifestForm(
             cell(lists())
                 .align(AlignX.FILL)
         }
-        row {
-            // Under the sentence it answers. It was briefly in the row of All / None / Compatible,
-            // which is a row of filters over the table — three links that move ticks — and this
-            // one launches another application. Reading them as four of a kind is the mistake that
-            // placement invites.
-            link(OpenSdkManager.label()) { OpenSdkManager.invoke(project) }
-        }
-
     }.apply { border = JBUI.Borders.empty(8) }
 
     /**
@@ -297,7 +289,14 @@ internal class ManifestForm(
                     "None" to { _: ConnectIqDevice -> false },
                     "Compatible" to { device: ConnectIqDevice -> device.id in compatibleDevices },
                 ),
-                footer = if (emptiness == EmptyReason.None) productSummary else emptyNotice(emptiness),
+                // What the selection is, and where more of it comes from, on one line: the state
+                // on the left and the way to change it on the right. Under the Devices tab rather
+                // than under all three, because downloading a device has nothing to do with
+                // permissions or languages.
+                footer = footerWith(
+                    if (emptiness == EmptyReason.None) productSummary else emptyNotice(emptiness),
+                    ActionLink(OpenSdkManager.label()) { OpenSdkManager.invoke(project) },
+                ),
             ),
         )
 
@@ -507,6 +506,19 @@ private fun emptyNotice(reason: EmptyReason): JBLabel = commentLabel(
                 "type above, or download a device that runs this one."
     },
 )
+
+/**
+ * A footer row: what is true on the left, what to do about it on the right.
+ *
+ * Kept apart rather than folded into the summary text, because one is a statement and the other is
+ * a link, and a sentence with a link buried in it reads as neither.
+ */
+private fun footerWith(state: JComponent, action: JComponent): JComponent =
+    JPanel(BorderLayout()).apply {
+        isOpaque = false
+        add(state, BorderLayout.WEST)
+        add(action, BorderLayout.EAST)
+    }
 
 private fun commentLabel(text: String): JBLabel =
     JBLabel(text, UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER).apply {

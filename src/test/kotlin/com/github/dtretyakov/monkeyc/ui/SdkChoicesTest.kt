@@ -38,21 +38,27 @@ class SdkChoicesTest {
     }
 
     @Test
-    fun `a pin this machine does not have is kept, and marked`() {
+    fun `a pin this machine does not have reads as custom, and the list never claims its path`() {
+        // These settings are committed, so the path may be a colleague's. It used to get a label of
+        // its own marked "(not on this machine)"; it is Custom now, and the path is on screen in
+        // the field below instead of inside a label — the same information, somewhere it can be
+        // corrected.
         val choices = MonkeyCConfigurable.SdkChoices(installed, pinned = "/Sdks/connectiq-sdk-mac-7.4.3")
 
-        val label = choices.labelFor("/Sdks/connectiq-sdk-mac-7.4.3")
-        assertTrue(label.contains("not on this machine"), label)
-        assertTrue(choices.labels.contains(label), "it has to be selectable, or saving would discard it")
-        assertEquals("/Sdks/connectiq-sdk-mac-7.4.3", choices.pathFor(label))
+        assertEquals(MonkeyCConfigurable.SdkChoices.CUSTOM, choices.labelFor("/Sdks/connectiq-sdk-mac-7.4.3"))
+        assertTrue(choices.labels.contains(MonkeyCConfigurable.SdkChoices.CUSTOM), "it has to be selectable")
+        // Custom owns no path: the field does. A caller that wrote `pathFor` back on every
+        // selection would blank the pin the moment the combo was touched, which is why the page
+        // skips Custom when it saves.
+        assertEquals("", choices.pathFor(MonkeyCConfigurable.SdkChoices.CUSTOM))
     }
 
     @Test
     fun `every installed SDK is offered`() {
         val choices = MonkeyCConfigurable.SdkChoices(installed, pinned = "")
 
-        assertEquals(4, choices.labels.size, "two SDKs, the current one, and adding one from disk")
-        assertEquals(MonkeyCConfigurable.SdkChoices.ADD, choices.labels.last(), "adding one comes last")
+        assertEquals(4, choices.labels.size, "two SDKs, the current one, and custom")
+        assertEquals(MonkeyCConfigurable.SdkChoices.CUSTOM, choices.labels.last(), "custom comes last")
     }
 
     @Test
@@ -98,7 +104,7 @@ class SdkChoicesTest {
     fun `two SDKs reporting one version keep their directory names, so the list stays distinct`() {
         val choices = MonkeyCConfigurable.SdkChoices(installed, pinned = "", version = { "9.2.0" })
 
-        val entries = choices.labels.filter { it != MonkeyCConfigurable.SdkChoices.ADD && !it.startsWith("Current") }
+        val entries = choices.labels.filter { it != MonkeyCConfigurable.SdkChoices.CUSTOM && !it.startsWith("Current") }
         assertEquals(2, entries.toSet().size, "labels collided: $entries")
         assertEquals(installed[0].toString(), choices.pathFor("9.2.0  (${installed[0].fileName})"))
     }

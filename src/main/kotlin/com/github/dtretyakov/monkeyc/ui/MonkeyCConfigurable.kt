@@ -11,7 +11,6 @@ import com.github.dtretyakov.monkeyc.project.ProjectLayout
 import com.github.dtretyakov.monkeyc.project.TypeCheckLevel
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
 import com.github.dtretyakov.monkeyc.sdk.DeveloperKey
-import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.fileChooser.FileSaverDescriptor
@@ -27,6 +26,7 @@ import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.HyperlinkEventAction
+import com.intellij.ui.dsl.builder.Row
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.builder.toNullableProperty
 import java.nio.file.Path
@@ -72,16 +72,17 @@ class MonkeyCConfigurable(private val project: Project) :
                 // One SDK control, not two. There used to be a machine-wide path field in a group
                 // of its own and a project combo down here, which between them answered "where is
                 // the SDK" twice and left the user to work out which one won. The combo answers it
-                // once: the manager's current one, any of the installed ones, or one chosen from
-                // disk — which is how the platform's own JDK combo is built.
+                // once: the manager's current one, any of the installed ones, or Custom — which
+                // brings back a path field, for this project only, right underneath.
+                lateinit var location: Row
                 row("SDK:") {
-                    comboBox(sdkChoices.labels)
+                    val combo = comboBox(sdkChoices.labels)
                         .bindItem(
                             { sdkChoices.labelFor(settings.sdkPath) },
                             { chosen ->
-                                if (chosen == SdkChoices.ADD) {
-                                    addSdk()?.let { settings.sdkPath = it.toString() }
-                                } else {
+                                // Custom keeps whatever the field below holds; every other entry
+                                // owns the value outright.
+                                if (chosen != SdkChoices.CUSTOM) {
                                     settings.sdkPath = sdkChoices.pathFor(chosen)
                                 }
                             },
@@ -97,7 +98,36 @@ class MonkeyCConfigurable(private val project: Project) :
                     // Stays beside the control, because it acts on it: nothing the manager changes
                     // reaches the IDE until something re-reads.
                     button("Reload") { sdkService.refresh() }
+
+                    // Shown for Custom and hidden otherwise. A listener rather than the DSL's own
+                    // predicate helper, which this platform version does not have.
+                    combo.component.addActionListener {
+                        location.visible(combo.component.selectedItem == SdkChoices.CUSTOM)
+                    }
                 }
+                location = row("Location:") {
+                    textFieldWithBrowseButton(
+                        FileChooserDescriptorFactory.createSingleFolderDescriptor()
+                            .withTitle("Connect IQ SDK")
+                            .withDescription("The directory holding bin/"),
+                    )
+                        .columns(COLUMNS_LARGE)
+                        .bindText(settings::sdkPath)
+                        // Without this a typo is indistinguishable from having no SDK at all: every
+                        // surface says "No Connect IQ SDK found" and none of them says where it looked.
+                        .validationOnApply { field ->
+                            val given = field.text.trim().takeIf { it.isNotEmpty() }
+                            given?.let { path ->
+                                if (!Path.of(path).resolve("bin").exists()) {
+                                    error("No bin directory here, so this is not a Connect IQ SDK")
+                                } else {
+                                    null
+                                }
+                            }
+                        }
+                }
+                // The state the page opens in, before anything is chosen.
+                location.visible(sdkChoices.labelFor(settings.sdkPath) == SdkChoices.CUSTOM)
                 row("Developer key:") {
                     val field = textFieldWithBrowseButton(
                         FileChooserDescriptorFactory.createSingleFileDescriptor("der")
@@ -194,28 +224,6 @@ class MonkeyCConfigurable(private val project: Project) :
      * key in PKCS#8 DER and the JVM can write one — so this works on a machine with no openssl,
      * which on Windows is most of them.
      */
-    /**
-     * Picks an SDK directory that the manager does not have.
-     *
-     * Checked for `bin/` here rather than accepted and reported broken later: every surface then
-     * says "No Connect IQ SDK found" and none of them says where it looked.
-     */
-    private fun addSdk(): Path? {
-        val chooser = FileChooserDescriptorFactory.createSingleFolderDescriptor()
-            .withTitle("Connect IQ SDK")
-            .withDescription("The directory holding bin/")
-        val chosen = FileChooser.chooseFile(chooser, project, null)?.toNioPath() ?: return null
-
-        if (!chosen.resolve("bin").exists()) {
-            Messages.showErrorDialog(
-                project,
-                "There is no bin directory in ${chosen.fileName}, so it is not a Connect IQ SDK.",
-                "Not a Connect IQ SDK",
-            )
-            return null
-        }
-        return chosen
-    }
 
     private fun generateDeveloperKey(project: Project): Path? {
         val chosen = FileChooserFactory.getInstance()
@@ -262,13 +270,7 @@ class MonkeyCConfigurable(private val project: Project) :
          */
         version: (Path) -> String? = { null },
     ) {
-        private val byLabel = installed.associateBy { describe(it, version(it), installed, version) } +
-            (
-                pinned.trim()
-                    .takeIf { it.isNotEmpty() && installed.none { sdk -> sdk.toString() == it } }
-                    ?.let { mapOf("$it  (not on this machine)" to Path.of(it)) }
-                    ?: emptyMap()
-                )
+        private val byLabel = installed.associateBy { describe(it, version(it), installed, version) }
 
         /**
          * The first entry names the SDK it currently resolves to, when that is known.
@@ -277,10 +279,20 @@ class MonkeyCConfigurable(private val project: Project) :
          * also answers the question the user actually has, which is what they are about to build
          * with today.
          */
-        val labels: List<String> = listOf(followLabel(current, version)) + byLabel.keys + ADD
+        val labels: List<String> = listOf(followLabel(current, version)) + byLabel.keys + CUSTOM
 
-        fun labelFor(path: String): String =
-            byLabel.entries.firstOrNull { it.value.toString() == path.trim() }?.key ?: labels.first()
+        /**
+         * Empty follows the manager; a path we know is its own entry; anything else is Custom.
+         *
+         * A pin this machine does not have used to be its own label marked "(not on this machine)".
+         * It is Custom now, and the path is on screen in the field below rather than inside a
+         * label — same information, in a place it can be corrected.
+         */
+        fun labelFor(path: String): String {
+            val trimmed = path.trim()
+            if (trimmed.isEmpty()) return labels.first()
+            return byLabel.entries.firstOrNull { it.value.toString() == trimmed }?.key ?: CUSTOM
+        }
 
         fun pathFor(label: String?): String = byLabel[label]?.toString().orEmpty()
 
@@ -297,13 +309,14 @@ class MonkeyCConfigurable(private val project: Project) :
             const val FOLLOW = "Current SDK"
 
             /**
-             * An SDK the manager does not know about, chosen from disk.
+             * An SDK the manager does not know about — unpacked by hand, or a colleague's.
              *
-             * This is what the machine-wide path field used to be for — an SDK unpacked by hand or
-             * inherited from a colleague — and it belongs in the list rather than in a field of its
-             * own, which is where the platform puts "Add SDK…" too.
+             * A state rather than an action, which is the correction: this was briefly "Add SDK…",
+             * an action item living in the same list as the values, so choosing it left the combo
+             * reading "Add SDK…" and cancelling the chooser left it there for good. Selecting
+             * Custom reveals the path instead, where it stays visible and can be edited or copied.
              */
-            const val ADD = "Add SDK…"
+            const val CUSTOM = "Custom…"
 
             /**
              * A version number, because that is what anyone comparing two SDKs is comparing.
