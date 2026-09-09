@@ -24,8 +24,6 @@ import com.intellij.util.xmlb.XmlSerializerUtil
 )
 class MonkeyCAppSettings : PersistentStateComponent<MonkeyCAppSettings> {
 
-    /** Overrides `current-sdk.cfg`. Empty means "whatever the SDK Manager has selected". */
-    var sdkPath: String = ""
 
     /** A JDK home or a `java` executable. Empty means the IDE's own JVM. */
     var javaPath: String = ""

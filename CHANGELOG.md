@@ -102,8 +102,9 @@ First release.
   choose from, it says which of the two reasons it is — nothing downloaded, or nothing downloaded
   that this manifest can use — because the remedies differ, and the SDK Manager is one click away
   from the table and from the settings page rather than only from a checklist item that has failed.
-- Products are edited in one place. Build | Edit Products and the target chip both open the manifest
-  there rather than a dialog of their own.
+- Devices are edited in one place. Build | Edit Connect IQ Devices and the chip beside Run both open
+  the manifest there rather than a dialog of their own. Called devices throughout, as Garmin's own
+  SDK Manager calls them — `products` is the word the manifest XML uses, and it stays in the XML.
 - The simulator is started as a child process rather than handed to the system's launcher, so the
   plugin knows when it dies, stops the one it started without searching the machine for it, and can
   quote what it printed when it refuses to come up. A simulator started elsewhere — the SDK Manager,

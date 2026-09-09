@@ -325,7 +325,7 @@
         <action
             id="MonkeyC.EditProducts"
             class="com.github.dtretyakov.monkeyc.ui.EditProductsAction"
-            text="Edit Connect IQ Products"
+            text="Edit Connect IQ Devices"
             description="Chooses which devices this project is built for">
             <add-to-group group-id="BuildMenu" anchor="last"/>
         </action>

@@ -44,7 +44,11 @@ class MonkeyCSettingsEditor(private val project: Project) : SettingsEditor<Monke
         val choices = DeviceChoices(devices)
 
         panel = panel {
-            deviceRow = row("Target:") {
+            // "Device", not "Target". The chip beside Run is called Connect IQ Device, the table
+            // column is Device, and Garmin's SDK Manager calls the tab Devices — this row was the
+            // only place saying something else. "Target" is also taken: the platform means by it
+            // where a process runs, which is Docker and SSH, not which watch is being built for.
+            deviceRow = row("Device:") {
                 comboBox(choices.labels)
                     .bindItem(
                         { choices.labelFor(device, forDevice) },

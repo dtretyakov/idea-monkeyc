@@ -4,7 +4,6 @@ import com.github.dtretyakov.monkeyc.project.ConnectIqEnvironment
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
 import com.github.dtretyakov.monkeyc.project.DebugLogLevel
-import com.github.dtretyakov.monkeyc.project.MonkeyCAppSettings
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.project.OptimizationLevel
@@ -12,6 +11,7 @@ import com.github.dtretyakov.monkeyc.project.ProjectLayout
 import com.github.dtretyakov.monkeyc.project.TypeCheckLevel
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
 import com.github.dtretyakov.monkeyc.sdk.DeveloperKey
+import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.fileChooser.FileSaverDescriptor
@@ -43,7 +43,6 @@ class MonkeyCConfigurable(private val project: Project) :
     BoundSearchableConfigurable("Monkey C", "settings.monkeyc") {
 
     override fun createPanel(): DialogPanel {
-        val app = MonkeyCAppSettings.getInstance()
         val settings = MonkeyCSettings.getInstance(project)
         val model = MonkeyCProject.getInstance(project)
         val sdkService = ConnectIqSdkService.getInstance()
@@ -60,85 +59,28 @@ class MonkeyCConfigurable(private val project: Project) :
         val sdkChoices = SdkChoices(ConnectIqSdk.installed(), settings.sdkPath, ConnectIqSdk.detect()?.root)
 
         return panel {
-            group("SDK (This Computer)") {
-                row {
-                    // Where SDKs and devices come from, with what it says about itself under it,
-                    // and Reload beside it because nothing the manager changes reaches the IDE
-                    // until something re-reads.
-                    link(OpenSdkManager.label()) { OpenSdkManager.invoke(project) }
-                    button("Reload") { sdkService.refresh() }
-                }.rowComment(status(ConnectIqEnvironment.Concern.SDK_MANAGER))
-                row("Location:") {
-                    textFieldWithBrowseButton(
-                        FileChooserDescriptorFactory.createSingleFolderDescriptor()
-                            .withTitle("Connect IQ SDK")
-                            .withDescription("The directory holding bin/, inside the SDK Manager's Sdks folder"),
-                    )
-                        .columns(COLUMNS_LARGE)
-                        .bindText(app::sdkPath)
-                        // What is actually in use, not only how to change it. This is the line
-                        // the checklist used to carry, and it is more use here: the field it
-                        // describes is the field that fixes it.
-                        .comment(
-                            "${status(ConnectIqEnvironment.Concern.SDK)}<br/>" +
-                                "${status(ConnectIqEnvironment.Concern.DEVICES)}. Leave empty to " +
-                                "follow the SDK Manager's own choice, which it records in " +
-                                "<code>current-sdk.cfg</code>.",
-                        )
-                        // Without this a typo is indistinguishable from having no SDK at all: every
-                        // surface says "No Connect IQ SDK found" and none of them says where it looked.
-                        .validationOnApply { field ->
-                            val given = field.text.trim().takeIf { it.isNotEmpty() }
-                            given?.let { path ->
-                                if (!Path.of(path).resolve("bin").exists()) {
-                                    error("No bin directory here, so this is not a Connect IQ SDK.")
-                                } else {
-                                    null
-                                }
-                            }
-                        }
-                }
-                row("MTP tool:") {
-                    textFieldWithBrowseButton(
-                        FileChooserDescriptorFactory.createSingleFileOrFolderDescriptor()
-                            .withTitle("mtp-rs"),
-                    )
-                        .columns(COLUMNS_LARGE)
-                        .bindText(app::mtpToolPath)
-                        .comment(
-                            "<code>mtp-rs</code>, used to install a build on a watch that speaks " +
-                                "MTP — which current Garmin devices do, appearing under no volume " +
-                                "at all. Leave empty to look for it. Older watches mount as a disk " +
-                                "and need none of this.",
-                        )
-                }
-                row("Java:") {
-                    textFieldWithBrowseButton(
-                        FileChooserDescriptorFactory.createSingleFileOrFolderDescriptor()
-                            .withTitle("Java"),
-                    )
-                        .columns(COLUMNS_LARGE)
-                        .bindText(app::javaPath)
-                        .comment("A JDK home or a <code>java</code> executable. Leave empty to use the IDE's own.")
-                }
-            }
-
-            group("Project") {
-                row {
-                    comment("Stored with the project, in <code>.idea/monkeyc.xml</code>")
-                }
-                row("SDK:") {
+            group("Connect IQ") {
+                // One SDK control, not two. There used to be a machine-wide path field in a group
+                // of its own and a project combo down here, which between them answered "where is
+                // the SDK" twice and left the user to work out which one won. The combo answers it
+                // once: the manager's current one, any of the installed ones, or one chosen from
+                // disk — which is how the platform's own JDK combo is built.
+                row("Connect IQ:") {
                     comboBox(sdkChoices.labels)
                         .bindItem(
                             { sdkChoices.labelFor(settings.sdkPath) },
-                            { settings.sdkPath = sdkChoices.pathFor(it) },
+                            { chosen ->
+                                if (chosen == SdkChoices.ADD) {
+                                    addSdk()?.let { settings.sdkPath = it.toString() }
+                                } else {
+                                    settings.sdkPath = sdkChoices.pathFor(chosen)
+                                }
+                            },
                         )
-                        .comment(
-                            "Which SDK this project builds with. <b>${SdkChoices.FOLLOW}</b> is the " +
-                                "one the SDK Manager has made current, and it changes when the " +
-                                "manager updates. Pinning one keeps a shipped app building the way " +
-                                "it shipped.",
-                        )
+                        .comment(status(ConnectIqEnvironment.Concern.DEVICES))
+                    link(OpenSdkManager.label()) { OpenSdkManager.invoke(project) }
+                    // Nothing the manager changes reaches the IDE until something re-reads.
+                    button("Reload") { sdkService.refresh() }
                 }
                 row("Developer key:") {
                     val field = textFieldWithBrowseButton(
@@ -147,10 +89,7 @@ class MonkeyCConfigurable(private val project: Project) :
                     )
                         .columns(COLUMNS_LARGE)
                         .bindText(settings::developerKeyPath)
-                        .comment(
-                            "${status(ConnectIqEnvironment.Concern.DEVELOPER_KEY)}. Leave empty to " +
-                                "use the key the SDK Manager generated",
-                        )
+                        .comment(status(ConnectIqEnvironment.Concern.DEVELOPER_KEY))
                         .validationOnApply { field ->
                             val given = field.text.trim().takeIf { it.isNotEmpty() }
                             given?.let { path ->
@@ -183,12 +122,12 @@ class MonkeyCConfigurable(private val project: Project) :
                 row {
                     checkBox("Analyse the project as it is edited")
                         .bindSelected(settings::liveAnalysis)
+                        // What the switch costs, in one line. It used to be four, three of
+                        // which explained the implementation: a second JVM, background compilation,
+                        // what the server is called. None of that changes the decision.
                         .comment(
-                            "${status(ConnectIqEnvironment.Concern.LANGUAGE_SERVER)}. Runs the " +
-                                "language server the SDK ships, which is what completion, " +
-                                "diagnostics and navigation come from. It is a second JVM that " +
-                                "compiles the whole project in the background; turning it off " +
-                                "leaves building, running, debugging and highlighting untouched.",
+                            "Completion and diagnostics come from the SDK's language server. " +
+                                "Turning it off leaves building and debugging untouched.",
                         )
                 }
             }.enabled(sdk != null)
@@ -239,6 +178,29 @@ class MonkeyCConfigurable(private val project: Project) :
      * key in PKCS#8 DER and the JVM can write one — so this works on a machine with no openssl,
      * which on Windows is most of them.
      */
+    /**
+     * Picks an SDK directory that the manager does not have.
+     *
+     * Checked for `bin/` here rather than accepted and reported broken later: every surface then
+     * says "No Connect IQ SDK found" and none of them says where it looked.
+     */
+    private fun addSdk(): Path? {
+        val chooser = FileChooserDescriptorFactory.createSingleFolderDescriptor()
+            .withTitle("Connect IQ SDK")
+            .withDescription("The directory holding bin/")
+        val chosen = FileChooser.chooseFile(chooser, project, null)?.toNioPath() ?: return null
+
+        if (!chosen.resolve("bin").exists()) {
+            Messages.showErrorDialog(
+                project,
+                "There is no bin directory in ${chosen.fileName}, so it is not a Connect IQ SDK.",
+                "Not a Connect IQ SDK",
+            )
+            return null
+        }
+        return chosen
+    }
+
     private fun generateDeveloperKey(project: Project): Path? {
         val chosen = FileChooserFactory.getInstance()
             .createSaveFileDialog(
@@ -288,7 +250,7 @@ class MonkeyCConfigurable(private val project: Project) :
          * also answers the question the user actually has, which is what they are about to build
          * with today.
          */
-        val labels: List<String> = listOf(followLabel(current)) + byLabel.keys
+        val labels: List<String> = listOf(followLabel(current)) + byLabel.keys + ADD
 
         fun labelFor(path: String): String =
             byLabel.entries.firstOrNull { it.value.toString() == path.trim() }?.key ?: labels.first()
@@ -306,6 +268,15 @@ class MonkeyCConfigurable(private val project: Project) :
              * and removes the translation step.
              */
             const val FOLLOW = "Current SDK"
+
+            /**
+             * An SDK the manager does not know about, chosen from disk.
+             *
+             * This is what the machine-wide path field used to be for — an SDK unpacked by hand or
+             * inherited from a colleague — and it belongs in the list rather than in a field of its
+             * own, which is where the platform puts "Add SDK…" too.
+             */
+            const val ADD = "Add SDK…"
 
             fun followLabel(current: Path?): String =
                 current?.let { "$FOLLOW  (${it.name})" } ?: FOLLOW

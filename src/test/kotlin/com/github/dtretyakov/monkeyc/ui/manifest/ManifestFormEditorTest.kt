@@ -79,7 +79,7 @@ class ManifestFormEditorTest : IdeTestCase() {
             assertNotNull("the three lists live in tabs", tabs)
             assertEquals(3, tabs!!.tabCount)
             // The count belongs in the title, so the tab says what is inside without being opened.
-            assertTrue(tabs.getTitleAt(0), tabs.getTitleAt(0).startsWith("Products"))
+            assertTrue(tabs.getTitleAt(0), tabs.getTitleAt(0).startsWith("Devices"))
             assertTrue(tabs.getTitleAt(0), tabs.getTitleAt(0).trim().endsWith("1"))
         } finally {
             com.intellij.openapi.util.Disposer.dispose(editor)
@@ -202,7 +202,7 @@ class ManifestFormEditorTest : IdeTestCase() {
 
         try {
             val table = editor.component.descendants().filterIsInstance<javax.swing.JTable>().firstOrNull()
-            assertNotNull("the Products tab should hold a table", table)
+            assertNotNull("the Devices tab should hold a table", table)
 
             val headings = (0 until table!!.columnModel.columnCount)
                 .map { table.columnModel.getColumn(it).headerValue?.toString().orEmpty() }

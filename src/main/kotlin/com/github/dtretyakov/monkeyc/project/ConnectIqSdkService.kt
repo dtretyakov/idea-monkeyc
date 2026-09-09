@@ -24,7 +24,7 @@ import kotlin.io.path.getLastModifiedTime
 @Service(Service.Level.APP)
 class ConnectIqSdkService {
 
-    private class Snapshot(val sdk: ConnectIqSdk?, val catalog: DeviceCatalog?, val stamp: Long, val override: String)
+    private class Snapshot(val sdk: ConnectIqSdk?, val catalog: DeviceCatalog?, val stamp: Long)
 
     @Volatile
     private var snapshot: Snapshot? = null
@@ -122,21 +122,19 @@ class ConnectIqSdkService {
     }
 
     private fun current(): Snapshot {
-        val override = MonkeyCAppSettings.getInstance().sdkPath.trim()
         val stamp = markerStamp()
-        snapshot?.let { if (it.stamp == stamp && it.override == override) return it }
+        snapshot?.let { if (it.stamp == stamp) return it }
 
-        val resolved = if (override.isNotEmpty()) {
-            Path.of(override).takeIf { it.resolve("bin").exists() }?.let { ConnectIqSdk.at(it) }
-        } else {
-            ConnectIqSdk.detect()
-        }
+        // Whatever the SDK Manager has made current. A project that wants another one pins it, and
+        // one the manager has never heard of is added to that project's list from disk — which is
+        // what the machine-wide override here used to be for, and it was a second answer to a
+        // question that only wants one.
+        val resolved = ConnectIqSdk.detect()
 
         return Snapshot(
             sdk = resolved,
             catalog = resolved?.let { DeviceCatalog(it.devicesRoot) },
             stamp = stamp,
-            override = override,
         ).also { snapshot = it }
     }
 

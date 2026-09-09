@@ -34,7 +34,7 @@ class ManifestModel(private val project: Project, private val document: Document
             .forEach { setAttribute(it, value, "Change Minimum API Level") }
     }
 
-    fun setDevices(ids: List<String>) = edit("Change Products") { ManifestText.withDevices(it, ids) }
+    fun setDevices(ids: List<String>) = edit("Change Devices") { ManifestText.withDevices(it, ids) }
 
     fun setPermissions(ids: List<String>) = edit("Change Permissions") { ManifestText.withPermissions(it, ids) }
 

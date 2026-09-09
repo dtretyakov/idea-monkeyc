@@ -192,7 +192,6 @@ internal class ManifestForm(
         row {
             cell(lists())
                 .align(AlignX.FILL)
-                .comment("Everything here comes from the SDK: the devices it has downloaded, and what this kind of app may declare")
         }
         row {
             // Under the sentence it answers. It was briefly in the row of All / None / Compatible,
@@ -265,7 +264,7 @@ internal class ManifestForm(
             productSummary.text =
                 DeviceSelectionSummary.of(products.selectedDevices(), manifest.appType, ids.size)
                     ?: PRODUCTS_HELP
-            tabs.setTitleAt(PRODUCTS_TAB, "Products  ${ids.size}")
+            tabs.setTitleAt(PRODUCTS_TAB, "Devices  ${ids.size}")
         }
         productSummary.text =
             DeviceSelectionSummary.of(
@@ -291,7 +290,7 @@ internal class ManifestForm(
         )
 
         tabs.addTab(
-            "Products  ${manifest.devices.size}",
+            "Devices  ${manifest.devices.size}",
             products.panel(
                 actions = listOf(
                     "All" to { _: ConnectIqDevice -> true },

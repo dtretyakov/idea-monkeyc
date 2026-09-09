@@ -51,7 +51,8 @@ class SdkChoicesTest {
     fun `every installed SDK is offered`() {
         val choices = MonkeyCConfigurable.SdkChoices(installed, pinned = "")
 
-        assertEquals(3, choices.labels.size, "two SDKs plus following the manager")
+        assertEquals(4, choices.labels.size, "two SDKs, the current one, and adding one from disk")
+        assertEquals(MonkeyCConfigurable.SdkChoices.ADD, choices.labels.last(), "adding one comes last")
     }
 
     @Test
