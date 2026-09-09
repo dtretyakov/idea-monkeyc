@@ -83,7 +83,7 @@ class ProductTableTest {
     }
 
     private companion object {
-        /** Checkbox, Device, Screen, Colours, Panel, Input, Memory. */
-        const val MEMORY_COLUMN = 6
+        /** Checkbox, Device, ID, Screen, Colours, Panel, Input, Memory. */
+        const val MEMORY_COLUMN = 7
     }
 }

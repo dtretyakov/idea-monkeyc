@@ -206,7 +206,7 @@ class ManifestFormEditorTest : IdeTestCase() {
 
             val headings = (0 until table!!.columnModel.columnCount)
                 .map { table.columnModel.getColumn(it).headerValue?.toString().orEmpty() }
-            listOf("Device", "Screen", "Colours", "Input", "Memory").forEach {
+            listOf("Device", "ID", "Screen", "Colours", "Input", "Memory").forEach {
                 assertTrue("no $it column, only $headings", headings.contains(it))
             }
         } finally {
@@ -229,12 +229,17 @@ class ManifestFormEditorTest : IdeTestCase() {
 
         try {
             val table = editor.component.descendants().filterIsInstance<javax.swing.JTable>().first()
-            val names = (0 until table.rowCount).map { table.getValueAt(it, 1)?.toString().orEmpty() }
+            // Column 2 is ID, which for a device with no profile is the only thing known about it.
+            val ids = (0 until table.rowCount).map { table.getValueAt(it, 2)?.toString().orEmpty() }
 
-            val row = names.firstOrNull { it.contains("nosuchdevice") }
-            assertNotNull("the declared device is missing from the table: $names", row)
-            assertTrue("and it should say why it looks bare: $row", row!!.contains("not downloaded"))
-            assertEquals("it must be ticked, or saving would drop it", true, table.getValueAt(names.indexOf(row), 0))
+            val row = ids.indexOf("nosuchdevice")
+            assertTrue("the declared device is missing from the table: $ids", row >= 0)
+            assertEquals(
+                "the name column should say why the row looks bare",
+                "(not downloaded)",
+                table.getValueAt(row, 1)?.toString(),
+            )
+            assertEquals("it must be ticked, or saving would drop it", true, table.getValueAt(row, 0))
         } finally {
             com.intellij.openapi.util.Disposer.dispose(editor)
         }

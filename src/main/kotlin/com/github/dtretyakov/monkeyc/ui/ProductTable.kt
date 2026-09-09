@@ -54,6 +54,7 @@ class ProductTable(
         arrayOf(
             checkbox(),
             device(),
+            id(),
             text("Screen", 150) { it.screen },
             text("Colours", 80) { it.bitsPerPixel?.let { bits -> "$bits-bit" }.orEmpty() },
             text("Panel", 80) { it.displayType.orEmpty() },
@@ -126,15 +127,27 @@ class ProductTable(
         override fun getWidth(table: javax.swing.JTable): Int = CHECKBOX_WIDTH
     }
 
-    /** The name, and for a device this machine does not have, the fact that it does not. */
+    /** The name, or for a device this machine does not have, the fact that it does not. */
     private fun device() = object : ColumnInfo<Row, String>("Device") {
-        override fun valueOf(item: Row): String = if (item.downloaded) {
-            "${item.device.displayName}  (${item.device.id})"
-        } else {
-            "${item.device.id}  (not downloaded)"
-        }
+        override fun valueOf(item: Row): String =
+            if (item.downloaded) item.device.displayName else "(not downloaded)"
 
         override fun getWidth(table: javax.swing.JTable): Int = DEVICE_WIDTH
+    }
+
+    /**
+     * The id, in a column of its own.
+     *
+     * It used to be in brackets after the name, where the two together were long enough that the
+     * end of them was cut off — and the id is the half that matters: it is what the manifest holds,
+     * what the compiler takes and what every error message names. A column also makes it sortable
+     * and, being a fixed shape, scannable down the page in a way a trailing bracket is not.
+     *
+     * Shown for an undownloaded device too, where it is the only thing known about it.
+     */
+    private fun id() = object : ColumnInfo<Row, String>("ID") {
+        override fun valueOf(item: Row): String = item.device.id
+        override fun getWidth(table: javax.swing.JTable): Int = ID_WIDTH
     }
 
     private fun text(title: String, width: Int, value: (ConnectIqDevice) -> String) =
@@ -218,7 +231,8 @@ class ProductTable(
             memoryLimits = emptyMap(),
         )
 
-        const val DEVICE_WIDTH = 220
+        const val DEVICE_WIDTH = 190
+        const val ID_WIDTH = 140
         const val CHECKBOX_WIDTH = 28
         const val MEMORY_WIDTH = 90
         const val NAME_COLUMN = 1
