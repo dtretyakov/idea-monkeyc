@@ -90,18 +90,37 @@ sealed interface GarminTarget {
         @Volatile
         private var attachedCache: Pair<Long, Set<String>> = 0L to emptySet()
 
-        fun attachedDeviceIds(): Set<String> {
+        /**
+         * What was attached the last time anyone looked. Never looks itself.
+         *
+         * This is read while a popup is being built, which happens on the UI thread, and looking
+         * means walking the mount points and starting a subprocess that is allowed twenty seconds
+         * to answer. An earlier version computed here when the cache was stale, and the first click
+         * on the chip froze the IDE for several seconds — the comment above it even said this must
+         * not sit on the IDE's pulse. Refreshing is [refreshAttached]'s job, and its callers are on
+         * background threads.
+         */
+        fun attachedDeviceIds(): Set<String> = attachedCache.second
+
+        /**
+         * Looks, if the last look is old enough. Must not be called on the UI thread.
+         *
+         * Called when the device popup opens, on a pooled thread, so the popup shows what was
+         * found last time and the next one is right. The worst case is a watch that has just been
+         * plugged in going unmarked until the menu is opened again, which is a great deal better
+         * than an IDE that stops responding — or than a subprocess every few seconds for as long
+         * as a project is open, answering a question nobody is asking.
+         */
+        fun refreshAttached() {
             val now = System.currentTimeMillis()
-            val (at, ids) = attachedCache
-            if (now - at < CACHE_MILLIS) return ids
+            if (now - attachedCache.first < CACHE_MILLIS) return
 
             val fresh = runCatching { attached().mapNotNull { it.device?.id }.toSet() }.getOrDefault(emptySet())
             attachedCache = now to fresh
-            return fresh
         }
 
-        /** Long enough to keep the toolbar cheap, short enough that plugging in a watch is noticed. */
-        private const val CACHE_MILLIS = 4_000L
+        /** Short: a look only happens when the menu is opened, so this only collapses a double-open. */
+        private const val CACHE_MILLIS = 2_000L
 
         /** Whether the tool is missing, which is only worth saying when a watch might need it. */
         fun mtpToolMissing(): Boolean = MtpLocator.resolve() == null

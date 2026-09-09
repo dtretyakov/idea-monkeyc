@@ -16,6 +16,7 @@ import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.actionSystem.Presentation
 import com.intellij.openapi.actionSystem.ex.CustomComponentAction
 import com.intellij.openapi.actionSystem.impl.ActionButtonWithText
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runReadActionBlocking
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.ui.popup.Balloon
@@ -63,6 +64,7 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
         presentation.isEnabledAndVisible = visible
         if (!visible) return
 
+
         // The effective target of the configuration that is selected, not the project setting.
         // Showing the setting was misleading: a configuration pinned to one watch built that watch
         // while this said another, and a control the platform puts beside Run has to describe the
@@ -97,28 +99,33 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
             )
         }
 
-        // Which of them is plugged in, from a short-lived cache: this runs when the popup opens,
-        // and finding out means walking mount points and starting a subprocess.
-        val attached = GarminTarget.attachedDeviceIds()
+        // Asked for now, answered for next time. Looking walks the mount points and starts a
+        // subprocess, and this runs while the popup is being built — on the UI thread — so it
+        // reads what was found last time and sets a fresh look going behind it. Tying the look to
+        // the toolbar's `update` instead would spawn a process every few seconds for as long as a
+        // project is open, to answer a question nobody is asking.
+        ApplicationManager.getApplication().executeOnPooledThread { GarminTarget.refreshAttached() }
 
         val simulator = devices.map {
             Select(project, MonkeyCTarget(it.id, MonkeyCTarget.Destination.SIMULATOR), "${it.displayName}  (${it.id})")
         }
-        // Every device, not only the attached ones: building a `.prg` for a watch you do not own
-        // is ordinary, and it is how you hand one to somebody else. The attached ones are marked
-        // because for those an install will be offered rather than just a file.
-        val watch = devices.map {
-            val connected = if (it.id in attached) "  · connected" else ""
-            Select(
-                project,
-                MonkeyCTarget(it.id, MonkeyCTarget.Destination.WATCH),
-                "${it.displayName}  (${it.id})$connected",
-            )
+
+        // Only watches that are actually plugged in. Listing every device here as well doubled the
+        // list for the ordinary case — no watch attached — and a menu whose second half repeats
+        // its first half teaches people to read neither. Building a `.prg` for a watch that is not
+        // here is still possible; it is Build | Build for Watch, which sets this target itself.
+        val attached = devices.filter { it.id in GarminTarget.attachedDeviceIds() }
+        val watch = attached.map {
+            Select(project, MonkeyCTarget(it.id, MonkeyCTarget.Destination.WATCH), "${it.displayName}  (${it.id})")
         }
 
+        // One section needs no heading; two do.
+        if (watch.isEmpty()) {
+            return DefaultActionGroup(simulator + listOf(Separator.getInstance(), acquire))
+        }
         return DefaultActionGroup(
             listOf(Separator("Simulator")) + simulator +
-                listOf(Separator("Watch")) + watch +
+                listOf(Separator("Connected watch")) + watch +
                 listOf(Separator.getInstance(), acquire),
         )
     }
