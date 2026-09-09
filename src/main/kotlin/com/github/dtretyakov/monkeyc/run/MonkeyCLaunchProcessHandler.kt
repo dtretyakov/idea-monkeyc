@@ -185,6 +185,11 @@ class MonkeyCLaunchProcessHandler(
      * leave them wondering why a run took twice as long.
      */
     private fun pushToSimulator(prepared: PreparedLaunch, java: String): Attempt {
+        // A close from the previous Stop may still be on its way. It names the same app, so
+        // overtaking it means pushing an app and having it closed a second later by a message
+        // meant for its predecessor.
+        SimulatorApp.awaitClose()
+
         val handler = OSProcessHandler(MonkeyDo.commandLine(prepared, java, options))
         running = handler
         pushed = prepared
@@ -296,9 +301,7 @@ class MonkeyCLaunchProcessHandler(
         val id = runReadAction { MonkeyCProject.getInstance(project).manifest(prepared.root)?.applicationId }
             ?.takeIf { it.isNotBlank() } ?: return
 
-        ApplicationManager.getApplication().executeOnPooledThread {
-            SimulatorApp.close(prepared.sdk, id)
-        }
+        SimulatorApp.closeLater(prepared.sdk, id)
     }
 
     override fun detachProcessImpl() {

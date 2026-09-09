@@ -8,6 +8,7 @@ import com.github.dtretyakov.monkeyc.run.MonkeyCLaunch
 import com.github.dtretyakov.monkeyc.run.Simulator
 import com.github.dtretyakov.monkeyc.run.MonkeyCRunOptions
 import com.github.dtretyakov.monkeyc.run.PreparedLaunch
+import com.github.dtretyakov.monkeyc.run.SimulatorApp
 import com.intellij.execution.ExecutionException
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.configurations.RunConfigurationOptions
@@ -54,10 +55,25 @@ class MonkeyCDebugAdapterDescriptor(
                 "Only a Connect IQ run configuration can be debugged with the Connect IQ debugger.",
             )
 
-        val indicator = ProgressManager.getInstance().progressIndicator
-        prepared = MonkeyCLaunch.prepare(environment.project, monkeyCOptions) { step ->
-            indicator?.text = step
-        }
+        // Under a modal progress, because LSP4IJ calls this on the EDT and the first thing it does
+        // is compile: `OSProcessHandler.waitFor` on the EDT is an error the platform reports, and
+        // a build can take a minute — a minute with the whole IDE frozen and nothing on screen to
+        // say why. This runs the work on a background thread and gives it a dialog that can be
+        // cancelled, which is what the platform offers for exactly this shape of problem.
+        prepared = ProgressManager.getInstance().runProcessWithProgressSynchronously<PreparedLaunch, ExecutionException>(
+            {
+                val indicator = ProgressManager.getInstance().progressIndicator
+                // Same reason as the run path: a close from the last Stop must land before this
+                // session pushes anything, or it lands on this session instead.
+                SimulatorApp.awaitClose()
+                MonkeyCLaunch.prepare(environment.project, monkeyCOptions) { step ->
+                    indicator?.text = step
+                }
+            },
+            "Building for the Debugger",
+            true,
+            environment.project,
+        )
 
         if (!prepared.debugXml.exists()) {
             throw ExecutionException(

@@ -4,7 +4,10 @@ import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.CapturingProcessHandler
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.util.concurrency.AppExecutorUtil
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.Future
+import java.util.concurrent.TimeUnit
 
 /**
  * Stopping the app that is running in the simulator, as opposed to stopping the simulator.
@@ -29,13 +32,41 @@ import java.nio.charset.StandardCharsets
 object SimulatorApp {
 
     /**
+     * The close that is still in flight, so a launch can wait for it.
+     *
+     * Stop must not block the UI, so the close runs on a pooled thread — and a developer who
+     * presses Run straight afterwards would otherwise race it: the new app starts, the late
+     * `closeApp` arrives, and it names the same id, so it closes the app that just started. The
+     * launch waits for this instead, which costs nothing when nothing is pending.
+     */
+    @Volatile
+    private var pending: Future<*>? = null
+
+    /** Sends the close in the background and returns at once, for callers that must not block. */
+    fun closeLater(sdk: ConnectIqSdk, applicationId: String) {
+        pending = AppExecutorUtil.getAppExecutorService().submit { close(sdk, applicationId) }
+    }
+
+    /**
+     * Waits for a close that Stop started, so a push cannot overtake it.
+     *
+     * Bounded, and a timeout is not worth reporting: the worst case is the race that was there
+     * before, and the run has better things to fail on than this.
+     */
+    fun awaitClose(timeoutMillis: Long = 6_000) {
+        val inFlight = pending ?: return
+        runCatching { inFlight.get(timeoutMillis, TimeUnit.MILLISECONDS) }
+        pending = null
+    }
+
+    /**
      * Asks the simulator to close the app with this id, and says whether the ask went through.
      *
      * True means the shell accepted the message, not that the app is gone — the simulator does not
-     * answer. It is called on the way out of a run, where there is nothing useful to do about a
-     * failure except carry on stopping, so the caller logs and moves on.
+     * answer a close. It runs on the way out of a run, where there is nothing useful to do about a
+     * failure except carry on stopping, so a failure is logged and no more.
      */
-    fun close(sdk: ConnectIqSdk, applicationId: String, timeoutMillis: Int = 5_000): Boolean {
+    fun close(sdk: ConnectIqSdk, applicationId: String, timeoutMillis: Int = 3_000): Boolean {
         val id = applicationId.replace("-", "").trim()
         if (id.isEmpty()) return false
 
