@@ -13,6 +13,7 @@ import com.intellij.ide.plugins.DynamicPlugins
 import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.extensions.PluginId
 import com.github.dtretyakov.monkeyc.run.MonkeyCRunConfigurationType
+import com.github.dtretyakov.monkeyc.run.session.SessionHelper
 import com.intellij.execution.configurations.ConfigurationTypeUtil
 import com.github.dtretyakov.monkeyc.navigation.ApiMirGotoClassContributor
 import com.github.dtretyakov.monkeyc.navigation.ApiMirGotoDeclarationHandler
@@ -24,6 +25,7 @@ import com.intellij.navigation.ChooseByNameContributor
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.ide.wizard.GeneratorNewProjectWizard
 import com.intellij.openapi.application.ModernApplicationStarter
+import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.fileEditor.FileEditorProvider
 import com.intellij.lang.LanguageExtensionPoint
 import com.intellij.openapi.extensions.ExtensionPointName
@@ -31,6 +33,8 @@ import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.vfs.JarFileSystem
 import com.intellij.openapi.vfs.LocalFileSystem
 import java.nio.file.Files
+import java.nio.file.Path
+import java.util.zip.ZipFile
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import com.intellij.openapi.roots.AdditionalLibraryRootsProvider
@@ -70,6 +74,7 @@ class SelfCheckStarter : ModernApplicationStarter() {
         println("[self-check] file types: .mc .mcgen .jungle .mss .mir")
 
         problems += barrelProblems()
+        problems += sessionHelperProblems()
 
         val runConfiguration = ConfigurationTypeUtil.findConfigurationType(MonkeyCRunConfigurationType::class.java)
         println("[self-check] run configurations: ${runConfiguration.configurationFactories.joinToString(", ") { it.name }}")
@@ -186,6 +191,33 @@ class SelfCheckStarter : ModernApplicationStarter() {
                 null -> "[self-check] dynamic unload: this IDE does not answer the question"
             },
         )
+    }
+
+    /**
+     * That the simulator session's helper can be handed to a JVM.
+     *
+     * The helper runs in a process of its own, started with this plugin's own jar on the
+     * classpath — and nothing checks that the jar the plugin is packaged into is the one the
+     * helper's class ended up in. Get it wrong and there is no error to see: the helper fails to
+     * start, the run falls back to `monkeydo`, and Stop quietly goes back to not stopping
+     * anything. Only a packaged plugin can answer it, which is why it is here rather than in a
+     * test.
+     */
+    private fun sessionHelperProblems(): List<String> {
+        val entry = PathManager.getJarPathForClass(SessionHelper::class.java)
+            ?: return listOf("the simulator session's helper has no jar or directory to be run from")
+        val name = SessionHelper::class.java.name.replace('.', '/') + ".class"
+        val path = Path.of(entry)
+
+        val present = if (Files.isDirectory(path)) {
+            Files.exists(path.resolve(name))
+        } else {
+            runCatching { ZipFile(path.toFile()).use { it.getEntry(name) != null } }.getOrDefault(false)
+        }
+        if (!present) return listOf("$name is not in $entry, so the simulator session cannot start")
+
+        println("[self-check] simulator session helper: $entry")
+        return emptyList()
     }
 
     private fun barrelProblems(): List<String> {

@@ -5,6 +5,7 @@ import com.github.dtretyakov.monkeyc.lsp.SdkServerCommands
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.project.ProjectLayout
 import com.github.dtretyakov.monkeyc.run.MonkeyCLaunch
+import com.github.dtretyakov.monkeyc.run.session.SimulatorSession
 import com.github.dtretyakov.monkeyc.run.Simulator
 import com.github.dtretyakov.monkeyc.run.MonkeyCRunOptions
 import com.github.dtretyakov.monkeyc.run.PreparedLaunch
@@ -77,6 +78,13 @@ class MonkeyCDebugAdapterDescriptor(
                     "to map the executable back to source.",
             )
         }
+
+        // The adapter opens the simulator's channel itself, and that channel carries one client:
+        // whoever is already on it is told `shellDisconnected` and then hears nothing more. The
+        // debugger wins that exchange — it is the run beside it that loses, going silent halfway
+        // through and never finding out that its app ended. So the run is ended here, on purpose,
+        // rather than left to be cut off.
+        SimulatorSession.getInstance().release()
 
         // The SDK the build actually used, not whichever is current now. Asking again could
         // answer differently — a project can pin one — and an adapter from one SDK driving a

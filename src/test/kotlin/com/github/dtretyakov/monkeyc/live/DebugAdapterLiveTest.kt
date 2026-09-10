@@ -3,6 +3,7 @@ package com.github.dtretyakov.monkeyc.live
 import com.github.dtretyakov.monkeyc.build.BuildKind
 import com.github.dtretyakov.monkeyc.lsp.SdkServerCommands
 import com.github.dtretyakov.monkeyc.run.Simulator
+import com.github.dtretyakov.monkeyc.run.session.SimulatorSession
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
 import com.github.dtretyakov.monkeyc.sdk.JavaLocator
 import org.eclipse.lsp4j.debug.Capabilities
@@ -59,6 +60,88 @@ class DebugAdapterLiveTest {
         }
     }
 
+    /**
+     * That a Run does not leave the simulator unusable by the debugger.
+     *
+     * The plugin holds a connection to the simulator across runs, and the simulator's channel
+     * carries one client: when the adapter connects, whoever was there is told `shellDisconnected`
+     * and hears nothing more — not the app's output, not the app ending. A run left in that state
+     * never finishes, and the Run window keeps a live process with a spinning Stop button for the
+     * rest of the session.
+     *
+     * So the run is ended on purpose first. Take out the `release()` below and the debugger still
+     * works; it is the run beside it that never comes back.
+     */
+    @Test
+    fun `the debugger starts on a simulator a run was using`(@TempDir temp: Path) {
+        val sdk = LiveSdk.require()
+        val project = LiveSdk.fixture(temp)
+        val device = LiveSdk.device(sdk, listOf("fenix7", "fenix6"))
+
+        val built = LiveBuild.run(sdk, project, device)
+        assertEquals(0, built.exitCode, built.text)
+        freshSimulator(sdk)
+
+        val running = CountDownLatch(1)
+        val run = Thread {
+            SimulatorSession.getInstance().run(
+                sdk = sdk,
+                prg = built.prg,
+                device = device,
+                uuid = APPLICATION_ID,
+                tests = null,
+                nativePairing = false,
+                stopped = { false },
+                report = {},
+                output = { if (it.contains("onUpdate")) running.countDown() },
+            )
+        }
+        run.start()
+        assertTrue(running.await(2, TimeUnit.MINUTES), "the app never started, so there is nothing in the way")
+
+        // What the debug adapter descriptor does before it starts the adapter.
+        SimulatorSession.getInstance().release()
+        run.join(TimeUnit.SECONDS.toMillis(30))
+        assertFalse(
+            run.isAlive,
+            "the run was not ended before the debugger took the simulator's channel from it",
+        )
+
+        val source = project.resolve("source/FixtureApp.mc").toRealPath()
+        Session(sdk).use { session ->
+            session.initialize()
+            val stopped = session.awaitStopped()
+            session.onInitialized {
+                session.server.setBreakpoints(
+                    SetBreakpointsArguments().apply {
+                        this.source = Source().apply {
+                            name = "FixtureApp.mc"
+                            path = source.toString()
+                        }
+                        breakpoints = arrayOf(SourceBreakpoint().apply { line = BREAKPOINT_LINE })
+                    },
+                ).get(30, TimeUnit.SECONDS)
+                session.server.configurationDone(ConfigurationDoneArguments())
+            }
+            session.launch(
+                mapOf(
+                    "type" to "monkeyc",
+                    "request" to "launch",
+                    "name" to "live test",
+                    "prg" to built.prg.toString(),
+                    "prgDebugXml" to "${built.prg}.debug.xml",
+                    "device" to device,
+                    "stopAtLaunch" to false,
+                ),
+            )
+
+            assertTrue(
+                stopped.await(60, TimeUnit.SECONDS),
+                "the debugger never reached the breakpoint after a run had the simulator:\n${session.output}",
+            )
+        }
+    }
+
     @Test
     fun `an app launched into the simulator stops on a breakpoint`(@TempDir temp: Path) {
         val sdk = LiveSdk.require()
@@ -67,13 +150,7 @@ class DebugAdapterLiveTest {
 
         val built = LiveBuild.run(sdk, project, device)
         assertEquals(0, built.exitCode, built.text)
-        assumeTrue(Simulator.isReady(), "the Connect IQ simulator is not running")
-        // A simulator from another SDK holds the same ports and answers nothing useful, which
-        // arrives here as an unexplained timeout. Say which it is instead.
-        assumeTrue(
-            Simulator.conflictingSdk(sdk) == null,
-            "the running simulator is from ${Simulator.conflictingSdk(sdk)}, not ${sdk.root}",
-        )
+        freshSimulator(sdk)
 
         // The compiler records real paths in the symbol file, and on macOS a temp directory is
         // reached through a symlink — a breakpoint on the unresolved path is silently never hit.
@@ -131,13 +208,7 @@ class DebugAdapterLiveTest {
 
         val built = LiveBuild.run(sdk, project, device, kind = BuildKind.TESTS)
         assertEquals(0, built.exitCode, built.text)
-        assumeTrue(Simulator.isReady(), "the Connect IQ simulator is not running")
-        // A simulator from another SDK holds the same ports and answers nothing useful, which
-        // arrives here as an unexplained timeout. Say which it is instead.
-        assumeTrue(
-            Simulator.conflictingSdk(sdk) == null,
-            "the running simulator is from ${Simulator.conflictingSdk(sdk)}, not ${sdk.root}",
-        )
+        freshSimulator(sdk)
 
         Session(sdk).use { session ->
             session.initialize()
@@ -178,6 +249,17 @@ class DebugAdapterLiveTest {
     }
 
     /** The adapter process plus the client bookkeeping every test here needs. */
+    /**
+     * A simulator of this SDK's own, freshly started.
+     *
+     * Fresh rather than whichever happens to be there: a simulator stops accepting the debug
+     * adapter after a handful of sessions — the SDK bug the plugin already offers to fix for the
+     * user — so a suite that runs several of these tests one after another walks straight into it.
+     * Restarting also settles the other case, a simulator from a different SDK holding the port.
+     */
+    private fun freshSimulator(sdk: ConnectIqSdk) =
+        assumeTrue(Simulator.restart(sdk), "the Connect IQ simulator did not start")
+
     private class Session(sdk: ConnectIqSdk) : AutoCloseable {
 
         private val process = ProcessBuilder(SdkServerCommands.debugAdapter(sdk, JavaLocator.resolve(null)))
@@ -256,6 +338,9 @@ class DebugAdapterLiveTest {
 
     private companion object {
         /** `counter += 1;` in the fixture's `onUpdate`, which the simulator reaches on every frame. */
-        const val BREAKPOINT_LINE = 28
+        const val BREAKPOINT_LINE = 29
+
+        /** The fixture's own application id, which is how the simulator names it back. */
+        const val APPLICATION_ID = "8f14e45fceea167a5a36dedd4bea2543"
     }
 }

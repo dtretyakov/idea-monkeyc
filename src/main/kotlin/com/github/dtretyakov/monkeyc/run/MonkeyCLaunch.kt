@@ -39,6 +39,13 @@ data class PreparedLaunch(
     val prg: Path,
     val debugXml: Path,
     val settingsJson: Path?,
+    /**
+     * The app's own id, which is how the simulator names it in everything it says about it.
+     *
+     * From the manifest rather than from the `.prg`, which carries the same value: the build that
+     * produced the `.prg` has only just read this manifest, so the two cannot have drifted apart.
+     */
+    val applicationId: String?,
     /** The other half of a complication pair, built for the same device. */
     val paired: BuiltArtifact? = null,
 )
@@ -242,6 +249,7 @@ object MonkeyCLaunch {
             prg = built.output,
             debugXml = ProjectLayout.debugXml(built.output),
             settingsJson = ProjectLayout.settingsJson(built.output),
+            applicationId = MonkeyCProject.getInstance(project).manifest(built.root)?.applicationId,
             paired = paired,
         )
     }

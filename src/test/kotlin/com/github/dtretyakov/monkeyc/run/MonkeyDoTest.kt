@@ -52,6 +52,7 @@ class MonkeyDoTest {
             prg = Path.of("/app/bin/App.prg"),
             debugXml = Path.of("/app/bin/App.prg.debug.xml"),
             settingsJson = null,
+            applicationId = "8f14e45fceea167a5a36dedd4bea2543",
         )
         return MonkeyDo.commandLine(launch, "java", options).parametersList.list
     }

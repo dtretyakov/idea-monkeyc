@@ -1,6 +1,7 @@
 package com.github.dtretyakov.monkeyc.run
 
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
+import com.github.dtretyakov.monkeyc.run.session.SimulatorSession
 import com.github.dtretyakov.monkeyc.run.test.MonkeyCTestMessages
 import com.intellij.execution.ExecutionException
 import com.intellij.execution.process.OSProcessHandler
@@ -37,6 +38,17 @@ class MonkeyCLaunchProcessHandler(
     /** The app in the simulator, once there is one. Until then, there is nothing to kill. */
     @Volatile
     private var running: OSProcessHandler? = null
+
+    /**
+     * What Stop should do, once there is something it can do.
+     *
+     * Stop means two different things depending on how the app got there: kill the `monkeydo` that
+     * pushed it, or ask the app on our own connection to close. Held as the action itself rather
+     * than as a flag to branch on, because the third case — Stop arriving before anything has
+     * started — is then simply the absence of one.
+     */
+    @Volatile
+    private var stopper: (() -> Unit)? = null
 
     /**
      * Set when the user presses Stop.
@@ -124,16 +136,19 @@ class MonkeyCLaunchProcessHandler(
 
     private fun runInSimulator() {
         if (options.pairedProject.isNotEmpty()) {
-            // `monkeydo` pushes one app and has no second slot; only the debug adapter takes an
+            // A run pushes one app and has no second slot; only the debug adapter takes an
             // additionalPrg. Saying so beats silently running half of a complication.
             throw ExecutionException(
-                "A complication pair can only be started under the debugger: monkeydo takes one " +
-                    "app. Use Debug, or clear the paired app in this configuration.",
+                "A complication pair can only be started under the debugger, which is the only " +
+                    "thing that takes a second app. Use Debug, or clear the paired app in this " +
+                    "configuration.",
             )
         }
 
         val prepared = MonkeyCLaunch.prepare(project, options, ::report)
         if (stopped) return
+
+        runOnOurConnection(prepared)?.let { return finish(it) }
 
         val java = ConnectIqSdkService.getInstance().java().toString()
 
@@ -160,6 +175,66 @@ class MonkeyCLaunchProcessHandler(
         }
     }
 
+    /**
+     * Runs the app on the plugin's own connection to the simulator, or says it could not.
+     *
+     * This is the path that makes Stop mean something: the connection stays open across runs, so
+     * the app can be asked to close and the simulator can confirm that it has. `monkeydo` is what
+     * happens when it cannot be — the classes behind the connection are internal to the SDK, with
+     * no compatibility promise, so a new SDK is allowed to move them and a run is not allowed to
+     * fail because of it.
+     *
+     * @return the exit code, or null if the app has to go through `monkeydo` instead
+     */
+    private fun runOnOurConnection(prepared: PreparedLaunch): Int? {
+        val uuid = prepared.applicationId
+        if (uuid == null) {
+            LOG.info("No application id in the manifest, so the run goes through monkeydo")
+            return null
+        }
+
+        // Nothing is announced here. Whether this path can run the app at all is not known until
+        // it has tried, and a "Running on fenix7..." that turned out to be a `monkeydo` run would
+        // be printed twice.
+        val session = SimulatorSession.getInstance()
+        stopper = session::stop
+        try {
+            if (stopped) return STOPPED
+            return session.run(
+                sdk = prepared.sdk,
+                prg = prepared.prg,
+                device = prepared.device,
+                uuid = uuid,
+                tests = if (options.runTests) options.testNames else null,
+                nativePairing = options.runNativePairing,
+                stopped = { stopped },
+                report = ::report,
+                output = ::appSaid,
+            )
+        } catch (e: SimulatorSession.Unavailable) {
+            // Not shown to the user: nothing they did is wrong, and the run is about to happen
+            // anyway through the other path.
+            LOG.info("Running through monkeydo instead: ${e.message}", e)
+            // Out of the way of the run that is about to be tried instead, and not kept for the
+            // next one either: a connection that has just failed to launch an app is not one to
+            // start the next run on.
+            SimulatorSession.getInstance().release()
+            return null
+        } finally {
+            stopper = null
+        }
+    }
+
+    /** What the app printed, on its way to the console or to the test tree. */
+    private fun appSaid(text: String) {
+        if (testMessages != null) {
+            val translated = testMessages.translate(text)
+            if (translated.isNotEmpty()) notifyTextAvailable(translated, ProcessOutputTypes.STDOUT)
+        } else {
+            notifyTextAvailable(text, ProcessOutputTypes.STDOUT)
+        }
+    }
+
     /** What one `monkeydo` invocation did, once it is over. */
     private class Attempt(val exitCode: Int, val simulatorRefused: Boolean)
 
@@ -174,6 +249,7 @@ class MonkeyCLaunchProcessHandler(
     private fun pushToSimulator(prepared: PreparedLaunch, java: String): Attempt {
         val handler = OSProcessHandler(MonkeyDo.commandLine(prepared, java, options))
         running = handler
+        stopper = handler::destroyProcess
         val errors = StringBuilder()
 
         handler.addProcessListener(
@@ -252,21 +328,24 @@ class MonkeyCLaunchProcessHandler(
 
     override fun destroyProcessImpl() {
         stopped = true
-        val handler = running
-        if (handler == null) {
-            // Stopped during the build. The compiler is not ours to kill — it runs under the Build
-            // tool window — so it finishes on its own; `stopped` only keeps the app from being
-            // pushed to the simulator afterwards. Said out loud, because a Run window that goes
-            // red while the Build window keeps working otherwise looks like two contradictions.
-            notifyTextAvailable(
-                "\nStopped. The compiler was already running and finishes in the Build window; " +
-                    "nothing will be started when it does.\n",
-                ProcessOutputTypes.SYSTEM,
-            )
-            finish(1)
-        } else {
-            handler.destroyProcess()
+        val stop = stopper
+        if (stop != null) {
+            // On our own connection this only asks: the run's thread is watching the connection,
+            // sees the app terminate and ends the run itself. That wait is the difference between
+            // Stop and the app actually being gone, which is what the connection is for.
+            stop()
+            return
         }
+        // Stopped during the build. The compiler is not ours to kill — it runs under the Build tool
+        // window — so it finishes on its own; `stopped` only keeps the app from being pushed to the
+        // simulator afterwards. Said out loud, because a Run window that goes red while the Build
+        // window keeps working otherwise looks like two contradictions.
+        notifyTextAvailable(
+            "\nStopped. The compiler was already running and finishes in the Build window; " +
+                "nothing will be started when it does.\n",
+            ProcessOutputTypes.SYSTEM,
+        )
+        finish(1)
     }
 
     override fun detachProcessImpl() {
