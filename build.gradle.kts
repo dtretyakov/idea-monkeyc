@@ -169,7 +169,19 @@ intellijPlatform {
      * certificate is the author's and lives nowhere in this repository — see PUBLISHING.md.
      */
     signing {
-        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
+        // As a file, though it arrives as content, and the difference is not cosmetic: given as
+        // content, the platform plugin hands the chain to `verifyPluginSignature` twice — once as
+        // the temporary file it writes for it, and again as raw arguments — and the zip signer
+        // rejects the second copy with `Invalid argument: -----BEGIN CERTIFICATE-----`. Signing
+        // itself is unaffected, so the failure lands at the very end of a release, after every
+        // other check has passed. The chain is public material; it ships inside every signed
+        // plugin, and writing it under `build/` exposes nothing that the artifact does not.
+        certificateChainFile = providers.environmentVariable("CERTIFICATE_CHAIN").map { chain ->
+            layout.buildDirectory.file("signing/certificate-chain.pem").get().also {
+                it.asFile.parentFile.mkdirs()
+                it.asFile.writeText(chain)
+            }
+        }
         privateKey = providers.environmentVariable("PRIVATE_KEY")
         password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
     }
@@ -183,6 +195,19 @@ intellijPlatform {
             listOf(version.substringAfter('-', "").substringBefore('.').ifEmpty { "default" })
         }
     }
+}
+
+/**
+ * The dependency between signing and checking the signature, which nothing else declares.
+ *
+ * `verifyPluginSignature` reads the archive `signPlugin` writes, and the platform plugin hands the
+ * path across as a plain location rather than as the provider that carries its producing task with
+ * it. Gradle will not run a task whose input is another task's undeclared output, so the pair fails
+ * the moment both are asked for at once — which is the only way either is ever asked for, here and
+ * in PUBLISHING.md. It fails at the end of a release, after everything else has already passed.
+ */
+tasks.named("verifyPluginSignature") {
+    dependsOn(tasks.named("signPlugin"))
 }
 
 /**
