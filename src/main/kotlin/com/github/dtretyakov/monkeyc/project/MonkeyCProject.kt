@@ -82,9 +82,8 @@ class MonkeyCProject(private val project: Project) {
             ?.let { FileDocumentManager.getInstance().getCachedDocument(it) }
 
         val stamp = when {
-            open != null -> Stamp(path, document = open.modificationStamp)
+            open != null -> Stamp(document = open.modificationStamp)
             else -> Stamp(
-                path,
                 modified = runCatching { path.getLastModifiedTime().toMillis() }.getOrDefault(0L),
                 size = runCatching { path.fileSize() }.getOrDefault(-1L),
             )
@@ -104,9 +103,15 @@ class MonkeyCProject(private val project: Project) {
      *
      * The two cases cannot share a field: a document that has never been saved has a modification
      * stamp and a file timestamp that disagree, and the moment a document is closed the same path
-     * has to be re-read from disk even though nothing about the disk changed.
+     * has to be re-read from disk even though nothing about the disk changed. A stamp of one kind
+     * never equals one of the other, so opening or closing the file is a miss, which is right.
+     *
+     * Timestamp and size for the closed case, which is the same pair `ApiMirIndex` uses on
+     * the other file this plugin caches. Two edits inside one filesystem tick that leave the length
+     * unchanged would be missed; the alternative is re-parsing the manifest on every highlighting
+     * pass, which is what this replaced.
      */
-    private data class Stamp(val path: Path, val document: Long? = null, val modified: Long = 0, val size: Long = -1)
+    private data class Stamp(val document: Long? = null, val modified: Long = 0, val size: Long = -1)
 
     private val manifests = ConcurrentHashMap<Path, Pair<Stamp, ManifestFile?>>()
 

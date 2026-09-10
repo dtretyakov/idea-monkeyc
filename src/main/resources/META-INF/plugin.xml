@@ -4,7 +4,7 @@
     <description><![CDATA[
         Write, build, run and debug Monkey C, the language of Garmin Connect IQ devices — watch
         faces, watch apps, data fields, widgets and barrels, for Garmin smartwatches and Edge
-        computers.
+        cycling computers.
         <p>
         The plugin brings no language model of its own. Code intelligence — completion,
         diagnostics, go to definition, hover, rename, symbols, type and call hierarchies — comes
@@ -409,7 +409,7 @@
           The simulator is started by a run and never closed by one, which is right: it holds the
           state being looked at. Closing it is therefore something only the user can ask for.
         -->
-        <group id="MonkeyC.Simulator" text="Connect IQ Simulator" popup="true">
+        <group id="MonkeyC.Simulator" text="Simulator" popup="true">
             <action
                 id="MonkeyC.RestartSimulator"
                 class="com.github.dtretyakov.monkeyc.ui.RestartSimulatorAction"

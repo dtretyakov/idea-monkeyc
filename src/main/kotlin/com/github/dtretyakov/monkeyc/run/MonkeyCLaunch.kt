@@ -206,7 +206,7 @@ object MonkeyCLaunch {
             throw ExecutionException(
                 "A Connect IQ simulator from ${other.fileName} is running and holding the port, " +
                     "but this project builds with ${built.sdk.root.fileName}. " +
-                    "Restart it from Run | Connect IQ Simulator | Restart Simulator.",
+                    "Restart it from Tools | Connect IQ | Simulator | Restart Simulator.",
             )
         }
 
