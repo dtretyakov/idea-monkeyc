@@ -133,5 +133,6 @@ First release.
 - Everything that is neither a build nor a run configuration lives under Tools | Connect IQ: the
   simulator's own commands, the device list, and Garmin's SDK Manager — the last of which is now an
   action, so Search Everywhere can find the one gesture that unblocks a machine with no SDK on it.
-- Runs in IntelliJ IDEA 2026.1 and later, on Windows, macOS and Linux, verified against both ends of
-  that IDE range on every push rather than only against the one it is compiled with.
+- Runs in IntelliJ IDEA 2026.1 and later and in Android Studio 2026.1 and later, on Windows, macOS
+  and Linux. Both ends of the IDEA range are verified on every push, and Android Studio and the
+  IDEs still in EAP every week, rather than only the one the plugin is compiled with.
