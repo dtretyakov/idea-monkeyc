@@ -77,14 +77,17 @@ Then, on the listing page:
 
   | | |
   |---|---|
-  | `01-editor.png` | Monkey C with syntax highlighting, `//!` documentation comments, and the run arrow in the gutter beside the class the manifest names |
-  | `02-completion.png` | completion over the Toybox API, from the language server in the SDK |
-  | `03-debugger.png` | stopped on a breakpoint: frames, locals with real values, and the same values inline in the editor |
+  | `01-completion.png` | completion over the Toybox API, from the language server in the SDK — and, with it, the editor itself: syntax highlighting, `//!` documentation comments, the project tree, External Libraries |
+  | `02-debugger.png` | stopped on a breakpoint: frames, locals with real values, and the same values inline in the editor |
+  | `03-build-memory.png` | a build measured against the target watch — *Memory: 92.4 KB of 768.0 KB (12%) on fēnix® 7 / quatix® 7* — which is the constraint that shapes this platform and is reported on every build |
   | `04-tests.png` | four `(:test)` functions green, with the Connect IQ runner's own output beside the tree |
   | `05-goto-api.png` | Go to Declaration on a Toybox symbol, landing in the SDK's `api.mir` with its documentation rendered |
   | `06-parameter-info.png` | parameter info over a Toybox call |
   | `07-test-gutter.png` | the run arrow beside every `(:test)` function |
   | `08-completion-module.png` | completing a module, where classes and constants carry different icons |
+
+  There is deliberately no screenshot of the editor on its own. The completion shot contains one —
+  the popup sits inside it — so a second would spend a carousel slot saying the same thing twice.
 
   Taken against a real SDK, in the sandbox IDE, on a demo project written for the purpose — a watch
   app with a pace module, its unit tests, and eight declared devices. Retake them the same way: a
