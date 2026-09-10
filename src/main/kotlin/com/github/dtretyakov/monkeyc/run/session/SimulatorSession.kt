@@ -182,9 +182,26 @@ class SimulatorSession : Disposable {
                             else -> "open $uuid"
                         },
                     )
-                    channel.expect("event appStarted $app", START_TIMEOUT, output, mine::asked)
+
+                    // Not `expect`, because from here on giving up is not free: the app may
+                    // already be starting, and walking away from it would leave it running with
+                    // nobody watching — which is the whole bug this class exists to fix, put back
+                    // by the code that fixes it. Whichever way this ends, the app is asked to
+                    // close on the way out.
+                    val started = try {
+                        channel.until(START_TIMEOUT, output, mine::asked) {
+                            it == "event appStarted $app"
+                        }
+                    } catch (e: Exception) {
+                        closeQuietly(connection, uuid)
+                        throw e
+                    }
+                    if (started == null) {
+                        closeQuietly(connection, uuid)
+                        if (mine.asked) return FAILED
+                        throw Unavailable("the simulator did not answer with 'event appStarted $app'")
+                    }
                 }
-                if (mine.asked) return FAILED
 
                 report("Running on $device...\n")
 
@@ -209,6 +226,11 @@ class SimulatorSession : Disposable {
         } finally {
             lock.withLock { if (live === mine) live = null }
         }
+    }
+
+    /** Asks an app to close and does not wait, for when the run is leaving anyway. */
+    private fun closeQuietly(connection: Connection, uuid: String) {
+        runCatching { connection.send("close $uuid") }
     }
 
     /**
@@ -245,9 +267,12 @@ class SimulatorSession : Disposable {
      * the app closes, the run finishes in the Run window with an exit code like any other, and the
      * debugger starts on a simulator with nothing in its way.
      */
-    fun release() {
+    fun release() = launching.withLock {
+        // Under the launch lock, so that a run in the middle of starting is finished first and
+        // then ended, rather than having its connection closed out from under it and reported as
+        // a connection that could not be had.
         val (connection, run) = lock.withLock { connection to live }
-        if (connection == null) return
+        if (connection == null) return@withLock
 
         if (run != null) {
             run.closeAskedAt = System.currentTimeMillis()
@@ -292,6 +317,7 @@ class SimulatorSession : Disposable {
         lock.withLock {
             connection?.close()
             connection = null
+            live = null
         }
     }
 
@@ -342,8 +368,14 @@ class SimulatorSession : Disposable {
         fun close() {
             try {
                 send("quit")
+                // Given a moment to go on its own terms: asked to quit, it stops the shell it
+                // started, and a shell that outlives it keeps a socket open on a simulator that
+                // will not then take another client.
+                process.waitFor(QUIT_TIMEOUT, TimeUnit.MILLISECONDS)
             } catch (ignored: Unavailable) {
                 // Already gone, which is where this was heading anyway.
+            } catch (interrupted: InterruptedException) {
+                Thread.currentThread().interrupt()
             }
             process.destroy()
         }
@@ -569,6 +601,9 @@ class SimulatorSession : Disposable {
         private const val DEVICE_TIMEOUT = 60_000L
         private const val START_TIMEOUT = 30_000L
         private const val CLOSE_TIMEOUT = 10_000L
+
+        /** How long a helper is given to shut down its shell before it is signalled. */
+        private const val QUIT_TIMEOUT = 2_000L
 
         /**
          * The application id as the simulator says it back.

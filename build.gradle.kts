@@ -187,10 +187,22 @@ intellijPlatformTesting {
 
     runIde.register("runIdeWithFixture") {
         task {
-            args = listOf(
-                providers.gradleProperty("fixture")
-                    .getOrElse(layout.projectDirectory.dir("src/test/resources/fixture-app").asFile.absolutePath),
-            )
+            // A copy under `build`, not the fixture itself. The IDE opens the project it is given
+            // and then writes to it — `bin/` from every build, `.idea/` the moment it opens — and
+            // the fixture lives in the repository, so opening it in place meant a run left the
+            // working tree dirty and a stray edit made while trying something out was one `git
+            // add -A` away from being committed. Fresh each time, so what is opened is what the
+            // repository says; `-Pfixture=/path/to/project` is the way to work in one that lasts.
+            val scratch = layout.buildDirectory.dir("fixture-app").get().asFile
+            val chosen = providers.gradleProperty("fixture").getOrElse(scratch.absolutePath)
+            if (chosen == scratch.absolutePath) {
+                doFirst {
+                    val source = layout.projectDirectory.dir("src/test/resources/fixture-app").asFile
+                    scratch.deleteRecursively()
+                    source.copyRecursively(scratch)
+                }
+            }
+            args = listOf(chosen)
             jvmArgumentProviders.add(
                 CommandLineArgumentProvider {
                     // The LSP client's own logging, in idea.log rather than only in the LSP
