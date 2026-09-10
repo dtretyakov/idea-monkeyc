@@ -169,6 +169,9 @@
         <runLineMarkerContributor
             language="MonkeyC"
             implementationClass="com.github.dtretyakov.monkeyc.run.MonkeyCTestRunLineMarkerContributor"/>
+        <runLineMarkerContributor
+            language="MonkeyC"
+            implementationClass="com.github.dtretyakov.monkeyc.run.MonkeyCAppRunLineMarkerContributor"/>
 
 
         <notificationGroup id="Monkey C" displayType="BALLOON"/>

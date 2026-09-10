@@ -3,7 +3,6 @@ package com.github.dtretyakov.monkeyc.lang
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiManager
-import com.intellij.psi.PsiWhiteSpace
 import com.intellij.psi.search.FileTypeIndex
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.util.PsiTreeUtil
@@ -75,19 +74,5 @@ object MonkeyCTestFunctions {
                 else -> return false
             }
         }
-    }
-
-    /**
-     * The previous token that carries meaning: whitespace and comments are not it.
-     *
-     * `prevLeaf`'s own flag skips *empty* elements, not whitespace — a distinction that costs an
-     * hour if you assume otherwise, because every lookback then stops at the newline.
-     */
-    private fun meaningfulBefore(element: PsiElement): PsiElement? {
-        var previous = PsiTreeUtil.prevLeaf(element, true)
-        while (previous is PsiWhiteSpace || previous?.elementType in MonkeyCTokens.COMMENTS) {
-            previous = PsiTreeUtil.prevLeaf(previous ?: return null, true)
-        }
-        return previous
     }
 }

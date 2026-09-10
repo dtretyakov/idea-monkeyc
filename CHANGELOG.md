@@ -32,6 +32,8 @@ First release.
 
 - Run configurations for the app, its unit tests, a build that runs nothing, an export to `.iq`,
   a barrel, and a barrel's tests.
+- A green arrow in the gutter beside the class the app starts from — the one the manifest names as
+  its entry point, so a base class of your own in between does not move it.
 - A build for the watch rather than the simulator. When a Garmin device is attached, the plugin
   offers to install the `.prg` on it — over MTP for current devices, which appear under no volume
   at all, and as a file copy for older ones that mount as a disk. It says which watch is attached,
@@ -68,6 +70,13 @@ First release.
 - A run survives the simulator refusing it: the SDK leaks two pipes per run and stops accepting
   connections after a few dozen, so the app is pushed again, and the simulator restarted before a
   third attempt.
+- Stop stops the app. The plugin keeps its own connection to the simulator across runs, asks the
+  app to close and waits for the simulator to confirm it has — where before it could only kill the
+  program that pushed the app, leaving the app itself running with nothing attached and the next
+  debug session timing out on it. Starting the debugger hands the simulator over deliberately, for
+  the same reason: its channel takes one client.
+- What the app prints reaches the console, and so does a crash, which used to be indistinguishable
+  from a normal exit.
 - When something other than the simulator holds its ports, the run says so before failing on it.
 
 ### Tests

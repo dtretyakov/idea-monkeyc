@@ -41,10 +41,11 @@ you to: how many resource families have to be drawn, the smallest memory budget 
 fit, how many devices have no touchscreen, and the poorest colour depth the artwork has to survive.
 
 **Building and running.** Run configurations for the app, its unit tests, a build that runs nothing,
-an export to `.iq`, a barrel and a barrel's tests. Every build reports what it took of the target
-device's memory and what is left — a figure that ranges from 64 KB to 2304 KB across the devices
-Garmin ships, and is the constraint that shapes Connect IQ development. Compiler errors land in the
-Build tool window as something to click.
+an export to `.iq`, a barrel and a barrel's tests, and a green arrow in the gutter beside the class
+the app starts from. Every build reports what it took of the target device's memory and what is
+left — a figure that ranges from 64 KB to 2304 KB across the devices Garmin ships, and is the
+constraint that shapes Connect IQ development. Compiler errors land in the Build tool window as
+something to click.
 
 ![A Monkey C source file, and the app it builds running in the Connect IQ simulator](docs/images/simulator.png)
 
