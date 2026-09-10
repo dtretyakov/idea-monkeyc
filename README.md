@@ -44,8 +44,9 @@ installs without the dialog that asks whether to trust it. Pre-release versions 
 
 ## Requirements
 
-* IntelliJ IDEA 2026.1 or newer. It loads in the other IntelliJ-based IDEs and in Android Studio
-  too; where there is no Build menu, the build commands are in Search Everywhere.
+* IntelliJ IDEA 2026.1 or newer, or Android Studio 2026.1 (Quail) or newer. It loads in the other
+  IntelliJ-based IDEs too; where there is no Build menu, the build commands are in Search
+  Everywhere.
 * Windows, macOS or Linux — wherever the Connect IQ SDK runs.
 * The Connect IQ SDK, installed with Garmin's SDK Manager. Code intelligence needs SDK 8.1.0 or
   newer; building, running and debugging work with older ones.

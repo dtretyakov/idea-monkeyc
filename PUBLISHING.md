@@ -149,7 +149,11 @@ would rather install from disk than add a repository.
 - `./gradlew verifyPlugin -PverifySince` — against the *oldest* IDE `sinceBuild` promises. Nothing
   else can tell you the promise is true, because the code compiles against the newest.
 - `./gradlew verifyPlugin -PverifyRecommended` — the whole sweep JetBrains recommends. Several
-  gigabytes of IDE downloads; run it on a machine with the disk for it, not in CI.
+  gigabytes of IDE downloads, so it runs weekly rather than on every push.
+- `./gradlew verifyPlugin -PverifyEap` — the next IDEA on its own. The sweep covers it too, but
+  that is every IDE in range and this is one.
+- `./gradlew verifyPlugin -PverifyAndroidStudio` — the product the sweep never reaches, because it
+  only picks the one the plugin is built against.
 - `./gradlew runSelfCheck` — a headless IDE that starts the plugin and checks every extension it
   declares is really registered, and every action it declares is really in the menu it names. Both
   are silent at run time when they are wrong: the feature simply never happens, or the menu item

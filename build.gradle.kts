@@ -1,5 +1,6 @@
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.models.ProductRelease
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -103,12 +104,33 @@ intellijPlatform {
             // so nothing but this check can tell us the promise is true.
             //
             //     ./gradlew verifyPlugin -PverifySince
+            //
+            // And two more, each a single IDE rather than a set:
+            //
+            //     ./gradlew verifyPlugin -PverifyEap             the next IDEA, before it ships
+            //     ./gradlew verifyPlugin -PverifyAndroidStudio   the newest stable Android Studio
+            //
+            // The EAP is inside the recommended sweep already — `./gradlew printProductsReleases`
+            // lists what that resolves to — but the sweep is every IDE in range and this is one,
+            // which is the difference between a check you run while waiting and one you schedule.
+            // Android Studio is not in the sweep at any price: `recommended()` only ever picks the
+            // product the plugin is built against. It is on a release train of its own, months
+            // behind the platform under it, and a plugin that asks only for
+            // `com.intellij.modules.platform` is offered to it whether or not anybody checked.
             val unpacked = providers.gradleProperty("verifyAgainst").orNull?.takeIf { it.isNotBlank() }
             when {
                 unpacked != null -> local(file(unpacked))
                 providers.gradleProperty("verifyRecommended").isPresent -> recommended()
                 providers.gradleProperty("verifySince").isPresent ->
                     create(IntelliJPlatformType.IntellijIdeaUltimate, OLDEST_SUPPORTED_IDE)
+                providers.gradleProperty("verifyEap").isPresent -> latest {
+                    types = listOf(IntelliJPlatformType.IntellijIdeaUltimate)
+                    channels = listOf(ProductRelease.Channel.EAP)
+                }
+                providers.gradleProperty("verifyAndroidStudio").isPresent -> latest {
+                    types = listOf(IntelliJPlatformType.AndroidStudio)
+                    channels = listOf(ProductRelease.Channel.RELEASE)
+                }
                 // The IDE the plugin is already compiled against: nothing extra to download, so it
                 // fits on a runner's disk and reuses what the build step has cached.
                 else -> current()

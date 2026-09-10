@@ -11,6 +11,8 @@ Building it, and the two kinds of test that catch different failures.
 ./gradlew verifyPlugin   # compatibility check against the IDE the plugin is built on
 ./gradlew verifyPlugin -PverifySince              # ...and against the oldest IDE sinceBuild promises
 ./gradlew verifyPlugin -PverifyRecommended        # ...and against every IDE JetBrains recommends
+./gradlew verifyPlugin -PverifyEap                # ...and against the next IDEA, before it ships
+./gradlew verifyPlugin -PverifyAndroidStudio      # ...and against the newest Android Studio
 ./gradlew verifyPlugin -PverifyAgainst=<unpacked> # ...against an IDE already on disk
 ./gradlew buildPlugin    # distributable zip
 ./gradlew test -PshowOutput                       # let the tests print to the console
@@ -18,6 +20,14 @@ Building it, and the two kinds of test that catch different failures.
 
 `-PverifySince` is the one worth remembering. The code compiles against the newest IDE, so nothing
 else can tell you whether the promise `sinceBuild` makes to users on an older one is still true.
+
+The other two are single IDEs. `-PverifyEap` is the next IDEA, months before anyone has it, which
+is when a removed API is still worth a YouTrack issue rather than a patch release; the recommended
+sweep covers it too — `./gradlew printProductsReleases` lists what it resolves to — but that is
+every IDE in range and this is one. `-PverifyAndroidStudio` is the one the sweep never reaches,
+because `recommended()` only picks the product the plugin is built against; Android Studio runs
+months behind the platform under it, and the plugin asks only for `com.intellij.modules.platform`,
+so it is offered there whether or not anyone checked. CI runs the sweep and Android Studio weekly.
 
 `runIdeWithFixture` opens the sandbox IDE on the test fixture, which is a real Connect IQ project:
 
