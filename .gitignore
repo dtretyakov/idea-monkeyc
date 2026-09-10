@@ -13,3 +13,11 @@
 *.pem
 *.crt
 *.p12
+
+# Left behind by the tools rather than written by anyone.
+.DS_Store
+*.log
+*.hprof
+local.properties
+/.vscode/
+/.fleet/

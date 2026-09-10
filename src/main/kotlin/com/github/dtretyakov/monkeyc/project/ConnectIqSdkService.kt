@@ -10,6 +10,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.util.messages.Topic
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.io.path.exists
 import kotlin.io.path.getLastModifiedTime
 
@@ -96,26 +97,44 @@ class ConnectIqSdkService {
     fun java(): Path = JavaLocator.resolve(MonkeyCAppSettings.getInstance().javaPath)
 
     /**
-     * What that `java` reports as its version, or null when it will not say.
+     * What that `java` reports as its version, or null when it has not been asked yet.
      *
-     * Cached against the path it was asked about, because answering means starting a process and
-     * the checklist that shows it is rebuilt whenever an editor tab changes.
+     * Never starts a process on the caller's thread. The checklist this feeds is built in two
+     * places that must not spawn a child and wait on it: the settings page, which the platform
+     * builds on the EDT, and the editor banner, which it computes inside a non-blocking read
+     * action. So the first call schedules the probe and answers null; the answer is cached against
+     * the path it was asked about, and the next checklist carries it.
+     *
+     * Cached rather than re-read because the checklist is rebuilt whenever an editor tab changes.
      */
     fun javaVersion(): String? {
         val java = java()
         javaVersion?.let { (path, version) -> if (path == java) return version }
-        val version = JavaLocator.version(java)
-        javaVersion = java to version
-        return version
+
+        // One probe in flight at a time: the checklist is rebuilt often, and every rebuild before
+        // the first answer lands would otherwise start another `java -version`.
+        if (probing.compareAndSet(false, true)) {
+            ApplicationManager.getApplication().executeOnPooledThread {
+                try {
+                    javaVersion = java to JavaLocator.version(java)
+                } finally {
+                    probing.set(false)
+                }
+            }
+        }
+        return null
     }
 
     @Volatile
     private var javaVersion: Pair<Path, String?>? = null
 
+    private val probing = AtomicBoolean(false)
+
     /** Forces a re-read; for the settings dialog and the "reload" action. */
     fun refresh() {
         snapshot = null
         javaVersion = null
+        probing.set(false)
         pinnedSdk = null
         current()
         ApplicationManager.getApplication().messageBus.syncPublisher(TOPIC).sdkChanged(sdk)

@@ -4,10 +4,14 @@ import com.github.dtretyakov.monkeyc.ui.MonkeyCIcons
 import com.intellij.openapi.fileTypes.LanguageFileType
 import javax.swing.Icon
 
+/**
+ * `.mc`, and with it `.mcgen` — generated source — and `.mb`, the source inside a compiled barrel.
+ *
+ * Which extensions map here is said once, in plugin.xml, and checked by the self-check. It used to
+ * be said twice: a constant lived here as well, referenced by nothing, free to disagree with the
+ * registration that actually decides.
+ */
 object MonkeyCFileType : LanguageFileType(MonkeyCLanguage) {
-    /** `.mcgen` is generated source and `.mb` a compiled barrel's source; both are Monkey C. */
-    const val EXTENSIONS = "mc;mcgen;mb"
-
     override fun getName(): String = "Monkey C"
     override fun getDescription(): String = "Monkey C source file"
     override fun getDefaultExtension(): String = "mc"

@@ -23,6 +23,11 @@ test that will go red the day Garmin fixes it:
   produces is the one the simulator runs; and `barrelbuild` refuses anything outside the barrel's
   own namespace, so a top-level `(:test)` function breaks the barrel rather than merely failing to
   run.
+* The simulator's shell carries one client at a time. Whoever connects second gets everything and
+  whoever was there first is told `shellDisconnected` and then hears nothing more — including the
+  end of the app it was watching, so a run displaced by a debugger would simply never finish. The
+  plugin holds one connection for the whole IDE (`run/session/`) and hands out channels off it, and
+  ends a run on purpose before starting a debugger rather than letting it be cut off.
 * Unit tests cannot be debugged by anything. The adapter's `entry` reads
   `if (!mRunTests && isForegroundApp) mClient.initialized();`, and a DAP client registers
   breakpoints only after `initialized` — so a test run has no moment at which a breakpoint can be

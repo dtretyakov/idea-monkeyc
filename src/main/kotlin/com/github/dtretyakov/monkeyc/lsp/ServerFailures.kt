@@ -87,7 +87,7 @@ object ServerFailures {
     )
 
     private fun fileContext() = Cause(
-        "Code intelligence does not recognise this file",
+        "Code intelligence does not recognize this file",
         "The server matches open files against the ones the compiler resolved, and it resolves " +
             "through symlinks. A project reached by a name other than its real one gets this for " +
             "every file. Opening it by its real path is the reliable answer.",

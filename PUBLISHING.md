@@ -54,26 +54,52 @@ PRIVATE_KEY_PASSWORD="…" \
   ./gradlew signPlugin verifyPluginSignature
 ```
 
-Upload `build/distributions/Monkey C-0.1.0-signed.zip` at
-<https://plugins.jetbrains.com/plugin/add>. Then, on the listing page:
+Upload `build/distributions/idea-monkeyc-0.1.0-signed.zip` at
+<https://plugins.jetbrains.com/plugin/add>. The archive is named after `rootProject.name` in
+`settings.gradle.kts`, not after the plugin's display name — `pluginConfiguration.name` sets
+`<name>` inside the descriptor and nothing else.
+
+Then, on the listing page:
 
 - **License** — Apache 2.0, matching `LICENSE`. The Marketplace will not publish without one.
+- **EEA trader / non-trader declaration** — mandatory, and it blocks publication until it is
+  answered. An individual publishing a free plugin is a non-trader.
 - **Tags** — the ones that decide whether anybody finds it. `Languages`, `Build`, `Debugging`,
   `Embedded Development`.
-- **Screenshots** — at least 1200×760. The four worth showing are the ones nothing else in the
-  ecosystem has: the manifest form's product table with the summary line under it, the target chip
-  beside the Run button, a build reporting what it took of the device's memory, and the export
-  preflight naming the languages a device will not ship.
+- **Screenshots** — 1280×800, and the same aspect ratio for all of them; the guidelines call out
+  inconsistent ratios by name. The four worth showing are the ones nothing else in the ecosystem
+  has: the manifest form's product table with the summary line under it, the target chip beside the
+  Run button, a build reporting what it took of the device's memory, and the export preflight
+  naming the languages a device will not ship.
+- **What's new** — read the rendered release notes on the listing before publishing. They are
+  generated from `CHANGELOG.md`, and the Marketplace sanitises HTML more strictly than the plugin
+  descriptor does; `<h4>`, which `### ` becomes, is the tag to look at.
 - **Source code** and **Issue tracker** — <https://github.com/dtretyakov/idea-monkeyc> and its
-  issues.
+  issues. **The repository has to be public before this is submitted.** Every external link on the
+  plugin page is checked for being reachable, and an open-source licence is only accepted with a
+  source link behind it — a 404 is a rejection, not a warning.
 
 Review takes a few working days for a first submission. Every later version goes out through the
 workflow without review.
 
+### The one thing worth having an answer ready for
+
+*Monkey C* is Garmin's mark, and the approval guidelines forbid third-party trademarked names used
+without authorization. The case for it is nominative use: the plugin is named after the language it
+supports, exactly as every other language plugin on the Marketplace is, and it says so — the
+description carries a Trademarks section naming Garmin as the owner and denying affiliation, and the
+plugin displays no Garmin logo or brand element anywhere.
+
+The other thing a reviewer may raise is internal API usage, which the verifier reports and this
+build does not fail on. The three, and why each is the only way to do what it does, are at the
+bottom of this file.
+
 ## Every release after that
 
 1. Write the release's section at the top of `CHANGELOG.md` — it becomes the Marketplace's release
-   notes verbatim, through `latestChangeNotes` in `build.gradle.kts`.
+   notes verbatim, through `latestChangeNotes` in `build.gradle.kts`. That converter understands
+   `### ` subheadings, `- ` bullets with wrapped continuation lines, and inline backticks, and
+   nothing else: a `**bold**` or a markdown link ships to the Marketplace as literal punctuation.
 2. Set `pluginVersion` in `gradle.properties`. It only ever goes up: the Marketplace refuses a
    version it has already seen, including one it rejected.
 3. Tag it and push the tag.
@@ -101,8 +127,10 @@ would rather install from disk than add a repository.
 - `./gradlew verifyPlugin -PverifyRecommended` — the whole sweep JetBrains recommends. Several
   gigabytes of IDE downloads; run it on a machine with the disk for it, not in CI.
 - `./gradlew runSelfCheck` — a headless IDE that starts the plugin and checks every extension it
-  declares is really registered. A missing registration is silent at run time: the feature simply
-  never happens. It also prints the platform's verdict on whether the plugin can be unloaded
+  declares is really registered, and every action it declares is really in the menu it names. Both
+  are silent at run time when they are wrong: the feature simply never happens, or the menu item
+  simply is not there — the second being how an `add-to-group` naming a group this IDE has not got
+  behaves. It also prints the platform's verdict on whether the plugin can be unloaded
   without restarting the IDE; that should stay `yes`, and it turns to `no` the moment an extension
   point that is not dynamic is added. A `yes` there does not stop the IDE showing "Failed to unload
   modified plugins" in the development sandbox — that comes from a later step, and LSP4IJ hits it
@@ -110,12 +138,20 @@ would rather install from disk than add a repository.
 
 Two things the verifier always reports, neither of which is a finding:
 
-**Internal API.** The Build tool window's event classes, `TogglePopupAction` for the toolbar chip,
-and `ModernApplicationStarter` for the self-check above. Each is the only way to do what it does,
-and each is used by plugins JetBrains ships.
+**Internal API.** Twenty-nine usages, of a short list: the Build tool window's event classes,
+`TogglePopupAction` for the toolbar chip, and `ModernApplicationStarter` plus `DynamicPlugins` for
+the self-check above. Each is the only way to do what it does, and each is used by plugins JetBrains
+ships. The Marketplace's guidelines name internal API as something review looks at, so this is the
+paragraph to have ready.
 
-**Deprecated API.** Eight calls, and all eight are deliberate: they are the forms that exist in
-*both* IDEs the plugin supports. `FilePosition(File, …)`, `runReadAction`, and the Build event
-constructors were each superseded in 2026.2 by something 2026.1 does not have, so using the
-replacement would narrow the supported range to a single IDE. When `sinceBuild` moves up to 262,
-these are the calls to modernise, and the verifier's report is the list.
+**Deprecated API.** Nine distinct APIs across eighteen call sites, and every one of them is
+deliberate: they are the forms that exist in *both* IDEs the plugin supports. `FilePosition(File, …)`
+— the one the verifier reports as scheduled for removal — `runReadAction`, `ActionUtil.invokeAction`
+and the six Build event constructors were each superseded in 2026.2 by something 2026.1 does not
+have, so using the replacement would narrow the supported range to a single IDE. When `sinceBuild`
+moves up to 262, these are the calls to modernise, and the verifier's own report is the list:
+
+```bash
+./gradlew verifyPlugin
+open build/reports/pluginVerifier/*/plugins/com.github.dtretyakov.monkeyc/*/deprecated-usages.txt
+```

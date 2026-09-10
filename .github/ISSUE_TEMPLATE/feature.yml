@@ -1,0 +1,25 @@
+name: Feature request
+description: Something the plugin could do and does not.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: >
+        The task, rather than the feature. Connect IQ development has a lot of sharp edges, and the
+        best answer to one is often not the one that was asked for.
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: How you do it today
+      description: The workaround, the other tool, or the manual step this would replace.
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you had in mind
+      description: Optional, and no worse an issue for being left empty.

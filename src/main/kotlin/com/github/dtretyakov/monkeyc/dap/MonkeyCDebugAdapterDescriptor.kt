@@ -63,28 +63,36 @@ class MonkeyCDebugAdapterDescriptor(
         prepared = ProgressManager.getInstance().runProcessWithProgressSynchronously<PreparedLaunch, ExecutionException>(
             {
                 val indicator = ProgressManager.getInstance().progressIndicator
-                MonkeyCLaunch.prepare(environment.project, monkeyCOptions) { step ->
+                val launch = MonkeyCLaunch.prepare(environment.project, monkeyCOptions) { step ->
                     indicator?.text = step
                 }
+
+                if (!launch.debugXml.exists()) {
+                    throw ExecutionException(
+                        "The build produced no ${launch.debugXml.fileName}, and the debugger needs " +
+                            "it to map the executable back to source.",
+                    )
+                }
+
+                // The adapter opens the simulator's channel itself, and that channel carries one
+                // client: whoever is already on it is told `shellDisconnected` and then hears
+                // nothing more. The debugger wins that exchange — it is the run beside it that
+                // loses, going silent halfway through and never finding out that its app ended. So
+                // the run is ended here, on purpose, rather than left to be cut off.
+                //
+                // Inside this progress and not after it: `release()` takes the launch lock, which a
+                // run that is still starting holds for as long as its own timeouts allow, and then
+                // waits on the app to close and the shell to quit. On the EDT — which is where
+                // LSP4IJ calls this from — that is a frozen IDE for as long as it takes.
+                indicator?.text = "Freeing the simulator"
+                SimulatorSession.getInstance().release()
+
+                launch
             },
             "Building for the Debugger",
             true,
             environment.project,
         )
-
-        if (!prepared.debugXml.exists()) {
-            throw ExecutionException(
-                "The build produced no ${prepared.debugXml.fileName}, and the debugger needs it " +
-                    "to map the executable back to source.",
-            )
-        }
-
-        // The adapter opens the simulator's channel itself, and that channel carries one client:
-        // whoever is already on it is told `shellDisconnected` and then hears nothing more. The
-        // debugger wins that exchange — it is the run beside it that loses, going silent halfway
-        // through and never finding out that its app ended. So the run is ended here, on purpose,
-        // rather than left to be cut off.
-        SimulatorSession.getInstance().release()
 
         // The SDK the build actually used, not whichever is current now. Asking again could
         // answer differently — a project can pin one — and an adapter from one SDK driving a

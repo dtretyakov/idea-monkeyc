@@ -2,9 +2,9 @@
     <vendor email="dtretyakov@gmail.com" url="https://github.com/dtretyakov/idea-monkeyc">Dmitry Tretyakov</vendor>
 
     <description><![CDATA[
-        Garmin Connect IQ development in IntelliJ IDEA: writing Monkey C, building, running in the
-        Connect IQ simulator, and debugging — for watch faces, watch apps, data fields, widgets and
-        barrels, on Garmin smartwatches and Edge devices.
+        Write, build, run and debug Monkey C, the language of Garmin Connect IQ devices — watch
+        faces, watch apps, data fields, widgets and barrels, for Garmin smartwatches and Edge
+        computers.
         <p>
         The plugin brings no language model of its own. Code intelligence — completion,
         diagnostics, go to definition, hover, rename, symbols, type and call hierarchies — comes
@@ -40,9 +40,18 @@
             which the IDE installs with this plugin.
         </p>
         <p>
-            <em>Garmin, Connect IQ and Monkey C are trademarks of Garmin Ltd. or its subsidiaries,
-            used here only to say what this plugin works with. It is an independent project, not
-            affiliated with, endorsed by or supported by Garmin.</em>
+            Windows, macOS and Linux, wherever the Connect IQ SDK runs.
+        </p>
+        <h3>Trademarks</h3>
+        <p>
+            Garmin, Connect IQ and Monkey C are trademarks of Garmin Ltd. or its subsidiaries. They
+            are used here only to name the language this plugin supports and the devices it builds
+            for, which is a statement of compatibility and nothing more.
+        </p>
+        <p>
+            This is an independent, open-source project. It is not affiliated with, endorsed by, or
+            supported by Garmin, and it redistributes nothing of Garmin's: it finds the SDK the user
+            installed and runs the programs already in it.
         </p>
     ]]></description>
 
@@ -326,13 +335,6 @@
             <add-to-group group-id="BuildMenu" anchor="last"/>
         </action>
         <action
-            id="MonkeyC.EditProducts"
-            class="com.github.dtretyakov.monkeyc.ui.EditProductsAction"
-            text="Edit Connect IQ Devices"
-            description="Chooses which devices this project is built for">
-            <add-to-group group-id="BuildMenu" anchor="last"/>
-        </action>
-        <action
             id="MonkeyC.Export"
             class="com.github.dtretyakov.monkeyc.ui.ExportAction"
             text="Export Connect IQ App"
@@ -340,16 +342,6 @@
             <add-to-group group-id="BuildMenu" anchor="last"/>
         </action>
 
-        <!--
-          The simulator is started by a run and never closed by one, which is right: it holds the
-          state being looked at. Closing it is therefore something only the user can ask for.
-        -->
-        <!--
-          The device selector, in the run widget just past Run and Debug. A Connect IQ executable
-          is built for one watch, so this is not a preference tucked away in a dialog: it is what
-          the run is, and switching it - a round face, then a square one - is most of testing a
-          watch app.
-        -->
         <!--
           The follow-up the SDK's server asks for after completing a function call.
 
@@ -385,6 +377,12 @@
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>
 
+        <!--
+          The device selector, in the run widget just past Run and Debug. A Connect IQ executable
+          is built for one watch, so this is not a preference tucked away in a dialog: it is what
+          the run is, and switching it - a round face, then a square one - is most of testing a
+          watch app.
+        -->
         <action
             id="MonkeyC.SelectDevice"
             class="com.github.dtretyakov.monkeyc.ui.SelectDeviceAction"
@@ -396,6 +394,21 @@
                 relative-to-action="RunToolbarTopLevelExecutorActionGroup"/>
         </action>
 
+        <!--
+          Declared here and referenced from the Tools group below. It is a way to reach the
+          manifest form on its Products tab, not a build step - which is why it is no longer in the
+          Build menu, where it sat next to three actions that produce a file and it does not.
+        -->
+        <action
+            id="MonkeyC.EditProducts"
+            class="com.github.dtretyakov.monkeyc.ui.EditProductsAction"
+            text="Edit Connect IQ Devices"
+            description="Chooses which devices this project is built for"/>
+
+        <!--
+          The simulator is started by a run and never closed by one, which is right: it holds the
+          state being looked at. Closing it is therefore something only the user can ask for.
+        -->
         <group id="MonkeyC.Simulator" text="Connect IQ Simulator" popup="true">
             <action
                 id="MonkeyC.RestartSimulator"
@@ -417,7 +430,30 @@
                 class="com.github.dtretyakov.monkeyc.ui.ClearSimulatorDataAction"
                 text="Clear Stored App Data"
                 description="Removes the settings and storage the simulator kept, so the defaults in properties.xml apply again"/>
-            <add-to-group group-id="RunMenu" anchor="last"/>
+        </group>
+
+        <!--
+          Everything that is neither a build nor a run configuration, in one place under Tools.
+
+          The platform's three menus are narrower than they look. Build turns sources into an
+          artifact; Run is run configurations and the debugger and nothing else. Managing an
+          external environment - which is what starting, stopping and wiping a simulator is, and
+          what fetching devices with Garmin's manager is - is Tools, and that is where Android
+          Studio keeps the Device Manager for exactly the same reason.
+
+          Tools also exists in every IDE, which BuildMenu does not: an `add-to-group` naming a
+          group the IDE has not got is logged once and the action then simply is not there.
+        -->
+        <group id="MonkeyC.Tools" text="Connect IQ" popup="true">
+            <reference ref="MonkeyC.Simulator"/>
+            <separator/>
+            <reference ref="MonkeyC.EditProducts"/>
+            <action
+                id="MonkeyC.OpenSdkManager"
+                class="com.github.dtretyakov.monkeyc.ui.OpenSdkManagerAction"
+                text="Open SDK Manager"
+                description="Opens Garmin's SDK Manager, which is where SDKs and devices come from"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
         </group>
     </actions>
 

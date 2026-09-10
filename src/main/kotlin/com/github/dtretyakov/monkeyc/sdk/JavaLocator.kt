@@ -2,6 +2,7 @@ package com.github.dtretyakov.monkeyc.sdk
 
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.io.path.exists
 import kotlin.io.path.isExecutable
 
@@ -55,12 +56,33 @@ object JavaLocator {
         val process = ProcessBuilder(java.toString(), "-version")
             .redirectErrorStream(true)
             .start()
-        val output = process.inputStream.bufferedReader().use { it.readText() }
+
+        // Drained on a thread of its own, and the timeout applied to the process rather than to
+        // the read. Reading here first — which is the obvious way to write this — makes the
+        // timeout decorative: `waitFor` is only reached once the child closes its stdout, so a
+        // `java` that starts and then hangs is waited on forever. It is the same trap
+        // `MtpTool.run` documents, and it matters more here, because this runs while the settings
+        // page is being built.
+        val output = AtomicReference("")
+        val reader = Thread {
+            runCatching { process.inputStream.bufferedReader().use { output.set(it.readText()) } }
+        }.apply {
+            isDaemon = true
+            start()
+        }
+
         if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
             process.destroyForcibly()
             return null
         }
+        // The process is gone, so its stream closes and the reader ends on its own; the join is
+        // bounded anyway, because a reader that somehow does not is not worth hanging on.
+        reader.join(DRAIN_MILLIS)
+
         // `java -version` writes three lines to standard error; the first carries the version.
-        output.lineSequence().firstOrNull { it.isNotBlank() }?.trim()
+        output.get().lineSequence().firstOrNull { it.isNotBlank() }?.trim()
     }.getOrNull()
+
+    /** How long to wait for the drain thread once the process itself is already gone. */
+    private const val DRAIN_MILLIS = 500L
 }

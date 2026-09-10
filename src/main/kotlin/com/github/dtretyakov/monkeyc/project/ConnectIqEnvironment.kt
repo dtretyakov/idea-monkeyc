@@ -58,6 +58,20 @@ object ConnectIqEnvironment {
     /** The line about one prerequisite, for the control that fixes it. */
     fun of(items: List<Item>, concern: Concern): Item? = items.firstOrNull { it.concern == concern }
 
+    /**
+     * That line as a finished sentence, for text that has something after it.
+     *
+     * The two kinds of [Item.detail] are punctuated differently on purpose: a MISSING one is a
+     * sentence explaining what is wrong, and a READY one is a fragment naming a path or a count,
+     * which reads worse with a full stop glued to it. A caller that puts a link after the detail
+     * needs the first kind left alone and the second finished, and doing that at the call site
+     * meant "…nothing to build for yet.. Get the SDK Manager".
+     */
+    fun sentence(items: List<Item>, concern: Concern): String =
+        of(items, concern)?.detail.orEmpty().let {
+            if (it.isEmpty() || it.last() in ".!?") it else "$it."
+        }
+
     /** The first thing actually in the way, or null when nothing is. */
     fun firstProblem(items: List<Item>): Item? =
         items.firstOrNull { it.status == Status.MISSING && it.blocking }

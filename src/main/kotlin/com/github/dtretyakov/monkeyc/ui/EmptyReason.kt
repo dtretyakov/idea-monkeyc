@@ -14,6 +14,7 @@ internal sealed interface EmptyReason {
     object None : EmptyReason
     object NothingDownloaded : EmptyReason
     data class AllBelowMinimum(val installed: Int, val minimum: SdkVersion) : EmptyReason
+    /** [appType] is the kind's display name, not the manifest's identifier: it goes in a sentence. */
     data class NoneRunsThisKind(val installed: Int, val appType: String) : EmptyReason
 
     companion object {

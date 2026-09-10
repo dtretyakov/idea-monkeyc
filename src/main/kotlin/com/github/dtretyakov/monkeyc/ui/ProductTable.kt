@@ -56,7 +56,7 @@ class ProductTable(
             id(),
             device(),
             text("Screen", 150) { it.screen },
-            text("Colours", 80) { it.bitsPerPixel?.let { bits -> "$bits-bit" }.orEmpty() },
+            text("Colors", 80) { it.bitsPerPixel?.let { bits -> "$bits-bit" }.orEmpty() },
             text("Panel", 80) { it.displayType.orEmpty() },
             text("Input", 130) { it.input },
             memory(appType),

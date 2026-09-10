@@ -21,7 +21,7 @@ data class ConnectIqDevice(
     /**
      * How much memory this device gives each kind of app, keyed by the catalogue's own names.
      *
-     * The interesting number on this platform. A watch app gets between 64 KB and 768 KB depending
+     * The interesting number on this platform. A watch app gets between 64 KB and 2304 KB depending
      * on the watch, a data field between 16 KB and 256 KB, and an app that fits one device fails
      * to load on another with a message about a limit it does not name. Developers have been
      * scraping these values out of `compiler.json` into shared spreadsheets to compare them; the

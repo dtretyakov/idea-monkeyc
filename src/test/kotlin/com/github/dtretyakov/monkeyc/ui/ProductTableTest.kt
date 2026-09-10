@@ -95,7 +95,7 @@ class ProductTableTest {
     }
 
     private companion object {
-        /** Checkbox, ID, Device, Screen, Colours, Panel, Input, Memory. */
+        /** Checkbox, ID, Device, Screen, Colors, Panel, Input, Memory. */
         const val MEMORY_COLUMN = 7
     }
 }

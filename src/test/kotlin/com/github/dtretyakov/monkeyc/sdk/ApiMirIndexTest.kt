@@ -10,9 +10,15 @@ import org.junit.jupiter.api.Test
 /**
  * Reading Garmin's IR, on a miniature of the real thing.
  *
- * Every shape here is copied from `bin/api.mir` rather than invented: the annotation blocks, the
- * `<init>` block that opens and closes a brace nothing should count, the one-line function bodies,
- * the nested class, and the enum whose members belong to the module around it.
+ * Written for the test, in the shapes `bin/api.mir` uses: the annotation blocks, the `<init>` block
+ * that opens and closes a brace nothing should count, the one-line function bodies, the nested
+ * class, and the enum whose members belong to the module around it. Those shapes are the file
+ * format, which is what the parser reads and what this has to be faithful to.
+ *
+ * The names are the API's own — `Toybox.Graphics.Dc`, `WatchUi.Menu2` — because a test about
+ * resolving a path reads better against paths anyone can check. Identifiers and a format, and no
+ * text out of an installed SDK: the plugin bundles nothing of Garmin's, and neither does its test
+ * tree.
  */
 class ApiMirIndexTest {
 
@@ -24,17 +30,17 @@ class ApiMirIndexTest {
                 <init> {
                 }
                 type ColorType as ${'$'}.Toybox.Lang.Number or ${'$'}.Toybox.Graphics.ColorValue;
-                //! Constant representing a colour
+                //! One of the colours a Dc will take.
                 //! @since 1.0.0
                 enum ColorValue {
-                    //! White
+                    //! The lightest of them.
                     [@file = "api/Graphics.mb"; @line = 127; @position = 8; ]
                     COLOR_WHITE = 16777215,
                     COLOR_BLACK = 0,
                 }
                 [@file = "api/Graphics.mb"; @line = 300; ]
                 class Dc {
-                    //! Draw text at the given location.
+                    //! Put a string where the caller says.
                     public function drawText(x as ${'$'}.Toybox.Lang.Numeric) as Void {}
                     protected var mWidth as ${'$'}.Toybox.Lang.Number;
                     class Nested {
@@ -149,7 +155,7 @@ class ApiMirIndexTest {
                     class Dc {
                     }
                 }
-                //! The user interface toolkit.
+                //! Views, menus and the things drawn in them.
                 //! @since 1.0.0
                 module WatchUi {
                 }
@@ -158,7 +164,7 @@ class ApiMirIndexTest {
         val parsed = ApiMirIndex.parse(text)
 
         val graphics = requireNotNull(parsed.exact("Toybox.Graphics"))
-        val comment = text.indexOf("//! The user interface")
+        val comment = text.indexOf("//! Views, menus")
 
         assertTrue(graphics.endOffset <= comment, "Graphics swallows the comment that follows it")
         assertTrue(graphics.endOffset > text.indexOf("class Dc"), "Graphics ends before its own body")

@@ -1,0 +1,58 @@
+name: Bug report
+description: Something the plugin does that it should not, or does not do that it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The three fields below are the ones that decide whether a Connect IQ bug can be reproduced
+        at all. Everything else is optional.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+
+  - type: input
+    id: sdk
+    attributes:
+      label: Connect IQ SDK version
+      description: >
+        From Settings | Languages & Frameworks | Monkey C. Add the device you were building for if
+        the problem is about a build, a run or the simulator.
+      placeholder: "9.2.0, fenix7"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      description: >
+        Development happens on macOS, so Windows and Linux get less exercise. Saying which you are
+        on makes a report far more useful.
+      options: [macOS, Windows, Linux]
+    validations:
+      required: true
+
+  - type: input
+    id: ide
+    attributes:
+      label: IDE and plugin version
+      description: From Help | About, and Settings | Plugins.
+      placeholder: "IntelliJ IDEA 2026.2.2, Monkey C 0.1.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Anything the IDE said
+      description: >
+        Help | Show Log in Finder (or Explorer) has idea.log. If code intelligence is what
+        misbehaved, View | Tool Windows | Language Servers shows what the server was asked and what
+        it answered.
+      render: text

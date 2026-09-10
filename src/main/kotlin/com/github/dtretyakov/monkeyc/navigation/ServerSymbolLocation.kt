@@ -35,7 +35,16 @@ object ServerSymbolLocation {
     /** A location in a file the IDE can open, as the server described it. */
     data class Target(val file: VirtualFile, val line: Int, val character: Int)
 
-    private const val TIMEOUT_MILLIS = 2_000L
+    /**
+     * How long Go To Declaration will wait on the server.
+     *
+     * Short on purpose. This is awaited inside a read action, so every millisecond spent here is a
+     * millisecond any pending write action is blocked for — which the platform reports to the user
+     * as a freeze, not as a slow navigation. The server answers a prepared hierarchy off an index
+     * it already holds, so half a second is generous; the alternative to timing out is not a better
+     * answer, it is the same fall-through to nothing.
+     */
+    private const val TIMEOUT_MILLIS = 500L
 
     fun of(file: PsiFile, offset: Int): Target? {
         val project = file.project
@@ -80,7 +89,12 @@ object ServerSymbolLocation {
             throw e
         } catch (_: CancellationException) {
             return null
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            // A cancellation does not always arrive as itself: a future completed exceptionally
+            // hands back a CompletionException wrapping the real cause, and swallowing that turns
+            // "the user moved on" into "there is no such symbol" — and, worse, eats a
+            // ProcessCanceledException the platform needs to see.
+            (e.cause as? ProcessCanceledException)?.let { throw it }
             return null
         }
 

@@ -23,8 +23,18 @@ object ApiDocumentationLinks {
         """(?:command:)?monkeyc\.viewApiDocumentation\?\[\s*"([^"]*)"\s*,\s*"([^"]*)"\s*]""",
     )
 
-    /** An anchor whose href we could not turn into anything useful, kept as its own text. */
-    private val DEAD_LINK = Regex("""<a\s+href=['"]command:[^'"]*['"]\s*>(.*?)</a>""", RegexOption.DOT_MATCHES_ALL)
+    /**
+     * An anchor whose href we could not turn into anything useful, kept as its own text.
+     *
+     * The quote is captured and matched back rather than excluded from the href, because the href
+     * *contains* the other quote: the server writes
+     * `href='command:monkeyc.viewApiDocumentation?["getWidth","Toybox.Graphics.Dc"]'`, single
+     * quotes outside and double quotes in the argument. A character class of "not a quote" stops at
+     * the first one of those and the pattern never matches — which meant that every link this
+     * plugin could not resolve, on an SDK without the page or with no SDK at all, was left in the
+     * hover as a `command:` link that does nothing when clicked.
+     */
+    private val DEAD_LINK = Regex("""<a\s+href=(['"])command:.*?\1\s*>(.*?)</a>""", RegexOption.DOT_MATCHES_ALL)
 
     /** The markdown equivalent: `[text](command:…)`. */
     private val DEAD_MARKDOWN_LINK = Regex("""\[([^]]*)]\(command:[^)]*\)""")
@@ -36,7 +46,7 @@ object ApiDocumentationLinks {
             documentationUrl(sdk, member, module) ?: match.value
         }
         // Whatever is still a command link points at a command this IDE does not have.
-        return DEAD_MARKDOWN_LINK.replace(DEAD_LINK.replace(linked) { it.groupValues[1] }) { it.groupValues[1] }
+        return DEAD_MARKDOWN_LINK.replace(DEAD_LINK.replace(linked) { it.groupValues[2] }) { it.groupValues[1] }
     }
 
     /**

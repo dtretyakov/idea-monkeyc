@@ -94,7 +94,7 @@ object DeviceSelectionSummary {
     private fun colours(selected: List<ConnectIqDevice>): String? {
         val depths = selected.mapNotNull { it.bitsPerPixel }.distinct()
         if (depths.size < 2) return null
-        return "colour down to ${depths.min()}-bit"
+        return "color down to ${depths.min()}-bit"
     }
 
     private fun kilobytes(bytes: Long): String = "%d KB".format(Locale.ROOT, bytes / 1024)

@@ -194,13 +194,12 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
         }
     }
 
-    /** The way out of an empty list: the application that downloads devices. */
     /**
      * The door to the list itself, which is the manifest.
      *
      * Delegating to the registered action rather than opening the dialog here: it is the same
-     * command as Build | Edit Products, and two entry points that construct the dialog separately
-     * are two places to fix when it changes.
+     * command as Tools | Connect IQ | Edit Connect IQ Devices, and two entry points that construct
+     * the dialog separately are two places to fix when it changes.
      */
     private class EditProducts : AnAction("Edit Devices") {
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
@@ -213,6 +212,7 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
         }
     }
 
+    /** The way out of an empty list: the application that downloads devices. */
     private class Acquire(private val project: Project) : AnAction(OpenSdkManager.label()) {
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
         override fun actionPerformed(event: AnActionEvent) = OpenSdkManager.invoke(project)

@@ -1,0 +1,16 @@
+# The versions in gradle/libs.versions.toml are pinned by hand — Kotlin, the IntelliJ Platform
+# Gradle Plugin, the IDE the plugin compiles against, LSP4IJ, JUnit — and until now the only thing
+# that noticed any of them going stale was the weekly EAP run, which checks something else.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

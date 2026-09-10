@@ -23,6 +23,7 @@ import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler
 import com.intellij.ide.highlighter.ArchiveFileType
 import com.intellij.navigation.ChooseByNameContributor
 import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.ide.wizard.GeneratorNewProjectWizard
 import com.intellij.openapi.application.ModernApplicationStarter
 import com.intellij.openapi.application.PathManager
@@ -64,6 +65,10 @@ class SelfCheckStarter : ModernApplicationStarter() {
         mapOf(
             "mc" to MonkeyCFileType,
             "mcgen" to MonkeyCFileType,
+            // The source inside a compiled barrel. Registered in plugin.xml since the barrel
+            // library node existed, and unchecked here until now — which is the whole hazard this
+            // starter is for.
+            "mb" to MonkeyCFileType,
             "jungle" to JungleFileType,
             "mss" to MssFileType,
             "mir" to ApiMirFileType,
@@ -71,7 +76,7 @@ class SelfCheckStarter : ModernApplicationStarter() {
             val actual = fileTypes.getFileTypeByExtension(extension)
             if (actual != expected) problems += ".$extension is $actual, expected ${expected.name}"
         }
-        println("[self-check] file types: .mc .mcgen .jungle .mss .mir")
+        println("[self-check] file types: .mc .mcgen .mb .jungle .mss .mir")
 
         problems += barrelProblems()
         problems += sessionHelperProblems()
@@ -112,6 +117,7 @@ class SelfCheckStarter : ModernApplicationStarter() {
 
         problems += apiSurfaceProblems()
         problems += typingProblems()
+        problems += menuProblems()
 
         val debugAdapter = DebugAdapterManager.getInstance()
             .getDebugAdapterServerById(MonkeyCDebugAdapterFactory.SERVER_ID)
@@ -139,15 +145,6 @@ class SelfCheckStarter : ModernApplicationStarter() {
         exitProcess(if (problems.isEmpty()) 0 else 1)
     }
 
-    /**
-     * That a `.barrel` can actually be opened as what it is: a zip of Monkey C source.
-     *
-     * The library node shows barrels by mounting them through `JarFileSystem`, and whether that
-     * works for an extension the platform has never heard of is not something a registration can
-     * be read to confirm — it depends on the file type association having taken. So this builds a
-     * barrel-shaped zip and mounts it. If the answer is no, every barrel in the tree is one
-     * unreadable binary file and nothing anywhere says why.
-     */
     /**
      * Whether the platform would let this plugin be unloaded without restarting the IDE.
      *
@@ -220,6 +217,15 @@ class SelfCheckStarter : ModernApplicationStarter() {
         return emptyList()
     }
 
+    /**
+     * That a `.barrel` can actually be opened as what it is: a zip of Monkey C source.
+     *
+     * The library node shows barrels by mounting them through `JarFileSystem`, and whether that
+     * works for an extension the platform has never heard of is not something a registration can
+     * be read to confirm — it depends on the file type association having taken. So this builds a
+     * barrel-shaped zip and mounts it. If the answer is no, every barrel in the tree is one
+     * unreadable binary file and nothing anywhere says why.
+     */
     private fun barrelProblems(): List<String> {
         val fileType = FileTypeManager.getInstance().getFileTypeByExtension("barrel")
         if (fileType !is ArchiveFileType) return listOf(".barrel is $fileType, expected an archive")
@@ -237,7 +243,7 @@ class SelfCheckStarter : ModernApplicationStarter() {
             val root = JarFileSystem.getInstance().getJarRootForLocalFile(local)
                 ?: return listOf("a .barrel cannot be mounted, so barrels would show as one binary file")
             val source = root.findFileByRelativePath("content/source/Probe.mc")
-                ?: return listOf("a mounted .barrel has no ${root.children.size} readable children")
+                ?: return listOf("none of the ${root.children.size} entries in a mounted .barrel is readable")
 
             println("[self-check] barrels: mounted, and ${source.name} is ${source.fileType.name}")
             return if (source.fileType == MonkeyCFileType) {
@@ -259,6 +265,36 @@ class SelfCheckStarter : ModernApplicationStarter() {
      * LSP4IJ resolves by looking for an IDE action of that id; without one, completing a call
      * raises an error balloon each time.
      */
+    /**
+     * That every action this plugin declares is really in the menu it was put in.
+     *
+     * An `add-to-group` naming a group the IDE has not got is a line in `idea.log` and then a menu
+     * item that is simply not there — the same silence as an unregistered extension point, and
+     * with a longer fuse. Two ways to earn it: `BuildMenu` does not exist in the IDEs without a
+     * build system, and the run widget's own group ids have been renamed more than once while this
+     * plugin's `untilBuild` stays open. Neither shows up in a unit test, because a unit test has no
+     * action manager with menus in it.
+     */
+    private fun menuProblems(): List<String> {
+        val actions = ActionManager.getInstance()
+        val problems = mutableListOf<String>()
+
+        MENU_MEMBERSHIP.forEach { (group, members) ->
+            val parent = actions.getAction(group) as? DefaultActionGroup
+            if (parent == null) {
+                problems += "there is no action group '$group', so ${members.joinToString()} are in no menu"
+                return@forEach
+            }
+            val present = parent.getChildActionsOrStubs().mapNotNull { actions.getId(it) }.toSet()
+            members.filterNot { it in present }.forEach {
+                problems += "'$it' is not in '$group', so nothing in the menus reaches it"
+            }
+            println("[self-check] menu: $group carries ${members.count { it in present }}/${members.size}")
+        }
+
+        return problems
+    }
+
     private fun typingProblems(): List<String> {
         val problems = mutableListOf<String>()
 
@@ -378,6 +414,21 @@ class SelfCheckStarter : ModernApplicationStarter() {
             "com.intellij.codeBlockProvider" to listOf("MonkeyC"),
             "com.intellij.typeHierarchyProvider" to listOf("MonkeyC"),
             "com.intellij.callHierarchyProvider" to listOf("MonkeyC"),
+        )
+
+        /**
+         * Which of this plugin's actions belong to which platform menu, as plugin.xml says.
+         *
+         * The point is the group ids on the left, not the action ids on the right: those are ours
+         * and cannot go missing, while a platform group can be absent in an IDE that has no build
+         * system, or renamed under us in a release we have promised to run in.
+         */
+        val MENU_MEMBERSHIP = mapOf(
+            "BuildMenu" to listOf("MonkeyC.BuildApp", "MonkeyC.BuildForWatch", "MonkeyC.Export"),
+            "ToolsMenu" to listOf("MonkeyC.Tools"),
+            "MonkeyC.Tools" to listOf("MonkeyC.Simulator", "MonkeyC.EditProducts", "MonkeyC.OpenSdkManager"),
+            "EditorPopupMenu" to listOf("MonkeyC.OpenApiDocumentation"),
+            "RunToolbarMainActionGroup" to listOf("MonkeyC.SelectDevice"),
         )
     }
 }

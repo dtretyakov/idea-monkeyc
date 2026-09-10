@@ -206,7 +206,7 @@ class ManifestFormEditorTest : IdeTestCase() {
 
             val headings = (0 until table!!.columnModel.columnCount)
                 .map { table.columnModel.getColumn(it).headerValue?.toString().orEmpty() }
-            listOf("ID", "Device", "Screen", "Colours", "Input", "Memory").forEach {
+            listOf("ID", "Device", "Screen", "Colors", "Input", "Memory").forEach {
                 assertTrue("no $it column, only $headings", headings.contains(it))
             }
         } finally {

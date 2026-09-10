@@ -1,0 +1,10 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/dtretyakov/idea-monkeyc/security/advisories/new
+    about: Report privately rather than as an issue. See SECURITY.md.
+  - name: Connect IQ SDK itself
+    url: https://forums.garmin.com/developer/connect-iq/
+    about: >
+      A compiler error, a simulator crash or a device question is Garmin's forum, not this plugin —
+      unless the plugin is what mangled it.

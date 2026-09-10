@@ -5,6 +5,8 @@ import com.github.dtretyakov.monkeyc.sdk.AppType
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
 import com.github.dtretyakov.monkeyc.ui.DeviceSelectionSummary
 import com.github.dtretyakov.monkeyc.ui.EmptyReason
+import com.github.dtretyakov.monkeyc.ui.appTypeLabel
+import com.github.dtretyakov.monkeyc.ui.article
 import com.github.dtretyakov.monkeyc.ui.OpenSdkManager
 import com.github.dtretyakov.monkeyc.ui.ProductTable
 import com.github.dtretyakov.monkeyc.sdk.ProjectInfo
@@ -278,7 +280,8 @@ internal class ManifestForm(
             // The rows the table will actually have, so "empty" here means what it looks like.
             eligible = runnable.size + undownloaded.size,
             minimum = manifest.minSdkVersion,
-            appType = manifest.appType,
+            // The display name, not the manifest's identifier: this ends up in a sentence.
+            appType = appTypeLabel(manifest.appType, appTypes),
         )
 
         tabs.addTab(
@@ -474,16 +477,6 @@ internal class ManifestForm(
 }
 
 /**
- * A line of explanation under a control, in the platform's comment style.
- *
- * Assembled here rather than taken from `ComponentPanelBuilder.createCommentComponent`, which
- * is what it used to be. That class is deprecated, and it acquired a Kotlin companion object
- * along the way — so a Kotlin caller compiled against the newest IDE binds to
- * `Companion.createCommentComponent` and dies with a NoSuchFieldError on any older one, which
- * is to say every time the manifest form is opened there. Three lines of JBLabel is the whole
- * of what the call did.
- */
-/**
  * What to say in place of the summary when there is nothing in the table.
  *
  * The summary line answers "what does this selection cost", which is not a question an empty
@@ -502,8 +495,8 @@ private fun emptyNotice(reason: EmptyReason): JBLabel = commentLabel(
                 "which is the minimum this manifest asks for. Lower it above, or download a newer device."
 
         is EmptyReason.NoneRunsThisKind ->
-            "None of the ${reason.installed} downloaded devices runs a ${reason.appType}. Change the " +
-                "type above, or download a device that runs this one."
+            "None of the ${reason.installed} downloaded devices runs ${article(reason.appType)} " +
+                "${reason.appType}. Change the type above, or download a device that runs this one."
     },
 )
 
@@ -520,6 +513,16 @@ private fun footerWith(state: JComponent, action: JComponent): JComponent =
         add(action, BorderLayout.EAST)
     }
 
+/**
+ * A line of explanation under a control, in the platform's comment style.
+ *
+ * Assembled here rather than taken from `ComponentPanelBuilder.createCommentComponent`, which
+ * is what it used to be. That class is deprecated, and it acquired a Kotlin companion object
+ * along the way — so a Kotlin caller compiled against the newest IDE binds to
+ * `Companion.createCommentComponent` and dies with a NoSuchFieldError on any older one, which
+ * is to say every time the manifest form is opened there. Three lines of JBLabel is the whole
+ * of what the call did.
+ */
 private fun commentLabel(text: String): JBLabel =
     JBLabel(text, UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER).apply {
         border = JBUI.Borders.emptyTop(4)

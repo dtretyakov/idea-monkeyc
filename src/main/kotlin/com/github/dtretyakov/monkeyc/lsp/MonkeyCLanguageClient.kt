@@ -2,6 +2,7 @@ package com.github.dtretyakov.monkeyc.lsp
 
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
@@ -108,9 +109,19 @@ class MonkeyCLanguageClient(project: Project) : LanguageClientImpl(project) {
     @JsonRequest("custom/save")
     fun save(root: String): CompletableFuture<SaveWorkspaceResult> {
         val result = CompletableFuture<SaveWorkspaceResult>()
-        ApplicationManager.getApplication().invokeLater {
-            result.complete(runCatching { saveUnder(root) }.getOrElse { SaveWorkspaceResult(emptyList(), true) })
-        }
+        // `ModalityState.any()`, because the server is waiting on this future and a dialog must not
+        // be what keeps it waiting. Under the default modality the runnable is held back for as
+        // long as any modal window is open — the settings page, a rename, a commit dialog — and the
+        // build behind this request stalls for exactly that long, having asked a question nobody
+        // answers. And `project.disposed`, so a project closed while the server was mid-request
+        // cancels the runnable rather than running a WriteCommandAction against a dead project.
+        ApplicationManager.getApplication().invokeLater(
+            {
+                result.complete(runCatching { saveUnder(root) }.getOrElse { SaveWorkspaceResult(emptyList(), true) })
+            },
+            ModalityState.any(),
+            project.disposed,
+        )
         return result
     }
 

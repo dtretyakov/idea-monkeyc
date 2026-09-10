@@ -17,8 +17,9 @@ import com.intellij.openapi.vfs.LocalFileSystem
  * form is the one that stays, because it edits the file as text with the XML tab beside it, and
  * because everything else in the manifest is already there.
  *
- * The action stays, because a command called Edit Products in the Build menu is a reasonable way to
- * ask for this and the target popup wants somewhere to point. What it does now is navigate.
+ * The action stays, because a command called Edit Products is a reasonable way to ask for this and
+ * the target popup wants somewhere to point. What it does now is navigate. It sits under
+ * Tools | Connect IQ rather than under Build: it produces nothing, it opens a file.
  */
 class EditProductsAction : AnAction() {
 

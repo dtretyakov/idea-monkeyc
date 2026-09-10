@@ -10,6 +10,7 @@ import com.github.dtretyakov.monkeyc.sdk.ProjectInfo
 import com.github.dtretyakov.monkeyc.sdk.ProjectTemplate
 import com.github.dtretyakov.monkeyc.sdk.SdkVersion
 import com.github.dtretyakov.monkeyc.ui.OpenSdkManager
+import com.github.dtretyakov.monkeyc.ui.article
 import com.intellij.ide.wizard.AbstractNewProjectWizardStep
 import com.intellij.ide.wizard.NewProjectWizardBaseData.Companion.baseData
 import com.intellij.ide.wizard.NewProjectWizardStep
@@ -120,7 +121,9 @@ class ConnectIqWizardStep(parent: NewProjectWizardStep) : AbstractNewProjectWiza
             }
         }
 
-        builder.row("") {
+        // `row { }` and not `row("")`: an empty label is still a label, and the DSL keeps a column
+        // for it, so the checkbox sat indented past everything above it for no reason.
+        builder.row {
             checkBox("Add every downloaded device that supports this API level")
                 .bindSelected({ allCompatibleDevices }, { allCompatibleDevices = it })
         }
@@ -182,9 +185,11 @@ class ConnectIqWizardStep(parent: NewProjectWizardStep) : AbstractNewProjectWiza
             return "${candidate.displayName} supports API level ${candidate.sdkVersion}, " +
                 "not $level. Lower the minimum, or choose another device."
         }
-        val id = appType?.id
-        if (id != null && id != "barrel" && !candidate.supports(id)) {
-            return "${candidate.displayName} does not run a $id. Choose another device."
+        // The display name, not the manifest's identifier: "does not run an Audio Content Provider
+        // App" rather than "does not run a audio-content-provider-app".
+        if (appType != null && appType.id != "barrel" && !candidate.supports(appType.id)) {
+            return "${candidate.displayName} does not run ${article(appType.name)} ${appType.name}. " +
+                "Choose another device."
         }
         return null
     }

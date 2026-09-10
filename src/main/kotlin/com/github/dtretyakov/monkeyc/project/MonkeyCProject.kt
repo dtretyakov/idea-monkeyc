@@ -1,6 +1,7 @@
 package com.github.dtretyakov.monkeyc.project
 
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -10,7 +11,10 @@ import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.exists
+import kotlin.io.path.fileSize
+import kotlin.io.path.getLastModifiedTime
 import kotlin.io.path.name
 
 /**
@@ -62,14 +66,49 @@ class MonkeyCProject(private val project: Project) {
      *
      * `getCachedDocument` rather than `getDocument`: it returns one only if the file is already
      * open, which is exactly when there can be unsaved text, and it neither loads the file nor
-     * needs a read action to answer.
+     * needs a read action to answer. Its *text*, though, does: `DocumentImpl.getText` asserts read
+     * access, and the callers here include the pooled launch thread and two BGT actions.
+     *
+     * Cached against what the answer was derived from — the document's modification stamp when one
+     * is open, the file's timestamp and size when it is not — because this is on a hot path it does
+     * not look like. Two run line marker contributors ask for it while highlighting, which is once
+     * per candidate identifier per pass; without a cache each of those is a file read and a DOM
+     * parse. Everything else the highlighter touches here is already cached, and this was the
+     * exception.
      */
     fun manifest(root: Path): ManifestFile? {
         val path = manifestPath(root)
         val open = LocalFileSystem.getInstance().findFileByNioFile(path)
             ?.let { FileDocumentManager.getInstance().getCachedDocument(it) }
-        return open?.let { ManifestFile.parseText(it.text) } ?: ManifestFile.parse(path)
+
+        val stamp = when {
+            open != null -> Stamp(path, document = open.modificationStamp)
+            else -> Stamp(
+                path,
+                modified = runCatching { path.getLastModifiedTime().toMillis() }.getOrDefault(0L),
+                size = runCatching { path.fileSize() }.getOrDefault(-1L),
+            )
+        }
+
+        manifests[path]?.let { (cached, value) -> if (cached == stamp) return value }
+
+        val parsed = open
+            ?.let { document -> ManifestFile.parseText(runReadAction { document.text }) }
+            ?: ManifestFile.parse(path)
+        manifests[path] = stamp to parsed
+        return parsed
     }
+
+    /**
+     * What a cached manifest was read from, so a stale one is never handed out.
+     *
+     * The two cases cannot share a field: a document that has never been saved has a modification
+     * stamp and a file timestamp that disagree, and the moment a document is closed the same path
+     * has to be re-read from disk even though nothing about the disk changed.
+     */
+    private data class Stamp(val path: Path, val document: Long? = null, val modified: Long = 0, val size: Long = -1)
+
+    private val manifests = ConcurrentHashMap<Path, Pair<Stamp, ManifestFile?>>()
 
     /**
      * The manifest the build will actually read.

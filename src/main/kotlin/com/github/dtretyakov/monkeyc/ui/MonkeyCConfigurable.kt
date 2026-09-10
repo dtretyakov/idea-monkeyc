@@ -95,7 +95,7 @@ class MonkeyCConfigurable(private val project: Project) :
                         // every time this page was built, which is every time a project window
                         // opens.
                         .comment(
-                            "${status(ConnectIqEnvironment.Concern.DEVICES)}. " +
+                            "${ConnectIqEnvironment.sentence(environment, ConnectIqEnvironment.Concern.DEVICES)} " +
                                 "<a>${OpenSdkManager.label()}</a>",
                             action = HyperlinkEventAction { OpenSdkManager.invoke(project) },
                         )
@@ -170,7 +170,7 @@ class MonkeyCConfigurable(private val project: Project) :
 
             group("Code Intelligence") {
                 row {
-                    checkBox("Analyse the project as it is edited")
+                    checkBox("Analyze the project as it is edited")
                         .bindSelected(settings::liveAnalysis)
                         // What the switch costs, in one line. It used to be four, three of
                         // which explained the implementation: a second JVM, background compilation,
@@ -228,7 +228,6 @@ class MonkeyCConfigurable(private val project: Project) :
      * key in PKCS#8 DER and the JVM can write one — so this works on a machine with no openssl,
      * which on Windows is most of them.
      */
-
     private fun generateDeveloperKey(project: Project): Path? {
         val chosen = FileChooserFactory.getInstance()
             .createSaveFileDialog(
@@ -343,10 +342,4 @@ class MonkeyCConfigurable(private val project: Project) :
         }
     }
 
-    /**
-     * The device list as it should read: a name first, the id the compiler wants in brackets.
-     *
-     * The setting stores the id, so the two have to be mapped back and forth — and an unset device
-     * is a value of its own rather than a blank line.
-     */
 }

@@ -1,5 +1,13 @@
 # Changelog
 
+<!--
+  The top section of this file becomes the Marketplace's release notes verbatim, converted to HTML
+  by `latestChangeNotes` in build.gradle.kts. That converter understands four things and no others:
+  `## ` to open a release, `### ` subheadings, `- ` bullets with wrapped continuation lines, and
+  inline `backticks`. Bold, italics and links ship as literal punctuation — check the rendered notes
+  on the listing before publishing, not after.
+-->
+
 ## 0.1.0
 
 First release.
@@ -111,16 +119,19 @@ First release.
   choose from, it says which of the two reasons it is — nothing downloaded, or nothing downloaded
   that this manifest can use — because the remedies differ, and the SDK Manager is one click away
   from the table and from the settings page rather than only from a checklist item that has failed.
-- Devices are edited in one place. Build | Edit Connect IQ Devices and the chip beside Run both open
-  the manifest there rather than a dialog of their own. Called devices throughout, as Garmin's own
+- Devices are edited in one place. Tools | Connect IQ | Edit Connect IQ Devices and the chip beside
+  Run both open the manifest there rather than a dialog of their own. Called devices throughout, as Garmin's own
   SDK Manager calls them — `products` is the word the manifest XML uses, and it stays in the XML.
 - The simulator is started as a child process rather than handed to the system's launcher, so the
   plugin knows when it dies, stops the one it started without searching the machine for it, and can
   quote what it printed when it refuses to come up. A simulator started elsewhere — the SDK Manager,
-  a previous session — is still found and still stops. Run | Connect IQ Simulator | Show Simulator
-  Log shows the output, which has nowhere else to go.
+  a previous session — is still found and still stops. Tools | Connect IQ | Connect IQ Simulator |
+  Show Simulator Log shows the output, which has nowhere else to go.
 - Stopping and restarting the Connect IQ simulator, and clearing the app data it keeps between
   runs — which is what makes an edited default in `properties.xml` take effect, since a value there
   applies only while the property does not yet exist.
-- Runs in IntelliJ IDEA 2026.1 and later, verified against both ends of that range on every push
-  rather than only against the one it is compiled with.
+- Everything that is neither a build nor a run configuration lives under Tools | Connect IQ: the
+  simulator's own commands, the device list, and Garmin's SDK Manager — the last of which is now an
+  action, so Search Everywhere can find the one gesture that unblocks a machine with no SDK on it.
+- Runs in IntelliJ IDEA 2026.1 and later, on Windows, macOS and Linux, verified against both ends of
+  that IDE range on every push rather than only against the one it is compiled with.

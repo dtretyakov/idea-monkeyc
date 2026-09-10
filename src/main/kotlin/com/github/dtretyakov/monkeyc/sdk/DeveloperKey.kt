@@ -1,6 +1,8 @@
 package com.github.dtretyakov.monkeyc.sdk
 
+import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermission
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.MessageDigest
@@ -91,6 +93,34 @@ object DeveloperKey {
 
         destination.createParentDirectories()
         destination.writeBytes(key.encoded)
+        restrictToOwner(destination)
         return destination
+    }
+
+    /**
+     * Takes the new key away from everyone but its owner.
+     *
+     * A default umask is 022, so a private key written with no thought about it lands readable by
+     * every account on the machine — and `openssl`, which is what Garmin's own instructions use,
+     * does not leave it that way. Best effort by design: a filesystem without POSIX permissions
+     * (Windows, or a mounted share) gets the `File` fallback, and a filesystem that refuses both
+     * still gets a working key, because failing to *narrow* permissions is not a reason to leave
+     * the user without one.
+     */
+    private fun restrictToOwner(path: Path) {
+        runCatching {
+            Files.setPosixFilePermissions(
+                path,
+                setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE),
+            )
+        }.onFailure {
+            val file = path.toFile()
+            runCatching {
+                file.setReadable(false, false)
+                file.setWritable(false, false)
+                file.setReadable(true, true)
+                file.setWritable(true, true)
+            }
+        }
     }
 }

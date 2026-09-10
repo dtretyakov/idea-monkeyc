@@ -28,8 +28,14 @@ language server.
 **Writing.** Completion over the whole Toybox API, diagnostics, go to definition, hover
 documentation, parameter info, rename, find usages, symbols, folding, and type and call hierarchies
 — all from the language server Garmin ships in the SDK, so none of it falls behind the SDK you have
-installed. Syntax highlighting, commenting, bracket matching and self-closing quotes for `.mc`,
-`.jungle` and `.mss`. Shift+F1 opens Garmin's own page for the symbol under the caret, offline.
+installed. Syntax highlighting, commenting, bracket matching, self-closing quotes and Enter-and-
+indent for `.mc` (and `.mcgen`, and the `.mb` inside a compiled barrel), `.jungle` and `.mss`.
+Shift+F1 opens Garmin's own page for the symbol under the caret, offline.
+
+**Reading the API.** The SDK's `bin/api.mir` is twenty-seven thousand lines and gets a viewer of its
+own: a structure view to browse it as a tree, folding, and its `//!` comments rendered in place the
+way the IDE renders javadoc. A `.barrel` opens as what it is — a zip of Monkey C — so a barrel in
+External Libraries is source you can read rather than one opaque binary file.
 
 **The manifest.** A form beside the XML, for the parts that are lists of identifiers nobody
 remembers. Devices are a sortable table — screen, colour depth, panel, input and the memory this
@@ -62,9 +68,19 @@ in the SDK — which is not, as is widely believed, only inside the official VS 
 **Tests.** A test tree, a green arrow beside every `(:test)` function, the tests of one file or
 directory from its context menu, and every test in the project from its root.
 
+**Settings.** Type-check level, optimization level, debug log level, compiler warnings and any extra
+compiler flags, per project — the things `monkeyc` takes on the command line, in the place you would
+look for them. The SDK and the `java` that runs it can be pinned too, per project and per machine.
+
 ## Requirements
 
-* IntelliJ IDEA 2026.1 or newer
+* IntelliJ IDEA 2026.1 or newer. The plugin uses only platform API, so it loads in the other
+  IntelliJ-based IDEs and in Android Studio as well — but IDEA is what it is developed and tested
+  against, and in an IDE with no Build menu those three build commands live only in Search
+  Everywhere.
+* Windows, macOS or Linux, wherever the Connect IQ SDK runs. Development happens on macOS and CI
+  runs on Linux without an SDK, so the Windows and Linux paths get less exercise than the macOS
+  ones; a bug report from either is welcome.
 * The Connect IQ SDK, installed with Garmin's SDK Manager. Code intelligence needs SDK 8.1.0 or
   newer — that is when `LanguageServer.jar` first shipped; building and running work with anything
   older.
@@ -78,6 +94,9 @@ directory from its context menu, and every test in the project from its root.
 * [Notes on the Connect IQ SDK](docs/sdk-notes.md) — what its own tools do that a client has to work
   around, none of it documented anywhere else
 * [Developing](docs/developing.md) — building the plugin, and the two kinds of test
+* [Contributing](CONTRIBUTING.md) — what a useful bug report has in it, and the checks a pull
+  request should pass
+* [Security](SECURITY.md) — how to report a vulnerability, and what the plugin touches at all
 * [Publishing](PUBLISHING.md) — releases, signing, the Marketplace listing
 * [Changelog](CHANGELOG.md)
 
@@ -85,6 +104,12 @@ directory from its context menu, and every test in the project from its root.
 
 Apache License 2.0; see [LICENSE](LICENSE).
 
-Garmin, Connect IQ and Monkey C are trademarks of Garmin Ltd. or its subsidiaries. This is an
-independent project, not affiliated with or endorsed by Garmin, and it redistributes nothing of
-theirs: it finds the SDK the user installed and launches its programs.
+## Trademarks
+
+Garmin, Connect IQ and Monkey C are trademarks of Garmin Ltd. or its subsidiaries. They are used
+here only to name the language this plugin supports and the devices it builds for, which is a
+statement of compatibility and nothing more.
+
+This is an independent, open-source project. It is not affiliated with, endorsed by, or supported by
+Garmin, and it redistributes nothing of Garmin's — no SDK, no templates, no device data, no API
+documentation. It finds the SDK the user installed and runs the programs already in it.

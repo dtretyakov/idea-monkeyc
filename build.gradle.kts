@@ -232,8 +232,20 @@ fun latestChangeNotes(changelog: File): String {
 
     val html = StringBuilder()
     var inList = false
+    // Closed explicitly. A browser forgives an unclosed `<li>`; the Marketplace runs the change
+    // notes through a sanitiser of its own, which is stricter than the plugin descriptor's DTD and
+    // has no reason to be as forgiving.
+    var openItem = false
+
+    fun closeItem() {
+        if (openItem) {
+            html.append("</li>")
+            openItem = false
+        }
+    }
 
     fun closeList() {
+        closeItem()
         if (inList) {
             html.append("</ul>")
             inList = false
@@ -250,11 +262,13 @@ fun latestChangeNotes(changelog: File): String {
                 html.append("<h4>").append(inlineHtml(line.removePrefix("### "))).append("</h4>")
             }
             line.startsWith("- ") -> {
+                closeItem()
                 if (!inList) {
                     html.append("<ul>")
                     inList = true
                 }
                 html.append("<li>").append(inlineHtml(line.removePrefix("- ")))
+                openItem = true
             }
             inList -> html.append(' ').append(inlineHtml(line))
             else -> html.append("<p>").append(inlineHtml(line)).append("</p>")

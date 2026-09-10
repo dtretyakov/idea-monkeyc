@@ -99,7 +99,7 @@ class DeviceSelectionSummaryTest {
 
         val line = DeviceSelectionSummary.of(selected, "watch-app")!!
 
-        assertTrue(line.contains("colour down to 4-bit"), line)
+        assertTrue(line.contains("color down to 4-bit"), line)
     }
 
     @Test

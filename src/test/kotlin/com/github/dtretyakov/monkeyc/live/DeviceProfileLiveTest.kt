@@ -51,7 +51,7 @@ class DeviceProfileLiveTest {
         // The spread is the entire argument for showing a range: the app must fit the smallest.
         assertTrue(line.contains("memory") && line.contains("–"), line)
         assertTrue(line.contains("without touch"), line)
-        assertTrue(line.contains("colour down to"), line)
+        assertTrue(line.contains("color down to"), line)
         println("summary of all downloaded devices: $line")
     }
 }
