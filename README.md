@@ -28,45 +28,19 @@ installs without the dialog that asks whether to trust it. Pre-release versions 
 
 ## What it does
 
-**Writing.** Completion over the whole Toybox API, diagnostics as you type, go to definition, hover
-documentation, parameter info, rename, find usages, symbols, folding, and type and call hierarchies.
-Syntax highlighting, commenting, bracket matching, self-closing quotes and Enter-and-indent for
-`.mc`, `.jungle` and `.mss`. Shift+F1 opens Garmin's own page for the symbol under the caret,
-offline.
-
-**Reading the API.** The whole Toybox API is browsable as a tree, with Garmin's documentation
-rendered where you read it rather than left as comment markers. Barrels you depend on open as
-source, not as one binary file.
-
-**The manifest.** A form beside the XML, for the parts that are lists of identifiers nobody
-remembers. Devices are a sortable table — screen, colour depth, panel, input and the memory this
-kind of app gets on each — so the device that will actually constrain the app is one sort away.
-Under it, what the selection commits you to: how many resource families have to be drawn, the
-smallest memory budget the code now has to fit, how many devices have no touchscreen, and the
-poorest colour depth the artwork has to survive.
-
-**Building and running.** Run configurations for the app, its unit tests, an export to `.iq`, a
-barrel and a barrel's tests, and a green arrow in the gutter beside the class the app starts from.
-Every build reports what it took of the target device's memory and what is left — a figure that
-ranges from 64 KB to 2304 KB across the devices Garmin ships, and the constraint that shapes Connect
-IQ development. Compiler errors land in the Build tool window as something to click.
-
-**On the watch.** A build for the hardware rather than the simulator, and an offer to install the
-`.prg` over USB when a watch is attached.
-
-**Publishing.** An export says what it is about to leave out before it spends minutes doing it:
-devices that are declared but not downloaded, devices below the manifest's minimum API level, and
-languages the declared devices cannot render. It also remembers the developer key and the
-application id the app went out as, and refuses a later export that would change either — a
-different key cannot update a store listing at all, and a different id updates somebody else's.
-
-**Debugging.** Breakpoints, stepping, variables and expression evaluation, in the simulator.
-
-**Tests.** A test tree, a green arrow beside every `(:test)` function, the tests of one file or
-directory from its context menu, and every test in the project from its root.
-
-**Settings.** Type-check level, optimization level, debug log level, compiler warnings and any extra
-compiler flags, per project. The SDK and the `java` that runs it can be pinned as well.
+| | |
+|---|---|
+| **Write code** | Completion, diagnostics, go to definition and rename across the whole Toybox API. |
+| **Look up API** | Garmin's own documentation for the symbol under the caret, offline. |
+| **Run** | Builds the app and starts it in the Connect IQ simulator. |
+| **Debug** | Breakpoints, stepping, variables and expression evaluation in the simulator. |
+| **Test** | Runs one `(:test)` function, one file or the whole project, results as a tree. |
+| **Target a watch** | The device chip beside Run that every build, run and debug follows. |
+| **Watch memory** | Every build reports what it took of that watch's memory and what is left. |
+| **Edit manifest** | Devices, permissions and languages as a form instead of hand-written XML. |
+| **Sideload** | Builds for the hardware and copies the `.prg` to an attached watch over USB. |
+| **Publish** | Exports a signed `.iq`, naming the devices and languages it will drop before it starts. |
+| **Start a project** | A new project from the SDK's own templates, and a developer key without openssl. |
 
 ## Requirements
 
