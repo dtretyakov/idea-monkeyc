@@ -66,21 +66,32 @@ Then, on the listing page:
   answered. An individual publishing a free plugin is a non-trader.
 - **Tags** — the ones that decide whether anybody finds it. `Languages`, `Build`, `Debugging`,
   `Embedded Development`.
-- **Screenshots** — the four in [`docs/images/marketplace/`](docs/images/marketplace), in order.
-  All 1280×800, which is the size the guidelines recommend and the ratio they insist be the same
-  across every shot. They show the four things nothing else in the ecosystem has:
+- **Screenshots** — the set in [`docs/images/marketplace/`](docs/images/marketplace), in file-name
+  order. All 1280×800, which is the size the guidelines recommend and the ratio they insist be the
+  same across every shot. The first four carry the listing; the rest are there because a listing may
+  show more than four, and because the carousel's later slots are free.
+
+  They are chosen for what a Connect IQ developer does every day rather than for what is unusual
+  about the plugin — a listing has to answer "is this a real IDE for Monkey C" before it answers
+  anything else:
 
   | | |
   |---|---|
-  | `1-manifest-devices.png` | the manifest form's product table, and under it what the selection costs: *8 selected · 6 resource families · memory 96 KB–2304 KB · 4 without touch · color down to 1-bit* |
-  | `2-device-chip.png` | the target chip beside Run, open on the eight devices the manifest declares |
-  | `3-build-memory.png` | a build reporting *Memory: 88.7 KB of 768.0 KB (12%) on fēnix® 7 / quatix® 7* |
-  | `4-export-preflight.png` | the export preflight naming the languages particular devices will not ship, which is invisible everywhere else |
+  | `01-editor.png` | Monkey C with syntax highlighting, `//!` documentation comments, and the run arrow in the gutter beside the class the manifest names |
+  | `02-completion.png` | completion over the Toybox API, from the language server in the SDK |
+  | `03-debugger.png` | stopped on a breakpoint: frames, locals with real values, and the same values inline in the editor |
+  | `04-tests.png` | four `(:test)` functions green, with the Connect IQ runner's own output beside the tree |
+  | `05-goto-api.png` | Go to Declaration on a Toybox symbol, landing in the SDK's `api.mir` with its documentation rendered |
+  | `06-parameter-info.png` | parameter info over a Toybox call |
+  | `07-test-gutter.png` | the run arrow beside every `(:test)` function |
+  | `08-completion-module.png` | completing a module, where classes and constants carry different icons |
 
-  They were taken against a real SDK on a demo project — a watch app declaring eight devices across
-  six resource families and ten languages — because the summary line and the preflight say nothing
-  interesting about the two-device test fixture. Retake them the same way: a 1560×975 window
-  (16:10), captured on a Retina display and scaled to 1280×800.
+  Taken against a real SDK, in the sandbox IDE, on a demo project written for the purpose — a watch
+  app with a pace module, its unit tests, and eight declared devices. Retake them the same way: a
+  1560×975 window (16:10), captured on a Retina display and scaled to 1280×800, then quantised to an
+  adaptive 256-colour palette, which costs nothing visible on a dark IDE and cuts the set by two
+  thirds.
+
 - **What's new** — read the rendered release notes on the listing before publishing. They are
   generated from `CHANGELOG.md`, and the Marketplace sanitises HTML more strictly than the plugin
   descriptor does; `<h4>`, which `### ` becomes, is the tag to look at.
