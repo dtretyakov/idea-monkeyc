@@ -66,11 +66,21 @@ Then, on the listing page:
   answered. An individual publishing a free plugin is a non-trader.
 - **Tags** — the ones that decide whether anybody finds it. `Languages`, `Build`, `Debugging`,
   `Embedded Development`.
-- **Screenshots** — 1280×800, and the same aspect ratio for all of them; the guidelines call out
-  inconsistent ratios by name. The four worth showing are the ones nothing else in the ecosystem
-  has: the manifest form's product table with the summary line under it, the target chip beside the
-  Run button, a build reporting what it took of the device's memory, and the export preflight
-  naming the languages a device will not ship.
+- **Screenshots** — the four in [`docs/images/marketplace/`](docs/images/marketplace), in order.
+  All 1280×800, which is the size the guidelines recommend and the ratio they insist be the same
+  across every shot. They show the four things nothing else in the ecosystem has:
+
+  | | |
+  |---|---|
+  | `1-manifest-devices.png` | the manifest form's product table, and under it what the selection costs: *8 selected · 6 resource families · memory 96 KB–2304 KB · 4 without touch · color down to 1-bit* |
+  | `2-device-chip.png` | the target chip beside Run, open on the eight devices the manifest declares |
+  | `3-build-memory.png` | a build reporting *Memory: 88.7 KB of 768.0 KB (12%) on fēnix® 7 / quatix® 7* |
+  | `4-export-preflight.png` | the export preflight naming the languages particular devices will not ship, which is invisible everywhere else |
+
+  They were taken against a real SDK on a demo project — a watch app declaring eight devices across
+  six resource families and ten languages — because the summary line and the preflight say nothing
+  interesting about the two-device test fixture. Retake them the same way: a 1560×975 window
+  (16:10), captured on a Retina display and scaled to 1280×800.
 - **What's new** — read the rendered release notes on the listing before publishing. They are
   generated from `CHANGELOG.md`, and the Marketplace sanitises HTML more strictly than the plugin
   descriptor does; `<h4>`, which `### ` becomes, is the tag to look at.
