@@ -3,7 +3,7 @@
 Garmin Connect IQ development in IntelliJ IDEA: writing Monkey C, building, running in the Connect
 IQ simulator, and debugging — for watch faces, watch apps, data fields, widgets and barrels.
 
-![A Monkey C app stopped on a breakpoint in IntelliJ IDEA, its variables in view](docs/images/plugin.png)
+![Trail Pace stopped on a breakpoint in IntelliJ IDEA: the frame in onUpdate, its locals with real values, and the same values inline in the editor](docs/images/marketplace/02-debugger.png)
 
 ## Getting started
 
