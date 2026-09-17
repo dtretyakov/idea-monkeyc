@@ -215,13 +215,15 @@ class MonkeyCProject(private val project: Project) {
         if (developerKey() != null) return null
 
         val configured = MonkeyCSettings.getInstance(project).developerKeyPath.trim()
+        // Neither sentence names the settings page. Both places that read them offer it as a
+        // control: the editor banner puts a Settings action beside the text, and the settings page
+        // shows this under the field it is about, next to the button that does it.
         return if (configured.isNotEmpty()) {
             "The developer key at $configured does not exist. The project's settings are committed, " +
-                "so the path may have come from another machine. Choose or generate one in " +
-                "Settings | Languages & Frameworks | Monkey C."
+                "so the path may have come from another machine — choose the key on this one, or " +
+                "generate a new one."
         } else {
-            "No developer key. Set one in Settings | Languages & Frameworks | Monkey C, " +
-                "or let the SDK Manager generate one."
+            "No developer key. Generate one, or choose the .der file the SDK Manager made."
         }
     }
 
