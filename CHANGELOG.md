@@ -49,7 +49,9 @@ First release.
   folder afterwards is the install working, not failing. The program and nothing else is copied:
   app settings reach an installed app from its store listing, which a sideloaded build has none of.
 - MTP needs `mtp-rs`, which is looked for rather than required: a watch that mounts as a disk needs
-  none of it, and its absence is only mentioned when no device could be found at all.
+  none of it, and its absence is only mentioned when no device could be found at all. It is looked
+  for under the name each platform installs it as, and can be pointed at in the settings when it
+  lives somewhere else.
 - Builds are skipped when the output already matches the sources and the compiler flags — except
   an export, which is always built fresh, because a stale `.iq` is found out after it is published.
 - Every build reports what it takes of the target device's memory, and what is left. The limits
@@ -106,7 +108,9 @@ First release.
 - A new project wizard built on the SDK's own templates, which refuses a device and a minimum API
   level that contradict each other rather than generating a project the compiler rejects. Every
   template it offers — the barrel included — is generated and compiled by a live test.
-- Developer key generation, without needing openssl.
+- Developer key generation, without needing openssl. A new key is offered where an unset key is
+  already looked for, so it works in every project without a path to commit, and its fingerprint is
+  shown once when it is made — the one fact about a signing key that nothing else records.
 - A project can pin the SDK it builds with, instead of following whichever the SDK Manager has
   made current. A pin the machine cannot honour falls back rather than failing, and says so.
 - A form editor for `manifest.xml`, with products, permissions and languages. Products are a

@@ -64,8 +64,16 @@ object MtpTool {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    /** The name the binary installs under. */
-    const val EXECUTABLE = "mtp-rs"
+    private const val NAME = "mtp-rs"
+
+    /**
+     * The name the binary installs under, which on Windows carries the extension.
+     *
+     * `cargo install mtp-rs-cli` writes `mtp-rs.exe`, so asking for the bare name there found
+     * nothing however the tool was installed. A parameter rather than a read, so either spelling
+     * can be tested from either platform — the missing `.exe` survived because nothing could ask.
+     */
+    fun executable(windows: Boolean = isWindows): String = if (windows) "$NAME.exe" else NAME
 
     /**
      * Where to look for it when nothing is configured.
@@ -74,9 +82,20 @@ object MtpTool {
      * get it, and that directory is on `PATH` for a shell but not always for a GUI application —
      * an IDE launched from Finder inherits a `PATH` that a terminal would not recognise.
      */
-    fun candidates(home: Path): List<Path> = listOf(home.resolve(".cargo/bin").resolve(EXECUTABLE))
+    fun candidates(home: Path, windows: Boolean = isWindows): List<Path> =
+        listOf(home.resolve(".cargo/bin").resolve(executable(windows)))
 
-    fun isUsable(path: Path): Boolean = path.isRegularFile() && path.isExecutable()
+    /**
+     * Whether this path is a file that can be run.
+     *
+     * Windows has no executable bit, and `isExecutable` answers yes for any readable file; what
+     * decides there is the extension, which [executable] carries. The POSIX check stays on POSIX,
+     * where it tells a tool from a README that happens to share its name.
+     */
+    fun isUsable(path: Path, windows: Boolean = isWindows): Boolean =
+        path.isRegularFile() && (windows || path.isExecutable())
+
+    private val isWindows get() = System.getProperty("os.name").startsWith("Windows")
 
     /**
      * The devices in `mtp-rs --json devices` output.
