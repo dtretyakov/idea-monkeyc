@@ -75,12 +75,17 @@ class MtpToolTest {
 
     @Test
     fun `the upload command is the one known to work on a real watch`() {
-        val arguments = MtpTool.uploadArguments("0123456789", Path.of("bin/app.prg"), "/GARMIN/APPS/APP.PRG")
+        val local = Path.of("bin/app.prg")
+        val arguments = MtpTool.uploadArguments("0123456789", local, "/GARMIN/APPS/APP.PRG")
 
         // `--device` before the subcommand, `--verify` after it, and no `--replace`: current
         // devices hide a .prg once taken, so there is usually no visible file to replace.
+        //
+        // The local path is spelled by the platform rather than written out here — it is handed to
+        // a process and `bin\app.prg` is the right spelling on Windows. The remote one is the
+        // device's own and stays as it is.
         assertEquals(
-            listOf("--json", "--device", "0123456789", "put", "--verify", "bin/app.prg", "/GARMIN/APPS/APP.PRG"),
+            listOf("--json", "--device", "0123456789", "put", "--verify", local.toString(), "/GARMIN/APPS/APP.PRG"),
             arguments,
         )
         assertFalse(arguments.contains("--replace"))
@@ -113,8 +118,22 @@ class MtpToolTest {
 
     @Test
     fun `cargo's bin directory is searched, because that is the only way to install it`() {
-        val candidates = MtpTool.candidates(Path.of("/home/dev"))
+        val home = Path.of("/home/dev")
+        val candidates = MtpTool.candidates(home, windows = false)
 
-        assertTrue(candidates.any { it.toString().contains(".cargo/bin") }, "$candidates")
+        // Compared as paths, not as text: the separator is the platform's and the directory is the
+        // fact being asserted.
+        assertTrue(candidates.any { it.parent == home.resolve(".cargo/bin") }, "$candidates")
+    }
+
+    /** The name on each platform, which is the difference between finding the tool and not. */
+    @Test
+    fun `the tool is named as each platform installs it`() {
+        assertEquals("mtp-rs", MtpTool.executable(windows = false))
+        assertEquals("mtp-rs.exe", MtpTool.executable(windows = true))
+        assertEquals(
+            Path.of("/home/dev/.cargo/bin/mtp-rs.exe"),
+            MtpTool.candidates(Path.of("/home/dev"), windows = true).single(),
+        )
     }
 }

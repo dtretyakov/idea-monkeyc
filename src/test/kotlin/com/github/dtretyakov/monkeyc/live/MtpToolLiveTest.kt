@@ -19,18 +19,30 @@ import kotlin.io.path.isRegularFile
  * parsing one. Running the real binary and insisting the contract still holds is how that arrives
  * as a red test.
  *
- * Skipped when the tool is not installed, like every other live test here.
+ * Opt-in and skipped when the tool is not installed, like every other live test here.
  */
 class MtpToolLiveTest {
 
-    private fun tool(): Path? =
-        MtpTool.candidates(Path.of(System.getProperty("user.home")))
+    /**
+     * The real tool, or a skip.
+     *
+     * The `-PliveTests` gate is not decoration here. This used to check only whether the tool was
+     * installed, which was harmless for as long as it could never be found — the locator asked for
+     * `mtp-rs` where cargo writes `mtp-rs.exe`. With that fixed, a plain `./gradlew build` on any
+     * Windows machine that has the tool started driving real USB and reporting the machine rather
+     * than the code, which is exactly what the opt-in exists to prevent.
+     */
+    private fun tool(): Path {
+        assumeTrue(LiveSdk.enabled, "run with -PliveTests to drive the real mtp-rs")
+        val tool = MtpTool.candidates(Path.of(System.getProperty("user.home")))
             .firstOrNull { it.isRegularFile() && it.isExecutable() }
+        assumeTrue(tool != null, "mtp-rs is not installed")
+        return tool!!
+    }
 
     @Test
     fun `listing devices answers JSON this plugin can read`() {
         val tool = tool()
-        assumeTrue(tool != null, "mtp-rs is not installed")
 
         val process = ProcessBuilder(listOf(tool.toString()) + MtpTool.deviceArguments())
             .redirectErrorStream(false)
@@ -57,7 +69,6 @@ class MtpToolLiveTest {
     @Test
     fun `a command that needs a device fails the way we expect when there is none`() {
         val tool = tool()
-        assumeTrue(tool != null, "mtp-rs is not installed")
 
         val process = ProcessBuilder(tool.toString(), "info").redirectErrorStream(true).start()
         val output = process.inputStream.bufferedReader().use { it.readText() }
