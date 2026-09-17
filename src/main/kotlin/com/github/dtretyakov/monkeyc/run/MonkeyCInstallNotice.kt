@@ -57,7 +57,7 @@ object MonkeyCInstallNotice {
 
         val mismatch = targets.firstNotNullOfOrNull { target ->
             (target as? GarminTarget.Mtp)?.let {
-                ConnectedWatch.mismatch(built.device, it.device, it.info.product)
+                ConnectedWatch.mismatch(built.device, it.device, it.model)
             }
         }
         return if (mismatch == null) head else "$head\n\n$mismatch"

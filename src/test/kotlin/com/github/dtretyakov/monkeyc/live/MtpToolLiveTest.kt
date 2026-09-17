@@ -1,8 +1,11 @@
 package com.github.dtretyakov.monkeyc.live
 
+import com.github.dtretyakov.monkeyc.run.ConnectedWatch
 import com.github.dtretyakov.monkeyc.run.MtpDeviceInfo
 import com.github.dtretyakov.monkeyc.run.MtpTool
+import com.github.dtretyakov.monkeyc.sdk.DeviceCatalog
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
@@ -14,11 +17,13 @@ import kotlin.io.path.isRegularFile
 /**
  * Runs the real `mtp-rs` and reads its real answer.
  *
- * No watch is needed for the thing this catches. The field names come from the tool's `DeviceRow`
- * struct, and a rename upstream would leave our parser quietly returning defaults for everything —
- * a device with no product and no serial, which looks like a detection problem rather than a
- * parsing one. Running the real binary and insisting the contract still holds is how that arrives
- * as a red test.
+ * Most of it needs no watch. The field names come from the tool's own structs, and a rename
+ * upstream would leave our parser quietly returning defaults for everything — a device with no
+ * product and no serial, which looks like a detection problem rather than a parsing one. Running
+ * the real binary and insisting the contract still holds is how that arrives as a red test.
+ *
+ * One test does need a watch, because naming an attached one is a chain that cannot be checked
+ * any other way.
  *
  * Opt-in and skipped when the tool is not installed, like every other live test here.
  */
@@ -73,6 +78,39 @@ class MtpToolLiveTest {
                 "a device with none of the fields we read suggests they were renamed: $it",
             )
         }
+    }
+
+    /**
+     * The chain that names an attached watch, end to end on real hardware.
+     *
+     * This is the one that needs a watch, and it is the one worth having: everything the plugin
+     * says about a device rests on a model string the catalogue recognises. On Windows the bus
+     * scan gives none, so the model is asked of the device — and if `mtp-rs` ever renames that
+     * field, or answers a name Garmin's own device data does not use, the watch goes back to being
+     * offered as "an MTP device at a26a3a80c08a9b61" with nothing to say about it.
+     */
+    @Test
+    fun `an attached watch names a model the catalogue recognises`() {
+        val tool = tool()
+        val watch = enumerated(tool).firstOrNull { it.isGarmin }
+        assumeTrue(watch != null, "no Garmin device is attached")
+
+        val outcome = MtpTool.run(
+            listOf(tool.toString()) + MtpTool.infoArguments(watch!!.serial_number),
+            30,
+            TimeUnit.SECONDS,
+        )
+        assertEquals(0, outcome.exitCode, "opening the watch failed: ${outcome.errors.take(200)}")
+
+        val model = MtpTool.parseInfo(outcome.output)?.model
+        assertNotNull(model, "the watch did not say its model: ${outcome.output.take(200)}")
+
+        val devices = DeviceCatalog(LiveSdk.require().devicesRoot).devices()
+        assumeTrue(devices.isNotEmpty(), "no devices are downloaded")
+        assertNotNull(
+            ConnectedWatch.match(model, devices),
+            "the SDK's catalogue has no device called $model",
+        )
     }
 
     @Test
