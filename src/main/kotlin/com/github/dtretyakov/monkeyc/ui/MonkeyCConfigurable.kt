@@ -4,11 +4,13 @@ import com.github.dtretyakov.monkeyc.project.ConnectIqEnvironment
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
 import com.github.dtretyakov.monkeyc.project.DebugLogLevel
+import com.github.dtretyakov.monkeyc.project.MonkeyCAppSettings
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.project.OptimizationLevel
 import com.github.dtretyakov.monkeyc.project.ProjectLayout
 import com.github.dtretyakov.monkeyc.project.TypeCheckLevel
+import com.github.dtretyakov.monkeyc.run.MtpLocator
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
 import com.github.dtretyakov.monkeyc.sdk.DeveloperKey
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
@@ -20,14 +22,15 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.ui.components.fields.ExpandableTextField
-import com.intellij.ui.dsl.builder.COLUMNS_LARGE
-import com.intellij.ui.dsl.builder.columns
+import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.ui.dsl.builder.Cell
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.HyperlinkEventAction
 import com.intellij.ui.dsl.builder.Row
 import com.intellij.ui.dsl.builder.panel
+import javax.swing.JEditorPane
 import com.intellij.ui.dsl.builder.toNullableProperty
 import java.nio.file.Path
 import kotlin.io.path.name
@@ -43,8 +46,18 @@ import kotlin.io.path.exists
 class MonkeyCConfigurable(private val project: Project) :
     BoundSearchableConfigurable("Monkey C", "settings.monkeyc") {
 
+    /**
+     * The two comments that describe state rather than the control above them.
+     *
+     * Built with the page and therefore true only at the moment it opened, so they are kept to be
+     * rewritten: the developer key's when a key is generated, and both when settings are applied.
+     */
+    private var keyStatus: Cell<JEditorPane>? = null
+    private var mtpStatus: Cell<JEditorPane>? = null
+
     override fun createPanel(): DialogPanel {
         val settings = MonkeyCSettings.getInstance(project)
+        val appSettings = MonkeyCAppSettings.getInstance()
         val model = MonkeyCProject.getInstance(project)
         val sdkService = ConnectIqSdkService.getInstance()
 
@@ -115,7 +128,10 @@ class MonkeyCConfigurable(private val project: Project) :
                             .withTitle("Connect IQ SDK")
                             .withDescription("The directory holding bin/"),
                     )
-                        .columns(COLUMNS_LARGE)
+                        // Stretched, as the platform does with every path field of its own. A
+                        // fixed width made the page wider than the dialog opens.
+                        .align(AlignX.FILL)
+                        .resizableColumn()
                         .bindText(settings::sdkPath)
                         // Without this a typo is indistinguishable from having no SDK at all: every
                         // surface says "No Connect IQ SDK found" and none of them says where it looked.
@@ -132,14 +148,15 @@ class MonkeyCConfigurable(private val project: Project) :
                 }
                 // The state the page opens in, before anything is chosen.
                 location.visible(sdkChoices.labelFor(settings.sdkPath) == SdkChoices.CUSTOM)
+                // Held rather than local: the Generate button rewrites it, and so does apply().
                 row("Developer key:") {
                     val field = textFieldWithBrowseButton(
                         FileChooserDescriptorFactory.createSingleFileDescriptor("der")
                             .withTitle("Developer Key"),
                     )
-                        .columns(COLUMNS_LARGE)
+                        .align(AlignX.FILL)
+                        .resizableColumn()
                         .bindText(settings::developerKeyPath)
-                        .comment(status(ConnectIqEnvironment.Concern.DEVELOPER_KEY))
                         .validationOnApply { field ->
                             val given = field.text.trim().takeIf { it.isNotEmpty() }
                             given?.let { path ->
@@ -148,24 +165,40 @@ class MonkeyCConfigurable(private val project: Project) :
                         }
 
                     button("Generate…") {
-                        generateDeveloperKey(project)?.let { field.component.text = it.toString() }
+                        generateDeveloperKey(project)?.let { written ->
+                            // Left empty when the key went where an empty setting already looks.
+                            // These settings are committed, and an absolute path is true on one
+                            // machine: a teammate would pull a path they have not got and be told
+                            // their key is missing while their own sits where this one is.
+                            field.component.text =
+                                if (written.normalize() == defaultKeyFile()) "" else written.toString()
+                            // Said from the key itself rather than by re-reading the checklist,
+                            // which reads the setting, and nothing is applied yet.
+                            keyStatus?.component?.text = describeGeneratedKey(written)
+                        }
                     }
+                }
+                // A row of its own rather than a comment on the field, and the same below: a
+                // comment on a field starts at the field's column, so the row spends the label's
+                // width twice. See SettingsPageFitsTest.
+                row {
+                    keyStatus = comment(status(ConnectIqEnvironment.Concern.DEVELOPER_KEY))
                 }
                 row("Jungle files:") {
                     // Expandable: several jungles on one line separated by semicolons is how the
                     // compiler wants them and not how anyone wants to read them.
                     cell(ExpandableTextField({ it.split(';').map(String::trim) }, { it.joinToString(";") }))
-                        .columns(COLUMNS_LARGE)
+                        .align(AlignX.FILL)
+                        .resizableColumn()
                         .bindText(settings::jungleFiles)
-                        .comment(
-                            "Separated by <code>;</code>, relative to the project root. " +
-                                "Empty means <code>${ProjectLayout.DEFAULT_JUNGLE}</code>.",
-                        )
                         // A jungle the compiler cannot find is not an error the user ever sees:
                         // the language server logs "does not exist" to a console nobody opens and
                         // then indexes nothing at all.
                         .validationOnApply { field -> missingJungle(model, field.text)?.let { error(it) } }
-                }
+                }.rowComment(
+                    "Separated by <code>;</code>, relative to the project root. " +
+                        "Empty means <code>${ProjectLayout.DEFAULT_JUNGLE}</code>.",
+                )
             }.enabled(sdk != null)
 
             group("Code Intelligence") {
@@ -208,8 +241,39 @@ class MonkeyCConfigurable(private val project: Project) :
                 }
                 row("Extra arguments:") {
                     textField()
-                        .columns(COLUMNS_LARGE)
+                        .align(AlignX.FILL)
+                        .resizableColumn()
                         .bindText(settings::compilerOptions)
+                }
+            }
+
+            // A control at all because [MtpLocator.INSTALL_HINT] has always told people to set the
+            // path here, and there was nothing here to set.
+            group("Device") {
+                row("MTP tool:") {
+                    textFieldWithBrowseButton(
+                        FileChooserDescriptorFactory.createSingleFileDescriptor()
+                            .withTitle("mtp-rs")
+                            .withDescription("The mtp-rs executable, or the directory holding it"),
+                    )
+                        .align(AlignX.FILL)
+                        .resizableColumn()
+                        .bindText(appSettings::mtpToolPath)
+                        // A path that holds no tool is worth refusing here rather than at the end
+                        // of a build for the watch, which is where it would otherwise surface.
+                        .validationOnApply { field ->
+                            val given = field.text.trim().takeIf { it.isNotEmpty() }
+                            given?.let {
+                                if (MtpLocator.resolve(configured = it) == null) {
+                                    error("No mtp-rs here")
+                                } else {
+                                    null
+                                }
+                            }
+                        }
+                }
+                row {
+                    mtpStatus = comment(mtpToolStatus())
                 }
             }
         }
@@ -217,8 +281,23 @@ class MonkeyCConfigurable(private val project: Project) :
 
     override fun apply() {
         super.apply()
+
+        // The two state comments were written when the page opened and describe the settings as
+        // they were then. Cheap to re-read: `javaVersion` answers from a cache and never spawns a
+        // process on this thread, which is the only expensive thing the checklist does.
+        val environment = ConnectIqEnvironment.check(project)
+        keyStatus?.component?.text = ConnectIqEnvironment
+            .of(environment, ConnectIqEnvironment.Concern.DEVELOPER_KEY)?.detail.orEmpty()
+        mtpStatus?.component?.text = mtpToolStatus()
+
         // The server reads all of this once, at initialize; it has to be told to start over.
         project.messageBus.syncPublisher(MonkeyCSettings.TOPIC).settingsChanged(project)
+    }
+
+    override fun disposeUIResources() {
+        keyStatus = null
+        mtpStatus = null
+        super.disposeUIResources()
     }
 
     /**
@@ -234,7 +313,7 @@ class MonkeyCConfigurable(private val project: Project) :
                 FileSaverDescriptor("Generate Developer Key", "Where to write the new signing key", "der"),
                 project,
             )
-            .save("developer_key.der")
+            .save(defaultKeyDirectory(), ConnectIqSdk.DEVELOPER_KEY_FILE)
             ?.file
             ?.toPath()
             ?: return null
@@ -245,6 +324,34 @@ class MonkeyCConfigurable(private val project: Project) :
             }
             .getOrNull()
     }
+
+    /**
+     * The fingerprint, not the path: the field beside it shows the path, and which key an app was
+     * signed with is the fact nothing else records. See [DeveloperKey.fingerprint].
+     */
+    private fun describeGeneratedKey(key: Path): String {
+        val fingerprint = DeveloperKey.fingerprint(key)?.let { ", fingerprint $it" } ?: ""
+        // The consequence rather than the advice: it is what makes the backup worth making.
+        return "New key$fingerprint. No other key can update an app signed with it."
+    }
+
+    /** What `mtp-rs` is for, or where it was found. Absence is normal, so it is not an error. */
+    private fun mtpToolStatus(): String =
+        MtpLocator.resolve()?.let { "Found at ${FileUtil.getLocationRelativeToUserHome(it.toString())}" }
+            ?: "Needed to install a build on a watch. <a href=\"${MtpLocator.PROJECT_URL}\">Get mtp-rs</a>"
+
+    /**
+     * Where a new key is offered first: where [MonkeyCProject.developerKey] already looks when
+     * nothing is configured, so a key written there is the machine's key and needs no setting.
+     *
+     * Given no directory the dialog opens wherever the platform was last, which on Windows is
+     * `Documents` — and a signing key that is lost cannot be replaced. Null leaves the dialog as
+     * it was, for a machine the SDK Manager has never run on.
+     */
+    private fun defaultKeyDirectory(): Path? = ConnectIqSdk.dataRoot().takeIf { it.exists() }
+
+    /** The key an empty [MonkeyCSettings.developerKeyPath] already resolves to. */
+    private fun defaultKeyFile(): Path = ConnectIqSdk.dataRoot().resolve(ConnectIqSdk.DEVELOPER_KEY_FILE).normalize()
 
     /** The first jungle file that is named but not there, if any. */
     private fun missingJungle(model: MonkeyCProject, configured: String): String? {

@@ -48,7 +48,7 @@ class ConnectIqSdk(
     val templates: Path = root.resolve("bin/templates")
 
     /** The key the SDK Manager generates, used when the project has not been given one. */
-    val defaultDeveloperKey: Path = dataRoot.resolve("developer_key.der")
+    val defaultDeveloperKey: Path = dataRoot.resolve(DEVELOPER_KEY_FILE)
 
     val hasLanguageServer: Boolean
         get() = languageServerJar.exists()
@@ -80,6 +80,9 @@ class ConnectIqSdk(
     override fun toString(): String = "$root${version?.let { " ($it)" } ?: ""}"
 
     companion object {
+        /** The name the SDK Manager gives the key it generates, and the one an empty setting means. */
+        const val DEVELOPER_KEY_FILE = "developer_key.der"
+
         private val isMac get() = System.getProperty("os.name").startsWith("Mac")
         private val isWindows get() = System.getProperty("os.name").startsWith("Windows")
 
