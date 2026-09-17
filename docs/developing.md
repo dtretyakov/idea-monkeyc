@@ -18,6 +18,14 @@ Building it, and the two kinds of test that catch different failures.
 ./gradlew test -PshowOutput                       # let the tests print to the console
 ```
 
+On Windows it is `gradlew.bat` rather than `./gradlew`, and it wants a JDK that is **not** the
+Microsoft build of OpenJDK — which is the one that arrives with Visual Studio and with `winget`, so
+it is very likely the one already on the machine. Ant carries a special case for the Microsoft JVM
+of the 1990s: a `java.vendor` containing `microsoft` sends it looking for `$JAVA_HOME\Packages`,
+which no modern JDK has, and `instrumentCode` fails with `…\Packages does not exist` before a line
+of this plugin is reached. Temurin 21 builds cleanly; the JDK the build runs on is `JAVA_HOME`, or
+`org.gradle.java.home` if you would rather not change it.
+
 `-PverifySince` is the one worth remembering. The code compiles against the newest IDE, so nothing
 else can tell you whether the promise `sinceBuild` makes to users on an older one is still true.
 
