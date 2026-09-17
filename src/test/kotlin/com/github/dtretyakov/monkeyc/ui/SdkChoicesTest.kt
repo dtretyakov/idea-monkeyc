@@ -31,10 +31,14 @@ class SdkChoicesTest {
 
     @Test
     fun `an installed SDK reads as its directory name and stores as its path`() {
-        val choices = MonkeyCConfigurable.SdkChoices(installed, pinned = "/Sdks/connectiq-sdk-mac-9.1.0")
+        // Spelled by the platform rather than written out: a pin is the `toString` of a path, and
+        // on Windows that is `\Sdks\…`. Written out, this asserted that the label of a path this
+        // machine has not got is Custom, which it is — and said nothing about installed SDKs.
+        val pinned = installed[1].toString()
+        val choices = MonkeyCConfigurable.SdkChoices(installed, pinned = pinned)
 
-        assertEquals("connectiq-sdk-mac-9.1.0", choices.labelFor("/Sdks/connectiq-sdk-mac-9.1.0"))
-        assertEquals("/Sdks/connectiq-sdk-mac-9.1.0", choices.pathFor("connectiq-sdk-mac-9.1.0"))
+        assertEquals("connectiq-sdk-mac-9.1.0", choices.labelFor(pinned))
+        assertEquals(pinned, choices.pathFor("connectiq-sdk-mac-9.1.0"))
     }
 
     @Test
