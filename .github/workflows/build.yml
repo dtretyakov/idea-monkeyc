@@ -17,9 +17,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # All three, because the plugin drives programs and paths and the SDK runs on all three. One
+  # Windows run found `mtp-rs` looked for without its `.exe`, four tests skipped for want of `sh`,
+  # and two comparing a `Path` against a literal spelled with forward slashes — none of which can
+  # be wrong on Linux.
+  #
+  # Temurin specifically: Ant has a special case for the Microsoft JVM of the 1990s — a
+  # `java.vendor` containing "microsoft" sends it looking for `$JAVA_HOME/Packages` — which the
+  # Microsoft build of OpenJDK matches, failing `instrumentCode`. See docs/developing.md.
   build:
-    name: Build and test
-    runs-on: ubuntu-latest
+    name: Build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    # `./gradlew` is the spelling in the docs and in every other job here; on Windows the default
+    # shell would look for a PowerShell script of that name and find the POSIX one.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7
 
@@ -45,10 +62,13 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: test-report
+          name: test-report-${{ matrix.os }}
           path: build/reports/tests/test
 
-      - uses: actions/upload-artifact@v7
+      # One runner's zip, not three identical ones: the distribution is the same everywhere, and
+      # an artifact name may appear once per workflow.
+      - if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v7
         with:
           name: plugin
           path: build/distributions/*.zip
