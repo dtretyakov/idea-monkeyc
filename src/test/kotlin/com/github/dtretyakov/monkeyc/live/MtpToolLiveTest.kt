@@ -1,5 +1,6 @@
 package com.github.dtretyakov.monkeyc.live
 
+import com.github.dtretyakov.monkeyc.run.MtpDeviceInfo
 import com.github.dtretyakov.monkeyc.run.MtpTool
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -40,6 +41,14 @@ class MtpToolLiveTest {
         return tool!!
     }
 
+    /** Everything the tool enumerates, watches and otherwise. */
+    private fun enumerated(tool: Path): List<MtpDeviceInfo> {
+        val process = ProcessBuilder(listOf(tool.toString()) + MtpTool.deviceArguments()).start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        assertTrue(process.waitFor(30, TimeUnit.SECONDS), "mtp-rs did not finish")
+        return MtpTool.parseDevices(output)
+    }
+
     @Test
     fun `listing devices answers JSON this plugin can read`() {
         val tool = tool()
@@ -70,11 +79,19 @@ class MtpToolLiveTest {
     fun `a command that needs a device fails the way we expect when there is none`() {
         val tool = tool()
 
+        // `info` with no `--device` opens the first device the tool enumerates, whatever it is, so
+        // this can only be asked when it enumerates nothing. On Windows the descriptor scan picks
+        // up things that are not watches and are not even MTP — a Synaptics fingerprint sensor,
+        // here — and `info` then exits 1 with "open device: operation not supported by this
+        // device", which says nothing about the code for an absent device. Asking "did it fail?"
+        // instead of "was there nothing there?" is what made this fail on a machine with no watch.
+        assumeTrue(enumerated(tool).isEmpty(), "the tool sees a device, so a failure says nothing")
+
         val process = ProcessBuilder(tool.toString(), "info").redirectErrorStream(true).start()
         val output = process.inputStream.bufferedReader().use { it.readText() }
         process.waitFor(30, TimeUnit.SECONDS)
 
-        assumeTrue(process.exitValue() != 0, "a device is attached, so this says nothing")
+        assumeTrue(process.exitValue() != 0, "a device answered, so this says nothing")
         assertEquals(MtpTool.NO_DEVICE, process.exitValue(), "the no-device exit code: $output")
         assertTrue(
             MtpTool.describeFailure(process.exitValue(), output).contains("No Garmin device"),

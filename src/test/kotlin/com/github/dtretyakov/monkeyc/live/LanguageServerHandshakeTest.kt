@@ -116,7 +116,10 @@ class LanguageServerHandshakeTest : IdeTestCase() {
 
             val file = MonkeyCFileUriSupport.findFileByUri(uri)
             assertNotNull("the client could not resolve the URI the server sent: $uri", file)
-            assertEquals(source.toString(), file!!.path)
+            // Compared as paths. `VirtualFile.path` is spelled with forward slashes on every
+            // platform, including Windows, so asserting it against a `Path.toString()` failed
+            // there on the separator while the file it had found was the right one.
+            assertEquals(source, file!!.toNioPath())
         } finally {
             process.destroy()
             process.waitFor(10, TimeUnit.SECONDS)
