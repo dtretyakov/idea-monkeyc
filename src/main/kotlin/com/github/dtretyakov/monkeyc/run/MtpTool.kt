@@ -39,6 +39,22 @@ data class MtpDeviceInfo(
     }
 }
 
+/**
+ * What the device says about itself when it is opened, which is more than the bus scan knows.
+ *
+ * Field names are the tool's own, as everywhere else here. `model` is the one that matters: it is
+ * the plain name — "Venu 2" — that [ConnectedWatch] matches against the catalogue, and it is the
+ * only place a Windows machine can get it. See [MtpTool.infoArguments].
+ */
+@Serializable
+data class MtpDeviceDetails(
+    val manufacturer: String? = null,
+    val model: String? = null,
+    val serial_number: String? = null,
+    val device_version: String? = null,
+    val supports_rename: Boolean = false,
+)
+
 /** What an upload did, as `mtp-rs` reports it. */
 @Serializable
 data class MtpUpload(
@@ -134,6 +150,26 @@ object MtpTool {
         }
 
     fun deviceArguments(): List<String> = listOf("--json", "devices")
+
+    /**
+     * The arguments that ask one device what it is.
+     *
+     * Needed because the device list does not always say. `mtp-rs` reads the USB string
+     * descriptors where it can and reports `"product": "Venu 2"` in `devices` on macOS; the same
+     * scan on Windows returns no strings at all — not for the watch and not for anything else on
+     * the bus. Opening the device and asking it answers `"model": "Venu 2"` on both.
+     */
+    fun infoArguments(serial: String?): List<String> = buildList {
+        add("--json")
+        serial?.takeIf { it.isNotBlank() }?.let {
+            add("--device")
+            add(it)
+        }
+        add("info")
+    }
+
+    fun parseInfo(output: String): MtpDeviceDetails? =
+        runCatching { json.decodeFromString<MtpDeviceDetails>(output.trim()) }.getOrNull()
 
     /** What a finished `mtp-rs` run said and how it ended. */
     data class Outcome(val exitCode: Int, val output: String, val errors: String)

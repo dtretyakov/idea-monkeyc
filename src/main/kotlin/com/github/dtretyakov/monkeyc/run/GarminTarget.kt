@@ -39,11 +39,11 @@ sealed interface GarminTarget {
      * settings file has to match the program's — which only means anything if the program's case is
      * fixed. Whether the stem must also be eight characters is not settled, so it is left alone.
      */
-    data class Mtp(val tool: Path, val info: MtpDeviceInfo) : GarminTarget {
-        override val name: String get() = info.displayName
+    data class Mtp(val tool: Path, val info: MtpDeviceInfo, val model: String? = null) : GarminTarget {
+        override val name: String get() = model ?: info.displayName
 
         override val device: ConnectIqDevice?
-            get() = ConnectedWatch.match(info.product, ConnectIqSdkService.getInstance().devices())
+            get() = ConnectedWatch.match(model, ConnectIqSdkService.getInstance().devices())
 
         override fun install(prg: Path): Path {
             val remote = "$APPS_DIRECTORY/${prg.name.uppercase()}"
@@ -135,10 +135,41 @@ sealed interface GarminTarget {
                 )
             }.getOrNull() ?: return emptyList()
 
-            // Garmin's vendor id, so a phone or a camera on the same bus is not offered as a watch.
-            return MtpTool.parseDevices(outcome.output).filter { it.isGarmin }.map { Mtp(tool, it) }
+            // Garmin's vendor id, so a phone or a camera on the same bus is not offered as a
+            // watch. On Windows it also keeps out a Synaptics fingerprint sensor, which the tool's
+            // descriptor scan reaches and which is not an MTP device at all.
+            return MtpTool.parseDevices(outcome.output)
+                .filter { it.isGarmin }
+                .map { Mtp(tool, it, model = it.product ?: modelOf(tool, it)) }
+        }
+
+        /**
+         * The model, asked of the device when the bus scan did not say.
+         *
+         * Everything that names the watch rests on this: what it is called when the user is asked
+         * where to install, which catalogue device it is, and the warning that a `.prg` was built
+         * for another watch — which matters because such a build installs and then does nothing.
+         * On Windows the scan reports no strings, so without this the watch is offered as "an MTP
+         * device at a26a3a80c08a9b61" and the warning has no opinion.
+         *
+         * One extra process per attached Garmin device, and only when the list was silent. This
+         * already runs a process and never runs on the UI thread — see [refreshAttached].
+         */
+        private fun modelOf(tool: Path, device: MtpDeviceInfo): String? {
+            val outcome = runCatching {
+                MtpTool.run(
+                    listOf(tool.toString()) + MtpTool.infoArguments(device.serial_number),
+                    INFO_TIMEOUT_SECONDS,
+                    TimeUnit.SECONDS,
+                )
+            }.getOrNull() ?: return null
+            if (outcome.exitCode != 0) return null
+            return MtpTool.parseInfo(outcome.output)?.model?.takeIf { it.isNotBlank() }
         }
 
         private const val LIST_TIMEOUT_SECONDS = 20L
+
+        /** Opening a device is quick; it is already attached and answering by the time this runs. */
+        private const val INFO_TIMEOUT_SECONDS = 20L
     }
 }

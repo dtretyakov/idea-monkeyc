@@ -126,6 +126,75 @@ class MtpToolTest {
         assertTrue(candidates.any { it.parent == home.resolve(".cargo/bin") }, "$candidates")
     }
 
+    /**
+     * A real watch as the bus scan reports it on Windows, which is not how it reports one on macOS.
+     *
+     * Captured from a Venu 2 over USB. The vendor id and the serial are there, which is all that
+     * is needed to install. Every string is missing: `opened_descriptor_scan` on Windows reads no
+     * `product` and no `manufacturer`, for the watch and for everything else on the bus — which is
+     * why the model is asked of the device separately.
+     */
+    @Test
+    fun `the bus scan on Windows carries a serial and no model`() {
+        val devices = MtpTool.parseDevices(WINDOWS_DEVICES)
+
+        // Unknown fields and all: the tool says more than this plugin reads, and a new one must
+        // not stop the answer parsing.
+        assertEquals(2, devices.size)
+
+        // The fingerprint sensor on the same bus, which is why the vendor filter is not decoration.
+        val watch = devices.single { it.isGarmin }
+        assertEquals("0000cbf416e5", watch.serial_number)
+        assertNull(watch.product)
+
+        // With no product string there is nothing to match against the catalogue, and the mismatch
+        // guard has no opinion about a build made for another watch. Both are what asking the
+        // device puts right.
+        assertNull(ConnectedWatch.match(watch.product, emptyList()))
+        assertNull(ConnectedWatch.mismatch(built = "fenix7", watch = null, product = watch.product))
+    }
+
+    /** Opening the device answers the plain name the catalogue uses. */
+    @Test
+    fun `asking the device gives the model the catalogue knows`() {
+        val details = MtpTool.parseInfo(
+            """
+            {
+              "manufacturer": "Garmin",
+              "model": "Venu 2",
+              "serial_number": "0000cbf416e5",
+              "device_version": "1905",
+              "supports_rename": true,
+              "storages": [
+                {"index": 0, "id": "cd5f512da6e96523", "description": "Internal Storage",
+                 "max_capacity": 7613612032, "free_space_bytes": 6596067328}
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals("Venu 2", details?.model)
+        assertEquals("Garmin", details?.manufacturer)
+        assertEquals("0000cbf416e5", details?.serial_number)
+    }
+
+    @Test
+    fun `the model asked for is what the watch is offered as`() {
+        val watch = MtpTool.parseDevices(WINDOWS_DEVICES).single { it.isGarmin }
+        val tool = Path.of("mtp-rs")
+
+        // Unasked, the best that can be said is where it is on the bus.
+        assertEquals("an MTP device at a26a3a80c08a9b61", GarminTarget.Mtp(tool, watch).name)
+        assertEquals("Venu 2", GarminTarget.Mtp(tool, watch, model = "Venu 2").name)
+    }
+
+    @Test
+    fun `the info command names the device globally, before the subcommand`() {
+        assertEquals(listOf("--json", "--device", "0123456789", "info"), MtpTool.infoArguments("0123456789"))
+        // Nothing to name with one device attached, and `--device` with no value would be an error.
+        assertEquals(listOf("--json", "info"), MtpTool.infoArguments(null))
+    }
+
     /** The name on each platform, which is the difference between finding the tool and not. */
     @Test
     fun `the tool is named as each platform installs it`() {
@@ -135,5 +204,21 @@ class MtpToolTest {
             Path.of("/home/dev/.cargo/bin/mtp-rs.exe"),
             MtpTool.candidates(Path.of("/home/dev"), windows = true).single(),
         )
+    }
+
+    private companion object {
+        /** A Venu 2 and a Synaptics fingerprint sensor, as `mtp-rs devices` answered on Windows. */
+        val WINDOWS_DEVICES = """
+            [
+              {"vendor_id": 1739, "product_id": 189, "manufacturer": null, "product": null,
+               "serial_number": "4e0767c8f382", "location_id": 17262426598600056251,
+               "location": "ef907587facf9dbb", "speed": "Full",
+               "match_reason": "opened_descriptor_scan"},
+              {"vendor_id": 2334, "product_id": 20087, "manufacturer": null, "product": null,
+               "serial_number": "0000cbf416e5", "location_id": 11703230906336189281,
+               "location": "a26a3a80c08a9b61", "speed": "High",
+               "match_reason": "opened_descriptor_scan"}
+            ]
+        """.trimIndent()
     }
 }
