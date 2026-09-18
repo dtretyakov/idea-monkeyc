@@ -78,16 +78,28 @@ class MtpToolTest {
         val local = Path.of("bin/app.prg")
         val arguments = MtpTool.uploadArguments("0123456789", local, "/GARMIN/APPS/APP.PRG")
 
-        // `--device` before the subcommand, `--verify` after it, and no `--replace`: current
-        // devices hide a .prg once taken, so there is usually no visible file to replace.
+        // `--device` before the subcommand, `--verify` and `--replace` after it.
+        //
+        // `--replace` is the one with a story. Without it the second install of a session fails —
+        // `remote file already exists; pass --replace to delete it first` — because the watch only
+        // hides a taken `.prg` across a replug, and an edit-and-run loop does not replug.
         //
         // The local path is spelled by the platform rather than written out here — it is handed to
         // a process and `bin\app.prg` is the right spelling on Windows. The remote one is the
         // device's own and stays as it is.
         assertEquals(
-            listOf("--json", "--device", "0123456789", "put", "--verify", local.toString(), "/GARMIN/APPS/APP.PRG"),
+            listOf(
+                "--json", "--device", "0123456789", "put",
+                "--verify", "--replace", local.toString(), "/GARMIN/APPS/APP.PRG",
+            ),
             arguments,
         )
+    }
+
+    @Test
+    fun `an upload can be asked not to replace`() {
+        val arguments = MtpTool.uploadArguments(null, Path.of("a.prg"), "/GARMIN/APPS/A.PRG", replace = false)
+
         assertFalse(arguments.contains("--replace"))
     }
 
