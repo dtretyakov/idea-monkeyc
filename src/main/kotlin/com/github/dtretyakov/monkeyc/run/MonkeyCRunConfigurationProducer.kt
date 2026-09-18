@@ -1,6 +1,5 @@
 package com.github.dtretyakov.monkeyc.run
 
-import com.github.dtretyakov.monkeyc.lang.MonkeyCFileType
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.intellij.execution.actions.ConfigurationContext
 import com.intellij.execution.actions.LazyRunConfigurationProducer
@@ -53,8 +52,19 @@ class MonkeyCRunConfigurationProducer : LazyRunConfigurationProducer<MonkeyCRunC
             context.project?.let { MonkeyCProject.getInstance(it).manifest(root)?.isBarrel != true } == true
         }
 
+    /**
+     * The project root for whatever the context is — any file, or a directory.
+     *
+     * Not narrowed to the three file types this plugin has a lexer for, which is what it used to
+     * be. The first thing a Connect IQ project shows is as likely to be a README as a `.mc`, and
+     * with one of those in the editor the Run toolbar had nothing to offer and the button was
+     * simply dead — in a project where there is exactly one obvious thing to run. Selecting the
+     * project folder did not help either, because a directory is not one of those types.
+     *
+     * [MonkeyCProject.rootFor] answers for a directory as readily as for a file, so the question
+     * this asks is the one the class doc always claimed: is this inside a Connect IQ project.
+     */
     private fun projectRoot(context: ConfigurationContext) =
         context.location?.virtualFile
-            ?.takeIf { it.fileType == MonkeyCFileType || it.name == "manifest.xml" || it.extension == "jungle" }
-            ?.let { context.project?.let { project -> MonkeyCProject.getInstance(project).rootFor(it) } }
+            ?.let { file -> context.project?.let { MonkeyCProject.getInstance(it).rootFor(file) } }
 }
