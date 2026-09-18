@@ -131,11 +131,16 @@ object MtpTool {
      *
      * Shaped after an invocation that is known to work on a real watch rather than after the
      * documentation's example: the device is named globally, and `--verify` reads the bytes back.
-     * `--replace` is deliberately not passed by default — it "replaces a visible existing remote
-     * file", and current Garmin devices hide a `.prg` once they have taken it, so there is often no
-     * visible file to replace.
+     *
+     * `--replace` is passed, and it used not to be. The reasoning against it was that current
+     * devices hide a `.prg` once they have taken it, so there would be no visible file to replace
+     * — which is true across a replug and false within one session. Installing twice without
+     * unplugging, which is what an edit-and-run loop is, met `remote file already exists; pass
+     * --replace to delete it first` on the second try. The flag "replaces a visible existing
+     * remote file", so it costs nothing when there is none, and the file it replaces is always the
+     * previous copy of the same app: the remote name comes from our own build's output.
      */
-    fun uploadArguments(serial: String?, local: Path, remote: String, replace: Boolean = false): List<String> =
+    fun uploadArguments(serial: String?, local: Path, remote: String, replace: Boolean = true): List<String> =
         buildList {
             add("--json")
             serial?.takeIf { it.isNotBlank() }?.let {
