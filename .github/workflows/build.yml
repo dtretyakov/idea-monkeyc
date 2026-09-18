@@ -73,6 +73,24 @@ jobs:
           name: plugin
           path: build/distributions/*.zip
 
+  # The check the branch rule on `main` asks for by name.
+  #
+  # A matrix job publishes one check per leg, each carrying its own OS — `Build and test
+  # (ubuntu-latest)` and so on — so the moment this job gained a matrix, the `Build and test` the
+  # rule requires stopped existing and no pull request could satisfy it. This is that name, and it
+  # is green only when every leg was, so the rule keeps meaning what it meant when one runner was
+  # the whole of it.
+  checked:
+    name: Build and test
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every platform built and tested
+        run: |
+          echo "build: ${{ needs.build.result }}"
+          [ "${{ needs.build.result }}" = "success" ]
+
   verify:
     name: Verify against the IDEs it claims
     runs-on: ubuntu-latest
