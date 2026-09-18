@@ -21,6 +21,18 @@ import kotlin.io.path.name
  */
 object MonkeyCInstallNotice {
 
+    /**
+     * What to do next, which is not obvious and is not optional.
+     *
+     * The cable comes out first: a watch on USB is in transfer mode and runs nothing, so a
+     * developer who installs and then looks for the app finds a watch that is not listening. Both
+     * places that report an install say this, and say it identically.
+     */
+    const val NEXT_STEP = "Unplug the cable, then open it on the watch."
+
+    /** Why the file is not there afterwards. One clause: it goes on the end of a line. */
+    const val HIDDEN_AFTERWARDS = "the watch hides every .prg from GARMIN/APPS once it has taken it."
+
     fun offer(project: Project, built: BuiltArtifact, targets: List<GarminTarget>) {
         ApplicationManager.getApplication().invokeLater {
             if (project.isDisposed) return@invokeLater
@@ -86,11 +98,8 @@ object MonkeyCInstallNotice {
                 notify(
                     project,
                     "Installed on ${target.name}",
-                    "${destination.name} is on the device. It will not be visible in GARMIN/APPS " +
-                        "the next time the watch is plugged in — current devices hide every .prg " +
-                        "once they have taken it, and that is the install working rather than " +
-                        "failing. Remove it from the watch's own Connect IQ list, or with Garmin " +
-                        "Express.",
+                    "${destination.name} is on ${target.name}. $NEXT_STEP " +
+                        "Looking for it over USB will not find it: $HIDDEN_AFTERWARDS",
                     NotificationType.INFORMATION,
                 )
             },

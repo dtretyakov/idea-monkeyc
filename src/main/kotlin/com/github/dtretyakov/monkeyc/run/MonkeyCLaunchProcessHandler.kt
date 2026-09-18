@@ -15,6 +15,7 @@ import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import java.io.OutputStream
+import kotlin.io.path.name
 
 /**
  * One process handler for the whole of "run this app": compile, start the simulator, push and run.
@@ -60,6 +61,17 @@ class MonkeyCLaunchProcessHandler(
     @Volatile
     private var stopped = false
 
+    /**
+     * Set while the app is being written to the watch.
+     *
+     * Stop has a third thing to say in that moment. There is no process of ours to kill — the
+     * transfer is inside `mtp-rs`, which was handed the whole file — so what Stop can honestly
+     * report is that it arrived too late, and the sentence about the compiler would be false: the
+     * compiler finished before this began.
+     */
+    @Volatile
+    private var installing = false
+
     override fun startNotify() {
         super.startNotify()
         ApplicationManager.getApplication().executeOnPooledThread { launch() }
@@ -101,8 +113,63 @@ class MonkeyCLaunchProcessHandler(
         } else {
             notifyTextAvailable("\n$verb ${built.output}\n", ProcessOutputTypes.SYSTEM)
         }
-        if (MonkeyCLaunch.onWatch(project, options)) offerToInstall(built)
+        if (MonkeyCLaunch.onWatch(project, options)) {
+            // A Run whose target is a watch is an instruction to put it there, so it goes there.
+            // The Build menu items are the other half of that sentence: they build and offer,
+            // because a build is not an instruction about hardware.
+            if (options.kind == MonkeyCRunKind.APP) installOnWatch(built) else offerToInstall(built)
+        }
         finish(0)
+    }
+
+    /**
+     * Puts the build on the watch, because that is what was asked for.
+     *
+     * Run does as much as its target allows — which is what every other IDE's Run does, and what
+     * the target chip beside the button promises by saying "on the watch". Connect IQ has no way
+     * to start an app on a device from here, so the app itself has to be opened on the watch; that
+     * is the one thing this cannot do, and it is said rather than implied.
+     *
+     * It installs rather than offering. The offer exists for a build, where connecting a watch and
+     * meaning to write to it are two different things; pressing Run with a watch as the target is
+     * not ambiguous. Anything this cannot decide for the user falls back to the offer.
+     */
+    private fun installOnWatch(built: BuiltArtifact) {
+        // Stop can arrive while the compiler is still working, and what the user asked for is that
+        // nothing reaches the watch. Checked here as well as before the launch, because this is the
+        // step that writes to hardware.
+        if (stopped) return
+
+        val targets = GarminTarget.attached()
+        if (targets.isEmpty()) return sayWhereItGoes()
+
+        val target = targets.singleOrNull()
+            ?: targets.firstOrNull { it.device?.id == built.device }
+            // Two watches and neither is the one this was built for: which to write to is the
+            // user's call and not ours.
+            ?: return offerToInstall(built)
+
+        val mismatch = (target as? GarminTarget.Mtp)
+            ?.let { ConnectedWatch.mismatch(built.device, it.device, it.model) }
+        if (mismatch != null) {
+            // Not installed, and not silently either: a `.prg` for another device installs and
+            // then does nothing, which reads as a broken app rather than a wrong target.
+            notifyTextAvailable("\n$mismatch\n", ProcessOutputTypes.STDERR)
+            return offerToInstall(built)
+        }
+
+        report("Installing ${built.output.name} on ${target.name}...")
+        installing = true
+        val destination = try {
+            target.install(built.output)
+        } finally {
+            installing = false
+        }
+        notifyTextAvailable(
+            "\nInstalled ${destination.name} on ${target.name}.\n" +
+                "${MonkeyCInstallNotice.NEXT_STEP}\n",
+            ProcessOutputTypes.SYSTEM,
+        )
     }
 
     /**
@@ -115,23 +182,27 @@ class MonkeyCLaunchProcessHandler(
      */
     private fun offerToInstall(built: BuiltArtifact) {
         val targets = GarminTarget.attached()
-        if (targets.isEmpty()) {
-            notifyTextAvailable(
-                "Copy it to GARMIN/APPS on the watch over USB to install it.\n",
-                ProcessOutputTypes.SYSTEM,
-            )
-            // Only said when there is no device: a current watch speaks MTP and appears under no
-            // volume, so "no device" and "no tool to see it with" look identical from here, and
-            // the second is fixable. Not said when a watch was found, because then nothing is
-            // missing.
-            if (GarminTarget.mtpToolMissing()) {
-                notifyTextAvailable("\n${MtpLocator.INSTALL_HINT}\n", ProcessOutputTypes.SYSTEM)
-            }
-            return
-        }
+        if (targets.isEmpty()) return sayWhereItGoes()
 
         notifyTextAvailable("Connected: ${targets.joinToString { it.name }}.\n", ProcessOutputTypes.SYSTEM)
         MonkeyCInstallNotice.offer(project, built, targets)
+    }
+
+    /**
+     * What to do with a device build when no device can be seen.
+     *
+     * The hint about the tool is only for this case: a current watch speaks MTP and appears under
+     * no volume, so "no device" and "no tool to see it with" look identical from here, and only
+     * the second is fixable. Nothing is missing when a watch was found, so nothing is said then.
+     */
+    private fun sayWhereItGoes() {
+        notifyTextAvailable(
+            "Copy it to GARMIN/APPS on the watch over USB to install it.\n",
+            ProcessOutputTypes.SYSTEM,
+        )
+        if (GarminTarget.mtpToolMissing()) {
+            notifyTextAvailable("\n${MtpLocator.INSTALL_HINT}\n", ProcessOutputTypes.SYSTEM)
+        }
     }
 
     private fun runInSimulator() {
@@ -336,10 +407,22 @@ class MonkeyCLaunchProcessHandler(
             stop()
             return
         }
+        if (installing) {
+            // Too late to be of use, and saying so is the only honest answer: the file is inside a
+            // transfer this process cannot take back.
+            notifyTextAvailable(
+                "\nStopped, but the app is already on its way to the watch and the transfer " +
+                    "will finish.\n",
+                ProcessOutputTypes.SYSTEM,
+            )
+            finish(1)
+            return
+        }
+
         // Stopped during the build. The compiler is not ours to kill — it runs under the Build tool
         // window — so it finishes on its own; `stopped` only keeps the app from being pushed to the
-        // simulator afterwards. Said out loud, because a Run window that goes red while the Build
-        // window keeps working otherwise looks like two contradictions.
+        // simulator or written to the watch afterwards. Said out loud, because a Run window that
+        // goes red while the Build window keeps working otherwise looks like two contradictions.
         notifyTextAvailable(
             "\nStopped. The compiler was already running and finishes in the Build window; " +
                 "nothing will be started when it does.\n",

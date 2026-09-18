@@ -62,12 +62,19 @@ class MonkeyCRunConfiguration(
      * A DAP client only registers breakpoints after `initialized`, so in a test run there is no
      * moment at which a breakpoint can be set; `stopAtLaunch` is ignored there as well. Offering
      * Debug would offer a button that silently runs the suite and stops nowhere.
+     *
+     * And a watch declines it, because Connect IQ has no on-device debugging at all: the adapter
+     * talks to the simulator's debug shell and there is nothing on the other end of a USB cable
+     * that speaks it. The destination is asked of [MonkeyCLaunch.onWatch] rather than read off
+     * `options.forDevice`, which is only the configuration's own pin — the destination has lived
+     * on the target chip beside the Run button since Build gained its own menu items, so a chip
+     * reading "on the watch" left Debug enabled and failing.
      */
     override fun canRun(executorId: String): Boolean =
         executorId == DefaultDebugExecutor.EXECUTOR_ID &&
             options.kind.launches &&
-            !options.forDevice &&
-            !options.kind.isTests
+            !options.kind.isTests &&
+            !MonkeyCLaunch.onWatch(project, options)
 
     override fun getDebugAdapterServer(): DebugAdapterServerDefinition? =
         DebugAdapterManager.getInstance().getDebugAdapterServerById(MonkeyCDebugAdapterFactory.SERVER_ID)
