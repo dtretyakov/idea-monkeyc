@@ -6,6 +6,9 @@ import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.project.MonkeyCTarget
 import com.github.dtretyakov.monkeyc.run.GarminTarget
 import com.github.dtretyakov.monkeyc.run.MonkeyCRunConfiguration
+import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
+import com.github.dtretyakov.monkeyc.ui.manifest.ManifestModel
+import com.intellij.icons.AllIcons
 import com.intellij.execution.RunManager
 import com.intellij.execution.ui.TogglePopupAction
 import com.intellij.openapi.actionSystem.ActionGroup
@@ -21,11 +24,18 @@ import com.intellij.openapi.actionSystem.ex.CustomComponentAction
 import com.intellij.openapi.actionSystem.impl.ActionButtonWithText
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runReadAction
+import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.ui.popup.Balloon
+import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.ui.popup.ListPopup
 import com.intellij.ui.GotItTooltip
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.util.ui.JBInsets
+import java.nio.file.Path
 import com.intellij.util.ui.JBUI
 import java.awt.Insets
 import javax.swing.JComponent
@@ -82,6 +92,36 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
         }
     }
 
+    /**
+     * The popup, built to show the rows that cannot be chosen.
+     *
+     * [TogglePopupAction] asks for `showDisabledActions = false`, and a popup built that way drops
+     * every disabled row before it is drawn. That is wrong for this list twice over. A watch that
+     * is plugged in but not among the project's products has to be visible — being told it was
+     * seen, and why it is not a target, is the whole reason the row exists — and the empty-state
+     * sentence [DeviceMenu] composes had never reached the screen either: it is a disabled row,
+     * so the popup for a project with nothing to build for showed two trailing actions and no
+     * explanation at all.
+     *
+     * Everything else is what the superclass passes, so the popup still looks and behaves like the
+     * run configuration one beside it.
+     */
+    override fun createPopup(
+        actionGroup: ActionGroup,
+        e: AnActionEvent,
+        disposeCallback: () -> Unit,
+    ): ListPopup = JBPopupFactory.getInstance().createActionGroupPopup(
+        null,
+        actionGroup,
+        e.dataContext,
+        false,
+        true,
+        false,
+        { disposeCallback() },
+        -1,
+        null,
+    )
+
     override fun getActionGroup(e: AnActionEvent): ActionGroup? {
         val project = e.project ?: return null
         val model = MonkeyCProject.getInstance(project)
@@ -101,12 +141,10 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
         )
         val trailing = listOfNotNull(EditProducts(), Acquire(project).takeIf { offer.sdkManager })
 
-        if (devices.isEmpty()) {
-            return DefaultActionGroup(
-                listOf(Unavailable(offer.empty ?: "No devices are downloaded"), Separator.getInstance()) + trailing,
-            )
-        }
-
+        // Before the early return, not after it. A project with nothing to build for is exactly
+        // when someone plugs a watch in, and with the look below the return that was the one case
+        // where nothing ever looked.
+        //
         // Asked for now, answered for next time. Looking walks the mount points and starts a
         // subprocess, and this runs while the popup is being built — on the UI thread — so it
         // reads what was found last time and sets a fresh look going behind it. Tying the look to
@@ -114,17 +152,16 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
         // project is open, to answer a question nobody is asking.
         ApplicationManager.getApplication().executeOnPooledThread { GarminTarget.refreshAttached() }
 
-        val simulator = devices.map {
-            Select(project, MonkeyCTarget(it.id, MonkeyCTarget.Destination.SIMULATOR), "${it.displayName}  (${it.id})")
+        val watch = attachedSection(project, root, devices)
+
+        if (devices.isEmpty()) {
+            val head = listOf(Unavailable(offer.empty ?: "No devices are downloaded"))
+            val connected = if (watch.isEmpty()) emptyList() else listOf(Separator("Connected Watch")) + watch
+            return DefaultActionGroup(head + connected + listOf(Separator.getInstance()) + trailing)
         }
 
-        // Only watches that are actually plugged in. Listing every device here as well doubled the
-        // list for the ordinary case — no watch attached — and a menu whose second half repeats
-        // its first half teaches people to read neither. Building a `.prg` for a watch that is not
-        // here is still possible; it is Build | Build for Watch, which sets this target itself.
-        val attached = devices.filter { it.id in GarminTarget.attachedDeviceIds() }
-        val watch = attached.map {
-            Select(project, MonkeyCTarget(it.id, MonkeyCTarget.Destination.WATCH), "${it.displayName}  (${it.id})")
+        val simulator = devices.map {
+            Select(project, MonkeyCTarget(it.id, MonkeyCTarget.Destination.SIMULATOR), "${it.displayName}  (${it.id})")
         }
 
         // One section needs no heading; two do.
@@ -136,6 +173,48 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
                 listOf(Separator("Connected Watch")) + watch +
                 listOf(Separator.getInstance()) + trailing,
         )
+    }
+
+    /**
+     * Every watch that is plugged in, whether or not it can be built for.
+     *
+     * A watch the project does not declare used to be dropped from this list entirely, which is
+     * the opposite of what a device picker is for: you plug a watch in, open the one control that
+     * is about devices, and it is not there — with nothing to say it was seen, and no hint that
+     * the manifest is what decides. The list is a fact about the USB bus; whether a build can be
+     * made for one is a separate fact, and belongs beside it rather than in place of it.
+     *
+     * The same shape Android Studio's device dropdown uses, where a device below the app's
+     * `minSdk` is listed and disabled with the reason instead of being hidden.
+     */
+    private fun attachedSection(
+        project: Project,
+        root: Path,
+        buildable: List<ConnectIqDevice>,
+    ): List<AnAction> = GarminTarget.attachedWatches().map { found ->
+        val device = found.deviceId?.let { id -> buildable.firstOrNull { it.id == id } }
+        val known = found.deviceId?.let { id -> ConnectIqSdkService.getInstance().device(id) }
+        when {
+            // Declared and downloaded: an ordinary target, and the reason this list exists.
+            device != null ->
+                Select(
+                    project,
+                    MonkeyCTarget(device.id, MonkeyCTarget.Destination.WATCH),
+                    "${device.displayName}  (${device.id})",
+                )
+
+            // Known to the SDK but not to this project. An enabled row whose click is the remedy,
+            // because a disabled one cannot carry an affordance: the popup draws no inline action
+            // on a row it has disabled, so the add had nothing to be clicked on and the row read
+            // as a dead end. The icon and the note beside it are what say this one acts rather
+            // than selects.
+            known != null -> AddProduct(project, root, known)
+
+            // Either the model could not be read from the device or it is not among the downloaded
+            // ones, and from here those look the same. Nothing to offer: adding a product needs an
+            // id, and there is none. The SDK Manager below is the way out of the second case.
+            else -> Unavailable(found.name, secondary = "model unknown")
+        }
     }
 
     /** The target the selected run configuration will actually use. */
@@ -212,14 +291,106 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
         }
     }
 
+    /**
+     * Adds an attached watch to the manifest's products, and targets it.
+     *
+     * One edit through the same writer the manifest form uses, so it is one undo and the text tab
+     * shows it at once. The manifest is the one the build reads rather than `manifest.xml` by
+     * name: a jungle can point `project.manifest` somewhere else, and editing the file nobody
+     * compiles would look like the click did nothing.
+     *
+     * It also becomes the target. Clicking this means "build for these watches", and adding the
+     * product and then having to pick it would be two clicks for one intention.
+     */
+    private class AddProduct(
+        private val project: Project,
+        private val root: Path,
+        private val device: ConnectIqDevice,
+    ) : AnAction(
+        "${device.displayName}  (${device.id})",
+        "Declares ${device.displayName} in the manifest and targets it",
+        AllIcons.General.Add,
+    ) {
+        init {
+            // The row has to read as an action rather than as one more target, because clicking it
+            // edits the manifest instead of choosing something. The icon and this note are what
+            // say so; a disabled row with the note alone said "seen, and nothing you can do".
+            templatePresentation.putClientProperty(ActionUtil.SECONDARY_TEXT, "add to products")
+        }
+
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+
+        override fun actionPerformed(event: AnActionEvent) {
+            val model = MonkeyCProject.getInstance(project)
+            val path = model.manifestPath(root)
+
+            // Every way this can fail is said out loud. A click that silently does nothing is the
+            // worst of the three outcomes: the user cannot tell it from a control that is not a
+            // control, which is exactly what the disabled row before it turned out to be.
+            val file = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path)
+            if (file == null) return complain("There is no manifest at $path to add it to.")
+
+            val document = FileDocumentManager.getInstance().getDocument(file)
+            if (document == null) return complain("${path.fileName} could not be opened for editing.")
+
+            val manifest = ManifestModel(project, document)
+            val declared = manifest.read()?.devices
+                ?: return complain(
+                    "${path.fileName} could not be read. It is probably mid-edit; fix the XML and try again.",
+                )
+
+            if (device.id !in declared) {
+                manifest.setDevices(declared + device.id)
+                if (manifest.read()?.devices?.contains(device.id) != true) {
+                    return complain("${device.id} could not be added to ${path.fileName}.")
+                }
+                // Saved, not left dirty. The compiler is a subprocess and reads the manifest off
+                // disk, and nothing on the way to a build saves documents — so an edit that
+                // stayed in memory would pass the plugin's own device check, which reads the
+                // document, and then be compiled against a file that never heard of this watch.
+                FileDocumentManager.getInstance().saveDocument(document)
+            }
+
+            // The click means "build for these", so it becomes the target too: adding the product
+            // and then having to pick it would be two clicks for one intention.
+            MonkeyCSettings.getInstance(project)
+                .setTarget(MonkeyCTarget(device.id, MonkeyCTarget.Destination.WATCH))
+            project.messageBus.syncPublisher(MonkeyCSettings.TOPIC).settingsChanged(project)
+        }
+
+        private fun complain(detail: String) {
+            NotificationGroupManager.getInstance()
+                .getNotificationGroup("Monkey C")
+                .createNotification("Could not add ${device.displayName}", detail, NotificationType.ERROR)
+                .notify(project)
+        }
+    }
+
     /** The way out of an empty list: the application that downloads devices. */
     private class Acquire(private val project: Project) : AnAction(OpenSdkManager.label()) {
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
         override fun actionPerformed(event: AnActionEvent) = OpenSdkManager.invoke(project)
     }
 
-    private class Unavailable(text: String) : AnAction(text) {
+    /**
+     * A row that says something and cannot be chosen.
+     *
+     * [secondary] is the platform's own right-aligned note — `SECONDARY_TEXT`, the same key the
+     * run configuration popup beside this one uses — and here it carries the reason.
+     *
+     * Only for rows with nothing to offer. A row that has a remedy must not be disabled: the
+     * popup draws no inline action on a disabled row, so the remedy would have nothing to be
+     * clicked on. Those are actions of their own, and look like it.
+     */
+    private class Unavailable(text: String, secondary: String? = null) : AnAction(text) {
+        init {
+            secondary?.let { templatePresentation.putClientProperty(ActionUtil.SECONDARY_TEXT, it) }
+        }
+
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+
+        // Disabled, not hidden: the row exists to say that the watch was seen and why it is not a
+        // target. Its inline actions carry their own state and stay clickable.
         override fun update(event: AnActionEvent) {
             event.presentation.isEnabled = false
         }

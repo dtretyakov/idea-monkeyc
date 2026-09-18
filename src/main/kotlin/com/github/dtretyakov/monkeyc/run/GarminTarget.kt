@@ -4,6 +4,7 @@ import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.io.path.name
 
 /**
@@ -80,7 +81,18 @@ sealed interface GarminTarget {
         }
 
         /**
-         * The ids of the catalogue devices currently attached, from a short-lived cache.
+         * A watch that was attached the last time anyone looked, as the device chip has to name it.
+         *
+         * The model is carried alongside the id because the two answer different questions, and
+         * the chip asks both: which catalogue device this is — null when the watch could not be
+         * placed among the downloaded ones — and what to call it on screen either way. Keeping
+         * only the ids is what made a watch the project does not declare invisible, since there
+         * was nothing left of it to show.
+         */
+        data class Attached(val name: String, val deviceId: String?)
+
+        /**
+         * What was attached, from a short-lived cache.
          *
          * The toolbar's device chip asks this on every repaint, and finding out means walking the
          * mount points and starting a subprocess. Neither belongs on the IDE's pulse, and a watch
@@ -88,7 +100,7 @@ sealed interface GarminTarget {
          * briefly and recomputed off the UI thread by whoever asks next.
          */
         @Volatile
-        private var attachedCache: Pair<Long, Set<String>> = 0L to emptySet()
+        private var attachedCache: Pair<Long, List<Attached>> = 0L to emptyList()
 
         /**
          * What was attached the last time anyone looked. Never looks itself.
@@ -100,26 +112,43 @@ sealed interface GarminTarget {
          * not sit on the IDE's pulse. Refreshing is [refreshAttached]'s job, and its callers are on
          * background threads.
          */
-        fun attachedDeviceIds(): Set<String> = attachedCache.second
+        fun attachedWatches(): List<Attached> = attachedCache.second
 
         /**
          * Looks, if the last look is old enough. Must not be called on the UI thread.
          *
-         * Called when the device popup opens, on a pooled thread, so the popup shows what was
-         * found last time and the next one is right. The worst case is a watch that has just been
-         * plugged in going unmarked until the menu is opened again, which is a great deal better
-         * than an IDE that stops responding — or than a subprocess every few seconds for as long
-         * as a project is open, answering a question nobody is asking.
+         * Called when the device popup opens and when the IDE regains focus, on a pooled thread.
+         * The focus one is what makes plugging a watch in work the way people expect: the popup
+         * renders from this cache, so without it the first look after attaching a watch showed
+         * what was there before it, and only the second look was right. There is no portable way
+         * to be told that a USB device arrived, and coming back to the IDE window is the one
+         * moment that reliably follows plugging something in.
          */
         fun refreshAttached() {
             val now = System.currentTimeMillis()
             if (now - attachedCache.first < CACHE_MILLIS) return
 
-            val fresh = runCatching { attached().mapNotNull { it.device?.id }.toSet() }.getOrDefault(emptySet())
-            attachedCache = now to fresh
+            // One look at a time. The timestamp above is only written when a look finishes, so
+            // while one is running the guard still sees the old one — and a look is not always
+            // quick: walking the filesystem roots on Windows reaches a disconnected network
+            // drive, where `Files.list` waits rather than failing. Without this, alt-tabbing
+            // during one of those starts a thread per activation, each waiting on the same drive.
+            if (!looking.compareAndSet(false, true)) return
+            try {
+                val fresh = runCatching { attached().map { Attached(it.name, it.device?.id) } }
+                    .getOrDefault(emptyList())
+                attachedCache = System.currentTimeMillis() to fresh
+            } finally {
+                looking.set(false)
+            }
         }
 
-        /** Short: a look only happens when the menu is opened, so this only collapses a double-open. */
+        private val looking = AtomicBoolean(false)
+
+        /**
+         * Long enough that alt-tabbing does not start a subprocess each time, short enough that a
+         * watch plugged in while the IDE was in the background is found on the way back to it.
+         */
         private const val CACHE_MILLIS = 2_000L
 
         /** Whether the tool is missing, which is only worth saying when a watch might need it. */

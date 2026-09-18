@@ -315,6 +315,13 @@
         <listener
             class="com.github.dtretyakov.monkeyc.library.ConnectIqLibraryWatcher"
             topic="com.github.dtretyakov.monkeyc.project.ConnectIqSdkListener"/>
+        <!--
+          A watch is plugged in while the IDE is not the active window, and nothing tells us when
+          that happened. Coming back to it is the moment that follows, so that is when we look.
+        -->
+        <listener
+            class="com.github.dtretyakov.monkeyc.run.AttachedWatchWatcher"
+            topic="com.intellij.openapi.application.ApplicationActivationListener"/>
     </applicationListeners>
 
     <actions>

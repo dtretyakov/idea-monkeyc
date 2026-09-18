@@ -19,7 +19,7 @@ class AttachedDeviceCacheTest {
     fun `reading the answer is instant, however long looking for it takes`() {
         // A popup opens on the UI thread and may ask this thousands of times while it is being
         // built; it must never be the thing that pauses.
-        repeat(1_000) { GarminTarget.attachedDeviceIds() }
+        repeat(1_000) { GarminTarget.attachedWatches() }
     }
 
     @Test
@@ -29,7 +29,7 @@ class AttachedDeviceCacheTest {
         // There is no watch on a build machine, so a read that looked would spend the mount-point
         // walk and a subprocess spawn here, and blow the timeout.
         val started = System.currentTimeMillis()
-        repeat(50) { GarminTarget.attachedDeviceIds() }
+        repeat(50) { GarminTarget.attachedWatches() }
 
         assertTrue(
             System.currentTimeMillis() - started < 500,
