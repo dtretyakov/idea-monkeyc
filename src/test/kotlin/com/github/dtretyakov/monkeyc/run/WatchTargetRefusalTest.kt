@@ -2,6 +2,9 @@ package com.github.dtretyakov.monkeyc.run
 
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.testing.IdeTestCase
+import com.intellij.execution.RunManager
+import com.intellij.execution.configurations.ConfigurationTypeUtil
+import com.intellij.execution.executors.DefaultDebugExecutor
 
 /**
  * What a watch target means for the runs that cannot use one.
@@ -63,5 +66,35 @@ class WatchTargetRefusalTest : IdeTestCase() {
         }
 
         assertTrue(MonkeyCLaunch.onWatch(project, pinned))
+    }
+
+    /**
+     * Debug goes grey rather than failing.
+     *
+     * Connect IQ has no on-device debugging: the adapter talks to the simulator's debug shell, and
+     * nothing on the other end of a USB cable speaks it. So the button has to be unavailable while
+     * the chip says "on the watch" — pressed, it can only produce an error, and an error for a
+     * thing the platform can never do belongs in the button's state and not in a dialog.
+     */
+    fun `test Debug is not offered while the target is a watch`() {
+        settings.targetDevice = "venu2"
+        settings.targetOnWatch = true
+
+        assertFalse(appConfiguration().canRun(DefaultDebugExecutor.EXECUTOR_ID))
+    }
+
+    fun `test Debug is offered for the simulator`() {
+        settings.targetDevice = "venu2"
+        settings.targetOnWatch = false
+
+        assertTrue(appConfiguration().canRun(DefaultDebugExecutor.EXECUTOR_ID))
+    }
+
+    private fun appConfiguration(): MonkeyCRunConfiguration {
+        val factory = ConfigurationTypeUtil.findConfigurationType(MonkeyCRunConfigurationType::class.java)
+            .configurationFactories
+            .first { it.name == MonkeyCRunKind.APP.display }
+        val created = RunManager.getInstance(project).createConfiguration(MonkeyCRunKind.APP.display, factory)
+        return (created.configuration as MonkeyCRunConfiguration).also { it.options.kind = MonkeyCRunKind.APP }
     }
 }
