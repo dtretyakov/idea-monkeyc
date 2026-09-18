@@ -1,5 +1,6 @@
 package com.github.dtretyakov.monkeyc.project
 
+import com.github.dtretyakov.monkeyc.ui.ConnectIqRunConfigurations
 import com.intellij.javaee.ExternalResourceManagerEx
 import com.intellij.openapi.application.edtWriteAction
 import com.intellij.openapi.application.readAction
@@ -57,6 +58,12 @@ class MonkeyCProjectSetup : ProjectActivity {
 
         chooseDeviceIfUnset(project, settings, roots.firstOrNull())
 
+        // A barrel has no app to run, so it gets no configuration; its Build menu item is the
+        // whole of what it can do.
+        val isApp = readAction {
+            roots.firstOrNull()?.let { MonkeyCProject.getInstance(project).manifest(it)?.isBarrel != true } == true
+        }
+
         edtWriteAction {
             if (project.isDisposed) return@edtWriteAction
             ignoreManifestNamespace(project)
@@ -64,6 +71,7 @@ class MonkeyCProjectSetup : ProjectActivity {
                 work.forEach { (module, directory) -> configure(module, directory) }
                 settings.rootsConfigured = true
             }
+            if (isApp) ConnectIqRunConfigurations.createDefault(project)
         }
     }
 

@@ -37,7 +37,25 @@ object ConnectIqRunConfigurations {
                 .notify(project)
             return
         }
-        ProgramRunnerUtil.executeConfiguration(settings(project, kind), executor)
+        ProgramRunnerUtil.executeConfiguration(ensure(project, kind), executor)
+    }
+
+    /**
+     * The one configuration a Connect IQ project always has, selected so Run is never dead.
+     *
+     * Called when the project opens. Without it the toolbar had nothing until the user opened a
+     * `.mc` file or found a Build menu item, and what a project shows first is as likely to be a
+     * README — so the first thing a newcomer met was a greyed-out Run button and no way to guess
+     * why. Android Studio's `app` exists from the moment a project is imported and Xcode's scheme
+     * is part of the project file; this is the same idea.
+     *
+     * Only when there is none already, and the selection is only taken when nothing is selected:
+     * a project that has been opened before keeps whatever the user arranged.
+     */
+    fun createDefault(project: Project) {
+        val manager = RunManager.getInstance(project)
+        val settings = ensure(project, MonkeyCRunKind.APP)
+        if (manager.selectedConfiguration == null) manager.selectedConfiguration = settings
     }
 
     /**
@@ -46,7 +64,7 @@ object ConnectIqRunConfigurations {
      * Making a new one on every invocation would fill the run history with copies of the same
      * thing, and lose whatever the user had set on it.
      */
-    private fun settings(
+    fun ensure(
         project: Project,
         kind: MonkeyCRunKind,
     ): RunnerAndConfigurationSettings {
