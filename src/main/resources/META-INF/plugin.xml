@@ -12,7 +12,10 @@
         </p>
         <ul>
             <li>Run configurations for the app, its unit tests, an export to <code>.iq</code>, and
-                barrels; a build for the watch, with an offer to install it over USB.</li>
+                barrels — one of them there from the moment the project opens, so Run works without
+                being set up first.</li>
+            <li>A watch on USB is a target like any other: pick it beside Run and Run builds for it
+                and installs it, rather than stopping at an offer.</li>
             <li>Breakpoints, stepping, variables and expression evaluation, in the simulator.</li>
             <li>Every build measured against the target watch's memory limit — from 64 KB to
                 2304 KB depending on the device, and the constraint that shapes this platform.</li>

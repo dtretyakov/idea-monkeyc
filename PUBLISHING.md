@@ -13,23 +13,37 @@ The Marketplace accepts an unsigned upload and signs it with its own key, so thi
 is worth doing anyway: an unsigned plugin installs behind a warning dialog, and that dialog is the
 first thing a new user sees.
 
+The private key is the one thing that cannot be made in CI — it would then be GitHub's rather than
+yours — so these three commands are the only ones a release ever needs on a personal machine. Run
+them outside the repository:
+
 ```bash
-openssl genpkey -aes-256-cbc -algorithm RSA -out private_encrypted.pem -pkeyopt rsa_keygen_bits:4096
-openssl rsa -in private_encrypted.pem -out private.pem
-openssl req -key private.pem -new -x509 -days 3650 -out chain.crt
+mkdir -p ~/keys/jetbrains-marketplace && cd ~/keys/jetbrains-marketplace
+openssl genpkey -aes-256-cbc -algorithm RSA -pkeyopt rsa_keygen_bits:4096 \
+  -out jetbrains-marketplace-signing-key.encrypted.pem
+openssl rsa -in jetbrains-marketplace-signing-key.encrypted.pem \
+  -out jetbrains-marketplace-signing-key.decrypted.pem
+openssl req -key jetbrains-marketplace-signing-key.decrypted.pem -new -x509 -days 3650 \
+  -subj "/CN=Your Name/O=Your Name" -out jetbrains-marketplace-signing-cert.crt
+rm jetbrains-marketplace-signing-key.decrypted.pem
 ```
 
-Keep `private_encrypted.pem` and its password somewhere that survives a lost laptop. A certificate
-that cannot be reproduced means every future release is signed by a different key, which is exactly
-what the signature exists to rule out.
+The decrypted copy exists only to issue the certificate; without `-subj` the last command asks seven
+questions about country and city that a self-signed plugin certificate does nothing with.
+
+Keep the encrypted key, the certificate and the password in a password manager — one item, both
+files attached. Keeping the key and its password apart buys nothing: the password manager is the
+encryption boundary, and whoever opens it has both. GitHub secrets cannot be read back, so that
+item is the only copy. A certificate that cannot be reproduced means every future release is signed
+by a different key, which is exactly what the signature exists to rule out.
 
 The three GitHub secrets the release workflow reads:
 
 | Secret | Contents |
 |---|---|
-| `PRIVATE_KEY` | the whole of `private_encrypted.pem`, `-----BEGIN` line included |
+| `PRIVATE_KEY` | the whole of `jetbrains-marketplace-signing-key.encrypted.pem`, `-----BEGIN` line included |
 | `PRIVATE_KEY_PASSWORD` | the password given to `genpkey` |
-| `CERTIFICATE_CHAIN` | the whole of `chain.crt` |
+| `CERTIFICATE_CHAIN` | the whole of `jetbrains-marketplace-signing-cert.crt` |
 
 Both files are multi-line. GitHub's secret field takes multi-line values as they are; if a tool in
 the way does not, base64 them — the Gradle plugin detects and decodes that.
@@ -44,28 +58,32 @@ leak is worth revoking immediately.
 ### 3. The first upload, by hand
 
 The Marketplace only creates a listing through the web form; `publishPlugin` can update a plugin
-that exists but cannot bring one into being. So the first release goes up manually:
+that exists but cannot bring one into being. So the first release is carried across by hand — but
+it is still built and signed on CI, where the secrets already are:
 
 ```bash
-./gradlew clean build
-CERTIFICATE_CHAIN="$(cat chain.crt)" \
-PRIVATE_KEY="$(cat private_encrypted.pem)" \
-PRIVATE_KEY_PASSWORD="…" \
-  ./gradlew signPlugin verifyPluginSignature
+gh workflow run Release --repo dtretyakov/idea-monkeyc -f dryRun=true
+gh run watch --repo dtretyakov/idea-monkeyc
+gh run download --repo dtretyakov/idea-monkeyc -n plugin --dir ./dist
 ```
 
-Upload `build/distributions/idea-monkeyc-0.1.0-signed.zip` at
-<https://plugins.jetbrains.com/plugin/add>. The archive is named after `rootProject.name` in
-`settings.gradle.kts`, not after the plugin's display name — `pluginConfiguration.name` sets
-`<name>` inside the descriptor and nothing else.
+`dryRun=true` is build, verify and sign without publishing, which is all there is to do while the
+listing does not exist. Do not reach for a tag instead: a tag runs `publishPlugin`, and that needs
+both the listing and `PUBLISH_TOKEN`.
+
+Upload `dist/idea-monkeyc-<version>-signed.zip` at <https://plugins.jetbrains.com/plugin/add>. The
+archive is named after `rootProject.name` in `settings.gradle.kts`, not after the plugin's display
+name — `pluginConfiguration.name` sets `<name>` inside the descriptor and nothing else. The version,
+the id and `since-build` are read from inside the descriptor; the form does not ask for them.
 
 Then, on the listing page:
 
 - **License** — Apache 2.0, matching `LICENSE`. The Marketplace will not publish without one.
 - **EEA trader / non-trader declaration** — mandatory, and it blocks publication until it is
   answered. An individual publishing a free plugin is a non-trader.
-- **Tags** — the ones that decide whether anybody finds it. `Languages`, `Build`, `Debugging`,
-  `Embedded Development`.
+- **Tags** — the ones that decide whether anybody finds it. `Programming Language`, `Build`,
+  `Debugging`, `Internet of Things`. Those four are from the Marketplace's own fixed list, which is
+  the only thing the field accepts: there is no `Languages` on it and no `Embedded Development`.
 - **Screenshots** — the set in [`docs/images/marketplace/`](docs/images/marketplace), in file-name
   order. All 1280×800, which is the size the guidelines recommend and the ratio they insist be the
   same across every shot. The first four carry the listing; the rest are there because a listing may
@@ -170,14 +188,24 @@ Two things the verifier always reports, neither of which is a finding:
 `TogglePopupAction` for the toolbar chip, and `ModernApplicationStarter` plus `DynamicPlugins` for
 the self-check above. Each is the only way to do what it does, and each is used by plugins JetBrains
 ships. The Marketplace's guidelines name internal API as something review looks at, so this is the
-paragraph to have ready.
+paragraph to have ready. Twenty-eight on 2026.1: the platform marked `PluginManagerCore.getPlugin`
+internal in 2026.2, which is a good illustration of the whole list — the number moves when
+JetBrains re-annotates its own code, not when this plugin changes.
 
-**Deprecated API.** Nine distinct APIs across eighteen call sites, and every one of them is
-deliberate: they are the forms that exist in *both* IDEs the plugin supports. `FilePosition(File, …)`
-— the one the verifier reports as scheduled for removal — `runReadAction`, `ActionUtil.invokeAction`
-and the six Build event constructors were each superseded in 2026.2 by something 2026.1 does not
-have, so using the replacement would narrow the supported range to a single IDE. When `sinceBuild`
-moves up to 262, these are the calls to modernise, and the verifier's own report is the list:
+**Deprecated API.** Nine distinct APIs across eighteen call sites, and two different reasons, which
+are worth keeping apart.
+
+`FilePosition(File, …)` — the one the verifier reports as scheduled for removal — is a supported
+range, not a choice: the `Path` overload that replaces it arrived in 2026.2 and 2026.1 has only the
+`File` one, so using it would narrow the plugin to a single IDE. It moves when `sinceBuild` does,
+and not before.
+
+`runReadAction` is the other kind, and it is the larger half of the count. Its replacements —
+`ReadAction.nonBlocking`, or `runReadActionBlocking` for an explicitly non-cancellable one — are not
+2026.2-only; the call sites are simply written in the blocking style, and modernising them is a
+refactor that can happen at any time. `ActionUtil.invokeAction` and the Build event constructors sit
+between the two and have not been checked one by one; the verifier's own report is the list, and
+each deserves the question asked of it separately rather than as a group:
 
 ```bash
 ./gradlew verifyPlugin

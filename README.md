@@ -32,10 +32,10 @@ installs without the dialog that asks whether to trust it. Pre-release versions 
 |---|---|
 | **Write code** | Completion, diagnostics, go to definition and rename across the whole Toybox API. |
 | **Look up API** | Garmin's own documentation for the symbol under the caret, offline. |
-| **Run** | Builds the app and starts it in the Connect IQ simulator. |
+| **Run** | Builds the app and starts it in the simulator — or, with a watch on the chip, installs it there. |
 | **Debug** | Breakpoints, stepping, variables and expression evaluation in the simulator. |
 | **Test** | Runs one `(:test)` function, one file or the whole project, results as a tree. |
-| **Target a watch** | The device chip beside Run that every build, run and debug follows. |
+| **Target a watch** | The chip beside Run: every device the project declares, and every watch plugged in. |
 | **Watch memory** | Every build reports what it took of that watch's memory and what is left. |
 | **Edit manifest** | Devices, permissions and languages as a form instead of hand-written XML. |
 | **Sideload** | Builds for the hardware and copies the `.prg` to an attached watch over USB. |

@@ -40,6 +40,10 @@ First release.
 
 - Run configurations for the app, its unit tests, a build that runs nothing, an export to `.iq`,
   a barrel, and a barrel's tests.
+- One of them exists from the moment a Connect IQ project opens, beside the device that is already
+  chosen there for the same reason, so Run is never a button with nothing behind it. A project
+  opens on its README as often as on a `.mc` file, and "Current File" over a README has nothing to
+  run. A barrel gets neither: it has no app to run.
 - A green arrow in the gutter beside the class the app starts from — the one the manifest names as
   its entry point, so a base class of your own in between does not move it.
 - A build for the watch rather than the simulator. When a Garmin device is attached, the plugin
@@ -48,6 +52,14 @@ First release.
   warns when the build was made for a different one, and says that the file vanishing from the
   folder afterwards is the install working, not failing. The program and nothing else is copied:
   app settings reach an installed app from its store listing, which a sideloaded build has none of.
+- Run installs, when the target is a watch: it builds for that watch and writes it across, rather
+  than building and then offering the install in a balloon. The offer is right for a build, where
+  connecting a watch and meaning to write to it are two different things; pressing Run with a watch
+  on the chip is not ambiguous. What it cannot do is start the app — Connect IQ does not allow that
+  from the host — so the console says to unplug the cable, which is also what takes the watch out
+  of transfer mode. Anything Run cannot decide, such as two watches and neither the one the build
+  was made for, falls back to the offer. Installing twice in a session replaces the first copy
+  rather than failing on it.
 - MTP needs `mtp-rs`, which is looked for rather than required: a watch that mounts as a disk needs
   none of it, and its absence is only mentioned when no device could be found at all. It is looked
   for under the name each platform installs it as, and can be pointed at in the settings when it
@@ -62,6 +74,13 @@ First release.
   Build | Build for Watch. The chip shows the target the selected run configuration will actually
   use, not the project setting it may be overriding. Devices that cannot run this kind of app are
   not offered.
+- Every attached watch is listed there, whether the project declares it or not. What is on the bus
+  is one fact and whether a build can be made for it is another, so the second sits beside the
+  first rather than in place of it: a watch the SDK knows and the manifest does not is a row that
+  adds it to the products and targets it in one click — one edit, one undo, and saved, because the
+  compiler reads the manifest off disk. A watch that matches no downloaded device says so instead
+  of vanishing from the list. The bus is looked at again when the IDE regains focus, which is the
+  moment that follows plugging something in; nothing portable announces a USB arrival.
 - Compiler diagnostics in the Build tool window, with clickable locations, and how long the build
   took beside them.
 - An export says what it is about to leave out before it spends minutes doing it: devices that are
@@ -100,6 +119,9 @@ First release.
 
 - Breakpoints, stepping, variables and expression evaluation through the debug adapter in the SDK.
 - A complication pair: a second Connect IQ project run alongside the first.
+- Debug is not offered for a watch target. There is no on-device debugging at all — the adapter
+  talks to the simulator's debug shell — so it greys out with the chip rather than failing when
+  it is pressed.
 
 ### Around it
 
@@ -140,4 +162,6 @@ First release.
   action, so Search Everywhere can find the one gesture that unblocks a machine with no SDK on it.
 - Runs in IntelliJ IDEA 2026.1 and later and in Android Studio 2026.1 and later, on Windows, macOS
   and Linux. Both ends of the IDEA range are verified on every push, and Android Studio and the
-  IDEs still in EAP every week, rather than only the one the plugin is compiled with.
+  IDEs still in EAP every week, rather than only the one the plugin is compiled with. The test
+  suite runs on all three operating systems rather than only the one CI is cheapest on, which is
+  what the claim to run on them rests on.
