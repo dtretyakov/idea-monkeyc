@@ -3,17 +3,18 @@ package com.github.dtretyakov.monkeyc.build
 import com.intellij.build.BuildViewManager
 import com.intellij.build.DefaultBuildDescriptor
 import com.intellij.build.FilePosition
+import com.intellij.build.events.BuildEvent
+import com.intellij.build.events.FileMessageEvent
+import com.intellij.build.events.FinishBuildEvent
 import com.intellij.build.events.MessageEvent
+import com.intellij.build.events.OutputBuildEvent
+import com.intellij.build.events.ProgressBuildEvent
+import com.intellij.build.events.StartBuildEvent
 import com.intellij.build.events.impl.FailureResultImpl
-import com.intellij.build.events.impl.FileMessageEventImpl
-import com.intellij.build.events.impl.FinishBuildEventImpl
-import com.intellij.build.events.impl.MessageEventImpl
-import com.intellij.build.events.impl.OutputBuildEventImpl
-import com.intellij.build.events.impl.ProgressBuildEventImpl
-import com.intellij.build.events.impl.StartBuildEventImpl
 import com.intellij.build.events.impl.SuccessResultImpl
 import com.github.dtretyakov.monkeyc.project.ConnectIqSdkService
 import com.github.dtretyakov.monkeyc.project.MonkeyCProject
+import com.intellij.execution.process.ProcessOutputType
 import com.intellij.openapi.project.Project
 import java.nio.file.Path
 import java.util.Locale
@@ -49,29 +50,25 @@ object MonkeyCBuildSession {
 
         view.onEvent(
             id,
-            StartBuildEventImpl(
-                DefaultBuildDescriptor(id, "Connect IQ", spec.root.toString(), started),
-                title,
-            ),
+            StartBuildEvent.builder(title, DefaultBuildDescriptor(id, "Connect IQ", spec.root.toString(), started))
+                .build(),
         )
 
         val result = try {
             MonkeyCBuilder.run(
                 project,
                 spec,
-                onOutput = { text, isError -> view.onEvent(id, OutputBuildEventImpl(id, text, !isError)) },
+                onOutput = { text, isError -> view.onEvent(id, output(id, text, isError)) },
                 onProgress = { progress ->
                     view.onEvent(
                         id,
-                        ProgressBuildEventImpl(
-                            Any(),
-                            id,
-                            System.currentTimeMillis(),
-                            "${progress.built} of ${progress.total} devices built",
-                            progress.total.toLong(),
-                            progress.built.toLong(),
-                            "devices",
-                        ),
+                        ProgressBuildEvent.builder(Any(), "${progress.built} of ${progress.total} devices built")
+                            .withParentId(id)
+                            .withTime(System.currentTimeMillis())
+                            .withTotal(progress.total.toLong())
+                            .withProgress(progress.built.toLong())
+                            .withUnit("devices")
+                            .build(),
                     )
                 },
             )
@@ -79,7 +76,7 @@ object MonkeyCBuildSession {
             // Not orEmpty(): an exception with no message would leave the Build window reporting a
             // failure with nothing written next to it.
             val reason = e.message ?: "the build stopped with ${e.javaClass.simpleName}"
-            view.onEvent(id, FinishBuildEventImpl(id, null, System.currentTimeMillis(), reason, FailureResultImpl()))
+            view.onEvent(id, finish(id, reason, succeeded = false))
             throw e
         }
 
@@ -92,7 +89,7 @@ object MonkeyCBuildSession {
         // neither, which the forums have called obscure for years.
         if (result.succeeded || result.messages.any { it.isAboutTheLimit() }) {
             memoryReport(project, spec)?.let {
-                view.onEvent(id, OutputBuildEventImpl(id, "Memory: $it\n", true))
+                view.onEvent(id, output(id, "Memory: $it\n"))
             }
         }
 
@@ -101,19 +98,10 @@ object MonkeyCBuildSession {
         // had to assemble by hand before finding that changing the JRE took their export from four
         // hours to two minutes.
         if (result.succeeded) {
-            view.onEvent(id, OutputBuildEventImpl(id, "Took ${elapsed(System.currentTimeMillis() - started)}\n", true))
+            view.onEvent(id, output(id, "Took ${elapsed(System.currentTimeMillis() - started)}\n"))
         }
 
-        view.onEvent(
-            id,
-            FinishBuildEventImpl(
-                id,
-                null,
-                System.currentTimeMillis(),
-                if (result.succeeded) "successful" else "failed",
-                if (result.succeeded) SuccessResultImpl() else FailureResultImpl(),
-            ),
-        )
+        view.onEvent(id, finish(id, if (result.succeeded) "successful" else "failed", result.succeeded))
 
         return result
     }
@@ -162,21 +150,33 @@ object MonkeyCBuildSession {
         // once, and which device complained is usually the point.
         val group = message.device ?: "Compiler"
         val file = message.file?.let { runCatching { Path.of(it) }.getOrNull() }
-            ?: return MessageEventImpl(id, kind, group, message.text, null)
+            ?: return MessageEvent.builder(message.text, kind).withParentId(id).withGroup(group).build()
 
-        return FileMessageEventImpl(
-            id,
-            kind,
-            group,
-            message.text,
-            null,
-            // The Build window counts lines and columns from one; the compiler counts columns
-            // from zero, and says nothing at all when it has no column.
-            // `toFile()`, because the constructor taking a `Path` is newer than the oldest IDE
-            // this plugin supports, and a build that reports one warning would die on it.
-            FilePosition(file.toFile(), (message.line ?: 1) - 1, message.column ?: 0),
-        )
+        // The Build window counts lines and columns from one; the compiler counts columns from
+        // zero, and says nothing at all when it has no column.
+        // `toFile()`, because the constructor taking a `Path` is newer than the oldest IDE this
+        // plugin supports, and a build that reports one warning would die on it. The same goes for
+        // `FileMessageEvent.builder`: 2026.2 deprecates it for `MessageEvent.builder(…)
+        // .withFilePosition(…)`, which 2026.1 does not have.
+        val position = FilePosition(file.toFile(), (message.line ?: 1) - 1, message.column ?: 0)
+        return FileMessageEvent.builder(message.text, kind, position).withParentId(id).withGroup(group).build()
     }
+
+    /*
+     * The events are made through the builders on their public interfaces. The `…EventImpl`
+     * constructors this used to call are internal API, which the Marketplace refuses a plugin for.
+     */
+
+    private fun output(id: Any, text: String, isError: Boolean = false): BuildEvent =
+        OutputBuildEvent.builder(text)
+            .withParentId(id)
+            .withOutputType(if (isError) ProcessOutputType.STDERR else ProcessOutputType.STDOUT)
+            .build()
+
+    private fun finish(id: Any, message: String, succeeded: Boolean): BuildEvent =
+        FinishBuildEvent.builder(id, message, if (succeeded) SuccessResultImpl() else FailureResultImpl())
+            .withTime(System.currentTimeMillis())
+            .build()
 
     /** A build for the simulator asks for `fenix7_sim`; the catalogue only knows `fenix7`. */
     private const val SIMULATOR_SUFFIX = "_sim"

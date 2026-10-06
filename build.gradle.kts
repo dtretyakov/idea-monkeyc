@@ -62,6 +62,35 @@ dependencies {
     testRuntimeOnly(libs.junitVintage)
 }
 
+/**
+ * The self-check's own source set, so it can be a plugin of its own rather than part of this one.
+ *
+ * What it checks is this plugin from the inside, so it compiles against everything the plugin does;
+ * what it uses to do that is internal API, which is why it cannot ship in the plugin. It is
+ * packaged as a jar plugin by `selfCheckJar` and installed by `runSelfCheck` alone, so it never
+ * reaches `buildPlugin`'s archive or the Plugin Verifier. See SelfCheckStarter.
+ */
+val selfCheck: SourceSet = sourceSets.create("selfCheck") {
+    compileClasspath += sourceSets.main.get().output + sourceSets.main.get().compileClasspath
+}
+
+kotlin {
+    // Associated with `main`, so the check may look at what the plugin keeps `internal`.
+    target.compilations.named("selfCheck") {
+        associateWith(target.compilations.getByName("main"))
+    }
+}
+
+val selfCheckJar = tasks.register<Jar>("selfCheckJar") {
+    archiveBaseName = "monkeyc-selfcheck"
+    destinationDirectory = layout.buildDirectory.dir("selfCheck")
+    // The classes from the build, the resources from source: the platform plugin replaces
+    // META-INF/plugin.xml in every processResources output with Monkey C's own, patched, and a
+    // second plugin carrying the first one's descriptor is a duplicate the IDE refuses to load.
+    from(selfCheck.output.classesDirs)
+    from(selfCheck.resources.srcDirs)
+}
+
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
     // The live tests drive the real SDK; they opt in rather than out so a clean checkout on a
@@ -84,8 +113,10 @@ tasks.withType<Test>().configureEach {
 
 intellijPlatform {
     pluginVerification {
+        // Internal API is not in the exceptions: the Marketplace refuses a plugin that uses any,
+        // so it fails here first. The self-check needs some, and lives in a plugin of its own
+        // that is never verified or shipped for exactly that reason.
         failureLevel = FailureLevel.ALL - setOf(
-            FailureLevel.INTERNAL_API_USAGES,
             FailureLevel.DEPRECATED_API_USAGES,
             FailureLevel.EXPERIMENTAL_API_USAGES,
         )
@@ -224,6 +255,13 @@ intellijPlatformTesting {
      *     ./gradlew runSelfCheck
      */
     runIde.register("runSelfCheck") {
+        // The starter is a plugin of its own, installed into this sandbox and no other. Copied in
+        // rather than declared with `plugins { localPlugin(…) }`, which reads the jar while
+        // Gradle is still planning the build — before `selfCheckJar` has run, so a clean checkout
+        // fails.
+        prepareSandboxTask {
+            from(selfCheckJar) { into("monkeyc-selfcheck/lib") }
+        }
         task {
             args = listOf("monkeyCSelfCheck")
             jvmArgumentProviders.add(

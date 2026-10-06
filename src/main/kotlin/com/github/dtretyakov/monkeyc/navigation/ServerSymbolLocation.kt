@@ -1,13 +1,16 @@
 package com.github.dtretyakov.monkeyc.navigation
 
+import com.github.dtretyakov.monkeyc.lang.MonkeyCFileType
 import com.github.dtretyakov.monkeyc.lsp.MonkeyCFileUriSupport
+import com.github.dtretyakov.monkeyc.lsp.MonkeyCLanguageServerFactory
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.util.ProgressIndicatorUtils
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
-import com.redhat.devtools.lsp4ij.LanguageServiceAccessor
+import com.redhat.devtools.lsp4ij.LanguageServerManager
+import com.redhat.devtools.lsp4ij.ServerStatus
 import org.eclipse.lsp4j.CallHierarchyPrepareParams
 import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.TextDocumentIdentifier
@@ -50,19 +53,30 @@ object ServerSymbolLocation {
         val project = file.project
         if (project.isDisposed) return null
 
+        // The questions LSP4IJ used to answer when it was asked for the servers of this file, asked
+        // here because the public way in names the server rather than the file. Only Monkey C
+        // source is the server's: `api.mir` has no language mapping, deliberately, and sending it
+        // requests about a file it was never given costs a timeout inside a read action. And only
+        // a server that is already up: asking for one by id starts it, which here would mean
+        // Go To Declaration starting the server the user turned off.
+        if (file.fileType != MonkeyCFileType) return null
+        val virtualFile = file.virtualFile ?: return null
+        val status = LanguageServerManager.getInstance(project).getServerStatus(MonkeyCLanguageServerFactory.SERVER_ID)
+        if (status != ServerStatus.started) return null
+
         val document = PsiDocumentManager.getInstance(project).getDocument(file) ?: return null
         if (offset !in 0..document.textLength) return null
 
         // Through the plugin's own URI support, which canonicalises symlinks: a document the
         // server cannot match to a compiled file gets no answers at all.
-        val uri = file.virtualFile?.let { MonkeyCFileUriSupport.getFileUri(it) } ?: return null
+        val uri = MonkeyCFileUriSupport.getFileUri(virtualFile) ?: return null
         val identifier = TextDocumentIdentifier(uri.toString())
         val at = positionOf(document, offset)
 
-        return ask(file) { service ->
+        return ask(file, virtualFile) { service ->
             service.prepareCallHierarchy(CallHierarchyPrepareParams(identifier, at))
                 .thenApply { items -> items?.firstOrNull()?.let { it.uri to it.selectionRange.start } }
-        } ?: ask(file) { service ->
+        } ?: ask(file, virtualFile) { service ->
             service.prepareTypeHierarchy(TypeHierarchyPrepareParams(identifier, at))
                 .thenApply { items -> items?.firstOrNull()?.let { it.uri to it.selectionRange.start } }
         }
@@ -70,12 +84,17 @@ object ServerSymbolLocation {
 
     private fun ask(
         file: PsiFile,
+        virtualFile: VirtualFile,
         request: (org.eclipse.lsp4j.services.TextDocumentService) -> CompletableFuture<Pair<String, Position>?>,
     ): Target? {
-        val answer = LanguageServiceAccessor.getInstance(file.project)
-            .getLanguageServers(file, null, null)
-            .thenCompose { servers ->
-                servers.firstOrNull()
+        // By the server's id through LanguageServerManager, the public way in: it answers with the
+        // same running server LSP4IJ's own features use. The client's own per-file gate is asked
+        // too, as LSP4IJ asks it before handing out a server for a file.
+        val answer = LanguageServerManager.getInstance(file.project)
+            .getLanguageServer(MonkeyCLanguageServerFactory.SERVER_ID)
+            .thenCompose { server ->
+                server
+                    ?.takeIf { it.clientFeatures.isEnabled(virtualFile) }
                     ?.let { request(it.textDocumentService) }
                     ?: CompletableFuture.completedFuture(null)
             }

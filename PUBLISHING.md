@@ -54,7 +54,7 @@ PRIVATE_KEY_PASSWORD="…" \
   ./gradlew signPlugin verifyPluginSignature
 ```
 
-Upload `build/distributions/idea-monkeyc-0.1.0-signed.zip` at
+Upload `build/distributions/idea-monkeyc-<version>-signed.zip` at
 <https://plugins.jetbrains.com/plugin/add>. The archive is named after `rootProject.name` in
 `settings.gradle.kts`, not after the plugin's display name — `pluginConfiguration.name` sets
 `<name>` inside the descriptor and nothing else.
@@ -114,8 +114,8 @@ supports, exactly as every other language plugin on the Marketplace is, and it s
 description carries a Trademarks section naming Garmin as the owner and denying affiliation, and the
 plugin displays no Garmin logo or brand element anywhere.
 
-The other thing a reviewer may raise is internal API usage, which the verifier reports and this
-build does not fail on. The three, and why each is the only way to do what it does, are at the
+The other thing a reviewer raises is internal API usage, and it is grounds for rejection: 0.1.0 was
+refused for it. There is none now, and `verifyPlugin` fails the build if any comes back — see the
 bottom of this file.
 
 ## Every release after that
@@ -164,20 +164,28 @@ would rather install from disk than add a repository.
   modified plugins" in the development sandbox — that comes from a later step, and LSP4IJ hits it
   too — but it does keep the half that is ours honest.
 
-Two things the verifier always reports, neither of which is a finding:
+What the verifier reports, and what it means:
 
-**Internal API.** Twenty-nine usages, of a short list: the Build tool window's event classes,
-`TogglePopupAction` for the toolbar chip, and `ModernApplicationStarter` plus `DynamicPlugins` for
-the self-check above. Each is the only way to do what it does, and each is used by plugins JetBrains
-ships. The Marketplace's guidelines name internal API as something review looks at, so this is the
-paragraph to have ready.
+**Internal API.** None, and `verifyPlugin` fails if any appears. The Marketplace rejected 0.1.0 for
+twenty-nine usages, every one of which had a public replacement in both IDEs the plugin supports:
+the Build tool window's events are made through the builders on their public interfaces rather than
+the `…EventImpl` constructors, the toolbar chip is a `ToggleAction` rather than a
+`TogglePopupAction`, and Go to Declaration reaches the language server through
+`LanguageServerManager` rather than LSP4IJ's `LanguageServiceAccessor` — asking only a server that
+is already running, because a request by name starts one, past the setting that turns it off
+(`ServerSymbolLocationTest`). The self-check does need
+internal API — an application starter, the dynamic-unload verdict — so it is a plugin of its own
+under `src/selfCheck`, which only `runSelfCheck` installs and which is never verified or shipped.
 
-**Deprecated API.** Nine distinct APIs across eighteen call sites, and every one of them is
-deliberate: they are the forms that exist in *both* IDEs the plugin supports. `FilePosition(File, …)`
-— the one the verifier reports as scheduled for removal — `runReadAction`, `ActionUtil.invokeAction`
-and the six Build event constructors were each superseded in 2026.2 by something 2026.1 does not
-have, so using the replacement would narrow the supported range to a single IDE. When `sinceBuild`
-moves up to 262, these are the calls to modernise, and the verifier's own report is the list:
+**Deprecated API.** Five APIs and fourteen usages against 2026.2, and every one of them is
+deliberate: they are the forms that exist in *both* IDEs the plugin supports.
+`FilePosition(File, …)` — the one the verifier reports as scheduled for removal —
+`FileMessageEvent.builder`, `runReadAction`, `ActionUtil.invokeAction` and
+`FileChooserDescriptorFactory.createSingleFileDescriptor` were each superseded in 2026.2 by
+something 2026.1 does not have, so using the replacement would narrow the supported range to a
+single IDE. The Marketplace does not refuse a plugin for deprecated API the way it does for
+internal API. When `sinceBuild` moves up to 262, these are the calls to modernise, and the
+verifier's own report is the list:
 
 ```bash
 ./gradlew verifyPlugin
