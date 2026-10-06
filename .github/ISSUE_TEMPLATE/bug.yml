@@ -43,7 +43,7 @@ body:
     attributes:
       label: IDE and plugin version
       description: From Help | About, and Settings | Plugins.
-      placeholder: "IntelliJ IDEA 2026.2.2, Monkey C 0.1.0"
+      placeholder: "IntelliJ IDEA 2026.2.2, Monkey C 0.2.0"
     validations:
       required: true
 
