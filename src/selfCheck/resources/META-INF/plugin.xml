@@ -1,0 +1,23 @@
+<!--
+  The self-check, as a plugin of its own: `./gradlew runSelfCheck` installs it beside Monkey C in a
+  sandbox of its own, and nothing else does. It is never part of the distribution, because what it
+  needs to do its job - an application starter, the platform's dynamic-unload verdict - is
+  internal API, and the Marketplace refuses a plugin that uses any. See SelfCheckStarter.
+-->
+<idea-plugin>
+    <id>com.github.dtretyakov.monkeyc.selfcheck</id>
+    <name>Monkey C Self-Check</name>
+    <version>1.0</version>
+    <vendor>Dmitry Tretyakov</vendor>
+    <description>Development only: checks that the Monkey C plugin is whole inside a real IDE.</description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.github.dtretyakov.monkeyc</depends>
+    <depends>com.redhat.devtools.lsp4ij</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <appStarter
+            id="monkeyCSelfCheck"
+            implementation="com.github.dtretyakov.monkeyc.selfcheck.SelfCheckStarter"/>
+    </extensions>
+</idea-plugin>

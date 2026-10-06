@@ -10,7 +10,6 @@ import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
 import com.github.dtretyakov.monkeyc.ui.manifest.ManifestModel
 import com.intellij.icons.AllIcons
 import com.intellij.execution.RunManager
-import com.intellij.execution.ui.TogglePopupAction
 import com.intellij.openapi.actionSystem.ActionGroup
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionUpdateThread
@@ -19,6 +18,8 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.actionSystem.Presentation
+import com.intellij.openapi.actionSystem.ToggleAction
+import com.intellij.openapi.actionSystem.Toggleable
 import com.intellij.openapi.actionSystem.ex.ActionUtil
 import com.intellij.openapi.actionSystem.ex.CustomComponentAction
 import com.intellij.openapi.actionSystem.impl.ActionButtonWithText
@@ -34,6 +35,7 @@ import com.intellij.openapi.ui.popup.ListPopup
 import com.intellij.ui.GotItTooltip
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.util.ui.JBDimension
 import com.intellij.util.ui.JBInsets
 import java.nio.file.Path
 import com.intellij.util.ui.JBUI
@@ -55,11 +57,13 @@ import javax.swing.SwingConstants
  * plugin already reads it from, the project's settings, which also keeps the language server and
  * the build looking at the same device.
  *
- * Built the same way the run configuration chip next to it is built — a [TogglePopupAction] drawn
- * by an [ActionButtonWithText] with a drop-down arrow — rather than as a `ComboBoxAction`, which
- * brings a bordered button of its own and reads as a foreign object among flat neighbours.
+ * Built the same way the run configuration chip next to it is built — a toggle that opens a popup
+ * underneath, drawn by an [ActionButtonWithText] with a drop-down arrow — rather than as a
+ * `ComboBoxAction`, which brings a bordered button of its own and reads as a foreign object among
+ * flat neighbours. The platform's chip extends `TogglePopupAction`, which is internal API and gets
+ * a plugin refused by the Marketplace, so the few lines of it this needs are here on [ToggleAction].
  */
-class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware {
+class SelectDeviceAction : ToggleAction(), CustomComponentAction, DumbAware {
 
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -95,18 +99,18 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
     /**
      * The popup, built to show the rows that cannot be chosen.
      *
-     * [TogglePopupAction] asks for `showDisabledActions = false`, and a popup built that way drops
-     * every disabled row before it is drawn. That is wrong for this list twice over. A watch that
-     * is plugged in but not among the project's products has to be visible — being told it was
-     * seen, and why it is not a target, is the whole reason the row exists — and the empty-state
-     * sentence [DeviceMenu] composes had never reached the screen either: it is a disabled row,
-     * so the popup for a project with nothing to build for showed two trailing actions and no
-     * explanation at all.
+     * The platform's `TogglePopupAction` asks for `showDisabledActions = false`, and a popup built
+     * that way drops every disabled row before it is drawn. That is wrong for this list twice over.
+     * A watch that is plugged in but not among the project's products has to be visible — being
+     * told it was seen, and why it is not a target, is the whole reason the row exists — and the
+     * empty-state sentence [DeviceMenu] composes had never reached the screen either: it is a
+     * disabled row, so the popup for a project with nothing to build for showed two trailing
+     * actions and no explanation at all.
      *
-     * Everything else is what the superclass passes, so the popup still looks and behaves like the
-     * run configuration one beside it.
+     * Everything else is what the platform's chip passes, so the popup still looks and behaves like
+     * the run configuration one beside it.
      */
-    override fun createPopup(
+    private fun createPopup(
         actionGroup: ActionGroup,
         e: AnActionEvent,
         disposeCallback: () -> Unit,
@@ -122,7 +126,21 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
         null,
     )
 
-    override fun getActionGroup(e: AnActionEvent): ActionGroup? {
+    /** Pressed while the popup is open, so the chip reads as held down until it closes. */
+    override fun isSelected(e: AnActionEvent): Boolean = Toggleable.isSelected(e.presentation)
+
+    override fun setSelected(e: AnActionEvent, state: Boolean) {
+        if (!state) return
+        val component = e.inputEvent?.component as? JComponent ?: return
+        val group = getActionGroup(e) ?: return
+        val presentation = e.presentation
+        createPopup(group, e) { Toggleable.setSelected(presentation, false) }
+            // The width the run configuration popup beside it opens at.
+            .apply { setMinimumSize(JBDimension(POPUP_MINIMUM_WIDTH, 0)) }
+            .showUnderneathOf(component)
+    }
+
+    private fun getActionGroup(e: AnActionEvent): ActionGroup? {
         val project = e.project ?: return null
         val model = MonkeyCProject.getInstance(project)
         val root = runReadAction { model.primaryRoot() } ?: return null
@@ -396,6 +414,10 @@ class SelectDeviceAction : TogglePopupAction(), CustomComponentAction, DumbAware
         }
 
         override fun actionPerformed(event: AnActionEvent) = Unit
+    }
+
+    private companion object {
+        const val POPUP_MINIMUM_WIDTH = 310
     }
 }
 

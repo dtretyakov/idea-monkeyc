@@ -67,7 +67,10 @@ passing when it has in fact skipped.
 `plugin.xml` that does not take is silent at runtime. A language server that was never registered
 simply never starts, and what the user sees is an editor with no completion and nothing to report.
 An `add-to-group` naming a group this IDE has not got is worse still — one line in `idea.log`, and
-then a menu item that is simply not there. Both are assertions in `SelfCheckStarter`.
+then a menu item that is simply not there. Both are assertions in `SelfCheckStarter`, which lives
+in `src/selfCheck` as a plugin of its own: it needs internal API to do its job, and the
+Marketplace refuses a plugin that ships any, so `runSelfCheck` installs it beside Monkey C and
+nothing else does.
 
 Between the two sit the tests that need a real `Project` — the manifest form is assembled inside
 one, because a UI that compiles is not a UI that builds.

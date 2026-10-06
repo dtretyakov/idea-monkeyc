@@ -215,10 +215,6 @@
         <gotoClassContributor
             implementation="com.github.dtretyakov.monkeyc.navigation.ApiMirGotoClassContributor"/>
 
-        <appStarter
-            id="monkeyCSelfCheck"
-            implementation="com.github.dtretyakov.monkeyc.ui.SelfCheckStarter"/>
-
         <projectConfigurable
             parentId="language"
             id="settings.monkeyc"

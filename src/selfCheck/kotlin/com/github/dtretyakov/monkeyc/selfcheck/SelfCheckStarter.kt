@@ -1,4 +1,4 @@
-package com.github.dtretyakov.monkeyc.ui
+package com.github.dtretyakov.monkeyc.selfcheck
 
 import com.github.dtretyakov.monkeyc.dap.MonkeyCDebugAdapterFactory
 import com.github.dtretyakov.monkeyc.lang.ApiMirFileType
@@ -53,6 +53,11 @@ import kotlin.system.exitProcess
  * extensions LSP4IJ owns actually took, whether the file types are bound to the right languages.
  * Those failures are silent at runtime — a language server that was never registered simply never
  * starts, and the user sees an editor with no completion and no error to report.
+ *
+ * A plugin of its own, loaded beside Monkey C only in the `runSelfCheck` sandbox and never shipped:
+ * an application starter and the dynamic-unload verdict are internal API, which is fine for a tool
+ * that runs on a developer's machine and is grounds for the Marketplace to refuse the plugin that
+ * users install. See `src/selfCheck/resources/META-INF/plugin.xml`.
  */
 class SelfCheckStarter : ModernApplicationStarter() {
 
