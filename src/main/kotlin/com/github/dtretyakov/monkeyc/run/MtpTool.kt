@@ -97,9 +97,23 @@ object MtpTool {
      * `~/.cargo/bin` is on the list because `cargo install mtp-rs-cli` is currently the only way to
      * get it, and that directory is on `PATH` for a shell but not always for a GUI application —
      * an IDE launched from Finder inherits a `PATH` that a terminal would not recognise.
+     *
+     * Homebrew's directories are there for the same reason: an IDE started from the Dock has
+     * neither `/opt/homebrew/bin` nor `/usr/local/bin` on its `PATH`, and a tool put in one —
+     * by hand today, by a package manager once one carries it — would otherwise be in plain sight
+     * and not found. [system] is the filesystem root they are resolved against, so a test can
+     * supply one.
      */
-    fun candidates(home: Path, windows: Boolean = isWindows): List<Path> =
-        listOf(home.resolve(".cargo/bin").resolve(executable(windows)))
+    fun candidates(home: Path, windows: Boolean = isWindows, system: Path = SYSTEM_ROOT): List<Path> {
+        val cargo = home.resolve(".cargo/bin").resolve(executable(windows))
+        if (windows) return listOf(cargo)
+        return listOf(cargo) + HOMEBREW_BINS.map { system.resolve(it).resolve(executable(windows)) }
+    }
+
+    /** Apple Silicon, Intel macOS, and Linux, in Homebrew's own words. Relative to [SYSTEM_ROOT]. */
+    private val HOMEBREW_BINS = listOf("opt/homebrew/bin", "usr/local/bin", "home/linuxbrew/.linuxbrew/bin")
+
+    private val SYSTEM_ROOT: Path = Path.of("/")
 
     /**
      * Whether this path is a file that can be run.
@@ -238,7 +252,7 @@ object MtpTool {
      * macOS the first is the common one — `ptpcamerad` claims MTP devices on connection, and
      * Android File Transfer and Garmin Express both take them too.
      */
-    fun describeFailure(exitCode: Int, stderr: String): String {
+    fun describeFailure(exitCode: Int, stderr: String, os: String = System.getProperty("os.name")): String {
         val said = stderr.trim().takeIf { it.isNotEmpty() }?.lines()?.first()
         return when (exitCode) {
             NO_DEVICE -> "No Garmin device is connected, or it is not in file-transfer mode."
@@ -246,12 +260,31 @@ object MtpTool {
             ACCESS_DENIED ->
                 "The device is connected but could not be opened. Another application usually has " +
                     "it: quit Garmin Express, Android File Transfer, or anything else reading the " +
-                    "watch, and try again." + (said?.let { " ($it)" } ?: "")
+                    "watch, and try again." + holder(os) + (said?.let { " ($it)" } ?: "")
             REMOTE_PATH -> "The device rejected the path. ${said ?: ""}".trim()
             TRANSFER -> "The transfer failed. ${said ?: "Try a different cable or port."}".trim()
             VERIFICATION -> "The file was copied but read back differently, so it was not installed correctly."
             else -> said ?: "mtp-rs exited with $exitCode."
         }
+    }
+
+    /**
+     * What else takes the device on this platform, which is not an application anyone would think
+     * to quit.
+     *
+     * On macOS it is `ptpcamerad`, a system daemon that claims every MTP and PTP device on
+     * connection, so the advice above finds nothing to quit and the watch still cannot be opened.
+     * On Linux it is the desktop's own mount, which normally means the plugin installs through
+     * that mount instead — this is for when it did not recognise the two as one watch.
+     */
+    private fun holder(os: String): String = when {
+        os.startsWith("Mac") ->
+            " On macOS the usual holder is the system's ptpcamerad, which takes the watch when it " +
+                "is plugged in: `pkill -9 ptpcamerad` frees it until it is plugged in again."
+        os.startsWith("Linux") ->
+            " On Linux it may be the desktop, which mounts the watch on its own: eject it in the " +
+                "file manager without unplugging it."
+        else -> ""
     }
 
     const val NO_DEVICE = 2

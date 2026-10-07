@@ -52,6 +52,12 @@ installs without the dialog that asks whether to trust it. Pre-release versions 
 * The Connect IQ SDK, installed with Garmin's SDK Manager. Code intelligence needs SDK 8.1.0 or
   newer; building, running and debugging work with older ones.
 * [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij), installed alongside this plugin
+* To install a build on a watch over USB: nothing, for a watch that mounts as a disk. A current
+  watch speaks MTP instead. On Linux under GNOME and most other desktops, the plugin installs
+  through the mount the desktop makes for it; under KDE or without a desktop, and on Windows and
+  macOS, it needs [mtp-rs](https://crates.io/crates/mtp-rs-cli)
+  (`cargo install mtp-rs-cli`). Windows can do without it — File Explorer shows the watch, and the
+  `.prg` can be copied to `GARMIN\APPS` by hand — but macOS cannot: Finder never shows it.
 
 ## More
 

@@ -247,7 +247,7 @@ class MonkeyCConfigurable(private val project: Project) :
                 }
             }
 
-            // A control at all because [MtpLocator.INSTALL_HINT] has always told people to set the
+            // A control at all because [MtpLocator.installHint] has always told people to set the
             // path here, and there was nothing here to set.
             group("Device") {
                 row("MTP tool:") {
@@ -338,7 +338,7 @@ class MonkeyCConfigurable(private val project: Project) :
     /** What `mtp-rs` is for, or where it was found. Absence is normal, so it is not an error. */
     private fun mtpToolStatus(): String =
         MtpLocator.resolve()?.let { "Found at ${FileUtil.getLocationRelativeToUserHome(it.toString())}" }
-            ?: "Needed to install a build on a watch. <a href=\"${MtpLocator.PROJECT_URL}\">Get mtp-rs</a>"
+            ?: "${MtpLocator.purpose()} <a href=\"${MtpLocator.PROJECT_URL}\">Get mtp-rs</a>"
 
     /**
      * Where a new key is offered first: where [MonkeyCProject.developerKey] already looks when

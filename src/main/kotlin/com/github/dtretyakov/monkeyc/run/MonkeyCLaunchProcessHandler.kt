@@ -201,7 +201,7 @@ class MonkeyCLaunchProcessHandler(
             ProcessOutputTypes.SYSTEM,
         )
         if (GarminTarget.mtpToolMissing()) {
-            notifyTextAvailable("\n${MtpLocator.INSTALL_HINT}\n", ProcessOutputTypes.SYSTEM)
+            notifyTextAvailable("\n${MtpLocator.installHint()}\n", ProcessOutputTypes.SYSTEM)
         }
     }
 
