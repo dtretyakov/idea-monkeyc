@@ -3,6 +3,7 @@ package com.github.dtretyakov.monkeyc.run
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.DisabledOnOs
 import org.junit.jupiter.api.condition.OS
@@ -145,8 +146,74 @@ class MtpLocatorTest {
 
     @Test
     fun `nothing installed is null, not an error`(@TempDir temp: Path) {
-        // A watch that mounts as a disk needs none of this, so absence is normal.
-        assertNull(MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false))
+        // A watch that mounts as a disk needs none of this, so absence is normal. The system root
+        // is the temporary directory too, or a tool Homebrew put on this machine would answer.
+        assertNull(MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false, system = temp))
+    }
+
+    /**
+     * An IDE started from the Dock has neither of Homebrew's directories on its `PATH`, so a tool
+     * installed with `brew` was in plain sight and reported missing.
+     */
+    @Test
+    fun `Homebrew's directory is found when PATH does not have it`(@TempDir temp: Path) {
+        val brewed = executable(temp.resolve("opt/homebrew/bin/mtp-rs"))
+
+        assertEquals(
+            brewed,
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp),
+        )
+    }
+
+    @Test
+    fun `a tool put in usr local bin by hand is found`(@TempDir temp: Path) {
+        val placed = executable(temp.resolve("usr/local/bin/mtp-rs"))
+
+        assertEquals(
+            placed,
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp),
+        )
+    }
+
+    @Test
+    fun `cargo's copy wins over Homebrew's, as it did before Homebrew was looked at`(@TempDir temp: Path) {
+        val cargo = executable(temp.resolve("home/.cargo/bin/mtp-rs"))
+        executable(temp.resolve("opt/homebrew/bin/mtp-rs"))
+
+        assertEquals(
+            cargo,
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp),
+        )
+    }
+
+    @Test
+    fun `Windows does not look in Homebrew's directories`(@TempDir temp: Path) {
+        executable(temp.resolve("usr/local/bin/mtp-rs.exe"))
+
+        assertNull(MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = null, windows = true, system = temp))
+    }
+
+    /**
+     * Only macOS has no way onto a current watch without the tool, and the hint has to say so
+     * there — and must not tell a Windows user, whose File Explorer shows the watch, that it is
+     * the only way.
+     */
+    @Test
+    fun `the hint says what the platform itself can do`() {
+        val mac = MtpLocator.installHint("Mac OS X")
+        val windows = MtpLocator.installHint("Windows 11")
+        val linux = MtpLocator.installHint("Linux")
+
+        assertTrue(mac.contains("Finder will not show it"), mac)
+        assertTrue(windows.contains("File Explorer"), windows)
+        assertTrue(windows.contains("GARMIN\\APPS"), windows)
+        assertTrue(linux.contains("GNOME"), linux)
+        assertTrue(linux.contains("KDE"), linux)
+        // Every one of them still says how to get the tool and where to point at it.
+        listOf(mac, windows, linux).forEach {
+            assertTrue(it.contains("cargo install mtp-rs-cli"), it)
+            assertTrue(it.contains("Settings | Languages & Frameworks | Monkey C"), it)
+        }
     }
 
     /**
@@ -160,7 +227,7 @@ class MtpLocatorTest {
         notExecutable.parent.createDirectories()
         notExecutable.writeText("text")
 
-        assertNull(MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false))
+        assertNull(MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false, system = temp))
     }
 
     private companion object {

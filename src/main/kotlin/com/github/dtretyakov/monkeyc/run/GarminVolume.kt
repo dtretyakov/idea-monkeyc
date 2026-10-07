@@ -15,10 +15,27 @@ import kotlin.io.path.name
  * had a "build for device" wizard; nothing since has, so the documented procedure is still: build,
  * plug in the USB cable, find the volume, copy the `.prg` into `GARMIN/APPS`, unplug. It is four
  * steps of clerical work that the IDE has every fact needed to do.
+ *
+ * A watch the Linux desktop mounted over MTP is one of these too: gvfs makes it a directory, and
+ * only the copy differs. See [GvfsMtp].
  */
-data class GarminVolume(val root: Path) {
+data class GarminVolume(
+    val root: Path,
+    /**
+     * The gvfs host this storage belongs to, when the watch is an MTP device the Linux desktop
+     * mounted rather than a disk. Null for a disk. See [GvfsMtp].
+     */
+    val mtpHost: String? = null,
+) {
 
-    val name: String get() = root.name.ifEmpty { root.toString() }
+    /**
+     * What to call it. A disk is named by its volume label; a gvfs mount's directory is the
+     * storage's name — "Primary" — so there the model the host names is the better answer.
+     */
+    val name: String get() = model ?: root.name.ifEmpty { root.toString() }
+
+    /** The model, which only a gvfs mount says. */
+    val model: String? get() = mtpHost?.let { GvfsMtp.model(it) }
 
     /** Where a sideloaded `.prg` goes. */
     val apps: Path get() = garmin.resolve("APPS")
@@ -40,6 +57,13 @@ data class GarminVolume(val root: Path) {
      * people looking for the real answer.
      */
     fun install(prg: Path): Path {
+        if (mtpHost != null) {
+            // Upper case, as over `mtp-rs`, and for the same reason: see [GarminTarget.Mtp].
+            val destination = apps.resolve(prg.name.uppercase())
+            GvfsMtp.push(prg, destination)
+            return destination
+        }
+
         apps.createDirectories()
         val destination = apps.resolve(prg.name)
         prg.copyTo(destination, overwrite = true)
@@ -51,7 +75,18 @@ data class GarminVolume(val root: Path) {
         /** Every Garmin device mounted right now. Usually none, occasionally one, rarely two. */
         fun mounted(): List<GarminVolume> = candidateRoots()
             .filter { garminDirectory(it) != null }
-            .map { GarminVolume(it) }
+            .map { GarminVolume(it) } + mountedOverMtp()
+
+        /**
+         * Every Garmin watch the Linux desktop has mounted over MTP, from the gvfs directories
+         * given. Nothing on macOS and Windows, which have no such directory.
+         */
+        internal fun mountedOverMtp(gvfsRoots: List<Path> = GvfsMtp.roots()): List<GarminVolume> =
+            gvfsRoots
+                .filter { it.isDirectory() }
+                .flatMap { GvfsMtp.storages(it) }
+                .filter { (storage, _) -> garminDirectory(storage) != null }
+                .map { (storage, host) -> GarminVolume(storage, mtpHost = host) }
 
         /**
          * The `GARMIN` directory on a volume, whatever case it is spelled in.

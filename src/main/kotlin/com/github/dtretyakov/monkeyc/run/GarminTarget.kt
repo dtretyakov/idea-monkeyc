@@ -26,9 +26,16 @@ sealed interface GarminTarget {
     /** Puts the file on the device, returning where it landed. */
     fun install(prg: Path): Path
 
-    /** A watch that mounts as a disk: the file copy that has always worked. */
+    /**
+     * A watch that mounts as a disk: the file copy that has always worked. Or one the Linux desktop
+     * mounted over MTP, which looks the same and says its model besides.
+     */
     data class Volume(val volume: GarminVolume) : GarminTarget {
         override val name: String get() = volume.name
+
+        override val device: ConnectIqDevice?
+            get() = volume.model?.let { ConnectedWatch.match(it, ConnectIqSdkService.getInstance().devices()) }
+
         override fun install(prg: Path): Path = volume.install(prg)
     }
 
@@ -76,8 +83,20 @@ sealed interface GarminTarget {
          * plugged in would be noise.
          */
         fun attached(): List<GarminTarget> {
-            val volumes = GarminVolume.mounted().map { Volume(it) }
-            return volumes + mtpDevices()
+            val volumes = GarminVolume.mounted()
+            return volumes.map { Volume(it) } + withoutMounted(mtpDevices(), volumes)
+        }
+
+        /**
+         * The MTP devices that are not already here as a gvfs mount.
+         *
+         * On Linux the desktop mounts a watch the moment it is plugged in, and from then on it holds
+         * the device: `mtp-rs` still lists it, because listing reads the bus, but cannot open it.
+         * Offering both would put the watch in the chooser twice, and one of the two always fails.
+         */
+        internal fun withoutMounted(devices: List<Mtp>, volumes: List<GarminVolume>): List<Mtp> {
+            val hosts = volumes.mapNotNull { it.mtpHost }
+            return devices.filterNot { device -> hosts.any { GvfsMtp.holds(it, device.info.serial_number) } }
         }
 
         /**

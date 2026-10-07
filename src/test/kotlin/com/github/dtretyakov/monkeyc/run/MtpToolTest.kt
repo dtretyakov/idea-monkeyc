@@ -120,6 +120,32 @@ class MtpToolTest {
     }
 
     @Test
+    fun `on macOS a device that cannot be opened names the daemon nobody would think to quit`() {
+        // ptpcamerad is not an application in the Dock, so "quit whatever has it" finds nothing to
+        // quit, and the watch stays held.
+        val mac = MtpTool.describeFailure(MtpTool.ACCESS_DENIED, "", os = "Mac OS X")
+        val windows = MtpTool.describeFailure(MtpTool.ACCESS_DENIED, "", os = "Windows 11")
+
+        assertTrue(mac.contains("ptpcamerad"), mac)
+        assertFalse(windows.contains("ptpcamerad"), windows)
+    }
+
+    @Test
+    fun `on Linux a device that cannot be opened points at the desktop's own mount`() {
+        val linux = MtpTool.describeFailure(MtpTool.ACCESS_DENIED, "", os = "Linux")
+
+        assertTrue(linux.contains("file manager"), linux)
+    }
+
+    @Test
+    fun `Homebrew's directories are searched outside Windows`() {
+        val candidates = MtpTool.candidates(Path.of("/home/dev"), windows = false, system = Path.of("/"))
+
+        assertTrue(candidates.contains(Path.of("/opt/homebrew/bin/mtp-rs")), "$candidates")
+        assertTrue(candidates.contains(Path.of("/usr/local/bin/mtp-rs")), "$candidates")
+    }
+
+    @Test
     fun `each exit code says its own thing`() {
         assertTrue(MtpTool.describeFailure(MtpTool.NO_DEVICE, "").contains("No Garmin device"))
         assertTrue(MtpTool.describeFailure(MtpTool.VERIFICATION, "").contains("read back differently"))

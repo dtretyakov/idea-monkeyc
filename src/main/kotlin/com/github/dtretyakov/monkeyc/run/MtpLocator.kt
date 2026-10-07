@@ -19,6 +19,7 @@ object MtpLocator {
         home: Path = Path.of(System.getProperty("user.home")),
         path: String? = System.getenv("PATH"),
         windows: Boolean = System.getProperty("os.name").startsWith("Windows"),
+        system: Path = Path.of("/"),
     ): Path? {
         configured?.trim()?.takeIf { it.isNotEmpty() }?.let { setting ->
             val candidate = Path.of(setting)
@@ -28,7 +29,7 @@ object MtpLocator {
             return executable.takeIf { MtpTool.isUsable(it, windows) }
         }
 
-        return (onPath(path, windows) + MtpTool.candidates(home, windows))
+        return (onPath(path, windows) + MtpTool.candidates(home, windows, system))
             .firstOrNull { MtpTool.isUsable(it, windows) }
     }
 
@@ -46,9 +47,43 @@ object MtpLocator {
     /** Where to get it: the crate `cargo install mtp-rs-cli` installs from. */
     const val PROJECT_URL = "https://crates.io/crates/mtp-rs-cli"
 
-    /** What to tell someone who has no tool and a watch that needs one. */
-    const val INSTALL_HINT =
-        "Installing a Connect IQ app on a current Garmin device needs mtp-rs, because the watch " +
-            "speaks MTP rather than mounting as a disk. Install it with `cargo install mtp-rs-cli` " +
-            "($PROJECT_URL), or set its path in Settings | Languages & Frameworks | Monkey C."
+    /**
+     * What to tell someone who has no tool and whose watch could not be found, on this platform.
+     *
+     * The three differ in what the system itself can do, and the advice has to follow. Windows
+     * shows an MTP watch in File Explorer, so the copy Garmin documents works there by hand, and
+     * the tool is a convenience. A Linux desktop built on gvfs mounts the watch on its own and the
+     * plugin installs through that mount, so not finding one means nothing did — KDE's kio has no
+     * directory to copy into, and a machine without a desktop has no mount. macOS has no MTP at all:
+     * Finder never shows the watch, and the tool is the only way onto it.
+     */
+    fun installHint(os: String = System.getProperty("os.name")): String = when {
+        os.startsWith("Mac") ->
+            "A current Garmin watch connects over MTP, which macOS does not speak: Finder will not " +
+                "show it, and installing on one needs mtp-rs. $HOW_TO_GET_IT"
+        os.startsWith("Windows") ->
+            "A current Garmin watch connects over MTP and appears in File Explorer under This PC " +
+                "rather than as a drive: copy the .prg to GARMIN\\APPS there, or install mtp-rs and " +
+                "let the IDE do it. $HOW_TO_GET_IT"
+        else ->
+            "A current Garmin watch connects over MTP. GNOME and most other desktops mount it on " +
+                "their own, and the IDE installs through that mount; KDE reaches it in a way the IDE " +
+                "cannot use, and without a desktop nothing mounts it. There, install mtp-rs. " +
+                HOW_TO_GET_IT
+    }
+
+    /**
+     * What the tool is for on this platform, for the settings page beside its path.
+     *
+     * Absence is normal everywhere, and only on macOS does it leave no way onto a current watch.
+     */
+    fun purpose(os: String = System.getProperty("os.name")): String = when {
+        os.startsWith("Mac") -> "Needed to install a build on a current watch, which macOS cannot open without it."
+        os.startsWith("Windows") -> "Lets the IDE install a build on a current watch. Without it, copy the .prg in File Explorer."
+        else -> "Needed only where the desktop does not mount the watch itself: under KDE, or with no desktop."
+    }
+
+    private const val HOW_TO_GET_IT =
+        "Install it with `cargo install mtp-rs-cli` ($PROJECT_URL), or set its path in " +
+            "Settings | Languages & Frameworks | Monkey C."
 }
