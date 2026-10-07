@@ -11,7 +11,8 @@ Five minutes, assuming you have IntelliJ IDEA.
 
 1. **Install the Connect IQ SDK** with [Garmin's SDK Manager](https://developer.garmin.com/connect-iq/sdk/),
    and download at least one device with it. The plugin finds it on its own.
-2. **Install this plugin** from *Settings | Plugins*.
+2. **Install [this plugin](https://plugins.jetbrains.com/plugin/34203-monkey-c)** from
+   *Settings | Plugins | Marketplace* — search for Monkey C.
    [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij) comes with it.
 3. **New Project | Connect IQ**, or open a folder that already has a `monkey.jungle` in it.
 4. **Generate a developer key** in *Settings | Languages & Frameworks | Monkey C*. It signs every
