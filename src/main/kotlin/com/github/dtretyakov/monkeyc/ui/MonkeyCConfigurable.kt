@@ -276,7 +276,10 @@ class MonkeyCConfigurable(private val project: Project) :
                         }
                 }
                 row {
-                    mtpStatus = comment(mtpToolStatus(environment), action = HyperlinkEventAction { installMtpTool() })
+                    mtpStatus = comment(
+                        mtpToolStatus(ConnectIqEnvironment.of(environment, ConnectIqEnvironment.Concern.MTP_TOOL)),
+                        action = HyperlinkEventAction { installMtpTool() },
+                    )
                 }
             }
         }
@@ -294,7 +297,8 @@ class MonkeyCConfigurable(private val project: Project) :
         val environment = ConnectIqEnvironment.check(project)
         keyStatus?.component?.text = ConnectIqEnvironment
             .of(environment, ConnectIqEnvironment.Concern.DEVELOPER_KEY)?.detail.orEmpty()
-        mtpStatus?.component?.text = mtpToolStatus(environment)
+        mtpStatus?.component?.text =
+            mtpToolStatus(ConnectIqEnvironment.of(environment, ConnectIqEnvironment.Concern.MTP_TOOL))
 
         // The server reads all of this once, at initialize; it has to be told to start over.
         project.messageBus.syncPublisher(MonkeyCSettings.TOPIC).settingsChanged(project)
@@ -346,9 +350,9 @@ class MonkeyCConfigurable(private val project: Project) :
      *
      * `<a>` without an href, as for the SDK Manager above: the link is a command, not a page.
      */
-    private fun mtpToolStatus(environment: List<ConnectIqEnvironment.Item>): String {
-        val item = ConnectIqEnvironment.of(environment, ConnectIqEnvironment.Concern.MTP_TOOL) ?: return ""
-        val sentence = ConnectIqEnvironment.sentence(environment, ConnectIqEnvironment.Concern.MTP_TOOL)
+    private fun mtpToolStatus(item: ConnectIqEnvironment.Item?): String {
+        item ?: return ""
+        val sentence = ConnectIqEnvironment.sentence(listOf(item), ConnectIqEnvironment.Concern.MTP_TOOL)
         if (item.fix != ConnectIqEnvironment.Fix.INSTALL_MTP_TOOL) return sentence
         return "$sentence <a>${MtpToolSetup.label()}</a>"
     }
@@ -366,13 +370,14 @@ class MonkeyCConfigurable(private val project: Project) :
      */
     private fun refreshMtpStatus() {
         ApplicationManager.getApplication().executeOnPooledThread {
-            runCatching { MtpLocator.refreshVersions() }
+            // The line is worked out here, off the UI thread, from this look alone — not from the
+            // whole checklist, which reads the SDK, the developer key and version control.
+            val text = runCatching { mtpToolStatus(ConnectIqEnvironment.mtpTool(MtpLocator.refresh())) }
+                .getOrNull() ?: return@executeOnPooledThread
             // `any`, because the page is a modal dialog and the default would hold this back until
             // it closed — which is after the line it rewrites has gone. It sets a label's text and
             // touches no model, which is what `any` is safe for.
-            ApplicationManager.getApplication().invokeLater({
-                mtpStatus?.component?.text = mtpToolStatus(ConnectIqEnvironment.check(project))
-            }, ModalityState.any())
+            ApplicationManager.getApplication().invokeLater({ mtpStatus?.component?.text = text }, ModalityState.any())
         }
     }
 

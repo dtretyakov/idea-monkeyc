@@ -67,12 +67,12 @@ A current watch connects over MTP, not as a drive, and what that takes depends o
 |---|---|
 | **macOS** | [mtp-rs](https://github.com/vdavid/mtp-rs). macOS has no MTP of its own: Finder never shows the watch. |
 | **Windows** | [mtp-rs](https://github.com/vdavid/mtp-rs). It uses Windows' own MTP support, so no driver is installed. |
-| **Linux, GNOME and most desktops** | Nothing. The desktop mounts the watch, and the plugin copies through that mount with `gio`. |
-| **Linux, KDE or no desktop** | [mtp-rs](https://github.com/vdavid/mtp-rs), and permission to open the watch without root (a udev rule; most desktop distributions ship one). |
+| **Linux, GNOME and its relatives** | Nothing. GNOME, Cinnamon, MATE, Budgie and Pantheon mount the watch themselves, and the plugin copies through that mount with `gio`. |
+| **Linux, KDE, Xfce or no desktop** | [mtp-rs](https://github.com/vdavid/mtp-rs), and permission to open the watch without root (a udev rule; most desktop distributions ship one). |
 
 If you installed mtp-rs yourself — `brew install vdavid/tap/mtp-rs`, or one of the
 [other ways](https://github.com/vdavid/mtp-rs/tree/main/crates/mtp-rs-cli#install) — the plugin
-finds it and uses it, as long as it is a version the plugin can read: 0.9.1 or a later 0.9.x
+finds it and prefers it, as long as it is a version the plugin can read: 0.9.1 or a later 0.9.x
 (`^0.9.1`, as Cargo would put it; mtp-rs follows semver, and below 1.0 a new minor version may
 change what it prints). A path set in *Settings | Languages & Frameworks | Monkey C* always wins.
 
@@ -80,7 +80,8 @@ Where there is none, or only one outside that range, the plugin says so in the w
 Run, in the settings, and after a build for a watch — each with an **Install mtp-rs** button. The
 button downloads mtp-rs 0.9.1 for your system from its GitHub release, checks it against a
 checksum built into the plugin, and keeps it in JetBrains' shared data directory, beside whatever
-you have rather than over it.
+you have rather than over it. Until then, a copy outside the range is still used — it may well
+work — and the plugin's own takes over once it is installed.
 
 Older watches that connect as a drive need none of this on any system.
 

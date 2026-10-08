@@ -9,8 +9,10 @@ import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.util.io.HttpRequests
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The one button that gets `mtp-rs` onto this machine, wherever it is offered.
@@ -49,13 +51,16 @@ object MtpToolSetup {
      * Cancellable, because it is a download: a slow connection is the user's to give up on.
      */
     fun install(project: Project?, then: (Path) -> Unit = {}) {
+        // One at a time. Two clicks — the settings link twice, or the link and the watch list —
+        // would otherwise download twice and race to put the tool in the same place.
+        if (!installing.compareAndSet(false, true)) return
         val asset = MtpRelease.forPlatform() ?: return notify(
             project,
             "mtp-rs is not available for this computer",
             "There is no mtp-rs ${MtpRelease.VERSION} build for ${System.getProperty("os.name")} on " +
                 "${System.getProperty("os.arch")}. See ${MtpLocator.INSTALL_URL}.",
             NotificationType.ERROR,
-        )
+        ).also { installing.set(false) }
         val windows = System.getProperty("os.name").startsWith("Windows")
 
         ProgressManager.getInstance().run(
@@ -73,7 +78,16 @@ object MtpToolSetup {
                         "mtp-rs was installed at $installed but answered ${version ?: "nothing"} when asked its version."
                     }
                     tool = installed
-                    then(installed)
+                    // So the watch list and the settings stop offering it at once, without waiting
+                    // for the next background look.
+                    runCatching { MtpLocator.refresh() }
+                    // The caller's continuation, kept apart: the tool is installed whatever it does,
+                    // and a failure in it must not be reported as a failure to install.
+                    runCatching { then(installed) }.onFailure { LOG.warn("After installing mtp-rs", it) }
+                }
+
+                override fun onFinished() {
+                    installing.set(false)
                 }
 
                 override fun onSuccess() {
@@ -159,4 +173,8 @@ object MtpToolSetup {
     }
 
     private fun group() = NotificationGroupManager.getInstance().getNotificationGroup("Monkey C")
+
+    private val installing = AtomicBoolean(false)
+
+    private val LOG = logger<MtpToolSetup>()
 }

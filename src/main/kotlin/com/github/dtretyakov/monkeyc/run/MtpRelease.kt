@@ -101,7 +101,13 @@ object MtpRelease {
     fun compatibility(version: String): Compatibility {
         val have = numbers(version) ?: return Compatibility.UNREADABLE
         val need = numbers(MINIMUM) ?: return Compatibility.COMPATIBLE
-        if (compare(have, need) < 0) return Compatibility.OLDER
+        val order = compare(have, need)
+        val preRelease = version.contains('-')
+        // A pre-release comes before its release, so `0.9.1-rc.1` is older than 0.9.1.
+        if (order < 0 || (order == 0 && preRelease)) return Compatibility.OLDER
+        // And no later pre-release is within the range either, as Cargo has it: a pre-release
+        // promises nothing, so it is treated as untested rather than as the release it precedes.
+        if (preRelease) return Compatibility.NEWER
         // The leftmost non-zero part of the minimum is the one a breaking release moves.
         val breaking = need.indexOfFirst { it != 0 }.let { if (it < 0) need.lastIndex else it }
         val sameLine = (0..breaking).all { have.getOrElse(it) { 0 } == need.getOrElse(it) { 0 } }

@@ -154,9 +154,6 @@ sealed interface GarminTarget {
             // during one of those starts a thread per activation, each waiting on the same drive.
             if (!looking.compareAndSet(false, true)) return
             try {
-                // Asked here because this is the background look the watch list starts: the list
-                // says when the tool is too old, and must not start a process itself to find out.
-                runCatching { MtpLocator.refreshVersions() }
                 val fresh = runCatching { attached().map { Attached(it.name, it.device?.id) } }
                     .getOrDefault(emptyList())
                 attachedCache = System.currentTimeMillis() to fresh
@@ -174,10 +171,10 @@ sealed interface GarminTarget {
         private const val CACHE_MILLIS = 2_000L
 
         private fun mtpDevices(): List<Mtp> {
-            // Which copy is used depends on the versions of all of them; this runs off the UI
-            // thread, so it can ask the ones not asked yet before choosing.
-            runCatching { MtpLocator.refreshVersions() }
-            val tool = MtpLocator.resolve() ?: return emptyList()
+            // A fresh look rather than the last one: which copy is used depends on the versions of
+            // all of them, and this runs off the UI thread, so it can ask the ones not asked yet.
+            // It is also what keeps the watch list's word about the tool current.
+            val tool = runCatching { MtpLocator.refresh().tool }.getOrNull() ?: return emptyList()
             val outcome = runCatching {
                 MtpTool.run(
                     listOf(tool.toString()) + MtpTool.deviceArguments(),

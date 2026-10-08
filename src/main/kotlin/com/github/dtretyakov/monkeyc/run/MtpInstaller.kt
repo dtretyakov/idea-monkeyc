@@ -67,16 +67,39 @@ object MtpInstaller {
             } ?: error("${asset.file} has no $name in it.")
 
             into.createDirectories()
-            val staged = into.resolve("$name.part")
+            clearAside(into, name)
+            // A name of its own, so a second install running alongside cannot take this one's file.
+            val staged = Files.createTempFile(into, name, ".part")
             Files.copy(unpackedTool, staged, StandardCopyOption.REPLACE_EXISTING)
             if (!windows) staged.toFile().setExecutable(true, false)
+
+            // The previous copy is moved aside rather than overwritten. Windows will not replace an
+            // executable that is running — and the watch list may be running this one at any
+            // moment — but it will rename it; the old file goes when it is no longer in use.
             val tool = into.resolve(name)
-            Files.move(staged, tool, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+            if (Files.exists(tool)) {
+                Files.move(tool, Files.createTempFile(into, name, ASIDE), StandardCopyOption.REPLACE_EXISTING)
+            }
+            Files.move(staged, tool, StandardCopyOption.ATOMIC_MOVE)
+            clearAside(into, name)
             return tool
         } finally {
             work.toFile().deleteRecursively()
         }
     }
+
+    /**
+     * Deletes what earlier installs left: copies moved aside, where nothing runs them any more, and
+     * staging files from one that was cut short. Installs run one at a time, so none is in use.
+     */
+    private fun clearAside(directory: Path, name: String) {
+        Files.list(directory).use { entries ->
+            entries.filter { it.name.startsWith(name) && (it.name.endsWith(ASIDE) || it.name.endsWith(".part")) }
+                .forEach { runCatching { Files.delete(it) } }
+        }
+    }
+
+    private const val ASIDE = ".old"
 
     internal fun sha256(file: Path): String {
         val digest = MessageDigest.getInstance("SHA-256")

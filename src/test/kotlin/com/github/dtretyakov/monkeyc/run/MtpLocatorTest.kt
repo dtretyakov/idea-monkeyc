@@ -244,7 +244,7 @@ class MtpLocatorTest {
             brewed,
             MtpLocator.resolve(
                 configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp,
-                managed = managed, version = versions(brewed to "0.9.4", managed to MtpRelease.VERSION),
+                managed = managed, standing = versions(brewed to "0.9.4", managed to MtpRelease.VERSION),
             ),
         )
     }
@@ -261,7 +261,7 @@ class MtpLocatorTest {
                 managed,
                 MtpLocator.resolve(
                     configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp,
-                    managed = managed, version = versions(old to "0.3.0", managed to MtpRelease.VERSION),
+                    managed = managed, standing = versions(old to "0.3.0", managed to MtpRelease.VERSION),
                 ),
             )
         }
@@ -276,7 +276,7 @@ class MtpLocatorTest {
             managed,
             MtpLocator.resolve(
                 configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp,
-                managed = managed, version = versions(newer to "0.10.0", managed to MtpRelease.VERSION),
+                managed = managed, standing = versions(newer to "0.10.0", managed to MtpRelease.VERSION),
             ),
         )
     }
@@ -290,7 +290,7 @@ class MtpLocatorTest {
             newer,
             MtpLocator.resolve(
                 configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp,
-                managed = null, version = versions(newer to "0.10.0"),
+                managed = null, standing = versions(newer to "0.10.0"),
             ),
         )
     }
@@ -306,11 +306,11 @@ class MtpLocatorTest {
 
         assertEquals(
             managed,
-            MtpLocator.resolve(configured = "", home = temp, path = onPath.parent.toString(), windows = false, system = temp, managed = managed, version = { null }),
+            MtpLocator.resolve(configured = "", home = temp, path = onPath.parent.toString(), windows = false, system = temp, managed = managed, standing = { null }),
         )
         assertEquals(
             onPath,
-            MtpLocator.resolve(configured = "", home = temp, path = onPath.parent.toString(), windows = false, system = temp, managed = null, version = { null }),
+            MtpLocator.resolve(configured = "", home = temp, path = onPath.parent.toString(), windows = false, system = temp, managed = null, standing = { null }),
         )
     }
 
@@ -346,11 +346,67 @@ class MtpLocatorTest {
 
     /** Where a current watch is unreachable without the tool, and where the desktop does it instead. */
     @Test
-    fun `the tool is needed on macOS and Windows, and on Linux only without gvfs`() {
-        assertTrue(MtpLocator.needed("Mac OS X") { true })
-        assertTrue(MtpLocator.needed("Windows 11") { true })
-        assertFalse(MtpLocator.needed("Linux") { true })
-        assertTrue(MtpLocator.needed("Linux") { false })
+    fun `the tool is needed on macOS and Windows, and on Linux unless a desktop mounts the watch`() {
+        assertTrue(MtpLocator.needed("Mac OS X", desktop = null) { true })
+        assertTrue(MtpLocator.needed("Windows 11", desktop = null) { true })
+        assertFalse(MtpLocator.needed("Linux", desktop = "ubuntu:GNOME") { true })
+        assertFalse(MtpLocator.needed("Linux", desktop = "X-Cinnamon") { true })
+        // GNOME, but no gvfs to mount anything with.
+        assertTrue(MtpLocator.needed("Linux", desktop = "GNOME") { false })
+        // No desktop at all.
+        assertTrue(MtpLocator.needed("Linux", desktop = null) { false })
+    }
+
+    /**
+     * gvfsd starts on demand under KDE and Xfce too, so its directory is there — and nothing mounts
+     * the watch. Taking the directory for the desktop meant a KDE machine was never offered the
+     * tool, and never found the watch.
+     */
+    @Test
+    fun `a gvfs directory under KDE does not mean the watch is mounted`() {
+        assertTrue(MtpLocator.needed("Linux", desktop = "KDE") { true })
+        assertTrue(MtpLocator.needed("Linux", desktop = "XFCE") { true })
+    }
+
+    /**
+     * A tool asked once and unable to say its version is remembered as unreadable. Forgotten, it
+     * was asked again — with a ten-second timeout — on every look at the attached watches.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    fun `a tool that gives no version is asked once`(@TempDir temp: Path) {
+        val silent = temp.resolve("bin/mtp-rs").also {
+            it.parent.createDirectories()
+            it.writeText("#!/bin/sh\necho hello\n")
+            it.toFile().setExecutable(true)
+        }
+
+        assertEquals(null, MtpLocator.knownStanding(silent), "not asked yet")
+        MtpLocator.readVersion(silent)
+
+        assertEquals(MtpRelease.Compatibility.UNREADABLE, MtpLocator.knownStanding(silent))
+    }
+
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    fun `a tool's version is remembered as it said it`(@TempDir temp: Path) {
+        val tool = temp.resolve("bin/mtp-rs").also {
+            it.parent.createDirectories()
+            it.writeText("#!/bin/sh\necho 'mtp-rs 0.9.4'\n")
+            it.toFile().setExecutable(true)
+        }
+
+        assertEquals("0.9.4", MtpLocator.readVersion(tool))
+        assertEquals(MtpRelease.Compatibility.COMPATIBLE, MtpLocator.knownStanding(tool))
+    }
+
+    @Test
+    fun `a look's result says what stands in the way`() {
+        val tool = Path.of("/opt/homebrew/bin/mtp-rs")
+        assertEquals(MtpLocator.Shortfall.MISSING, MtpLocator.shortfallOf(MtpLocator.Snapshot(null, null, needed = true)))
+        assertEquals(null, MtpLocator.shortfallOf(MtpLocator.Snapshot(null, null, needed = false)))
+        assertEquals(MtpLocator.Shortfall.OUTDATED, MtpLocator.shortfallOf(MtpLocator.Snapshot(tool, "0.3.0", needed = true)))
+        assertEquals(null, MtpLocator.shortfallOf(MtpLocator.Snapshot(tool, MtpRelease.VERSION, needed = true)))
     }
 
     /** Where the project's install script puts it, on every platform. */
@@ -392,8 +448,9 @@ class MtpLocatorTest {
         assertNull(MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false, system = temp, managed = null))
     }
 
-    /** Versions as already known, for the candidates named; everything else unknown. */
-    private fun versions(vararg known: Pair<Path, String>): (Path) -> String? = known.toMap()::get
+    /** Versions as already known, for the candidates named; everything else not asked yet. */
+    private fun versions(vararg known: Pair<Path, String>): (Path) -> MtpRelease.Compatibility? =
+        { tool -> known.toMap()[tool]?.let { MtpRelease.compatibility(it) } }
 
     private companion object {
         /** A NUL, which no platform allows in a path. Spelled as a character to keep it visible. */

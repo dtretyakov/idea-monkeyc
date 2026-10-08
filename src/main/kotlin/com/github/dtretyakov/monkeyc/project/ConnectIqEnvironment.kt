@@ -92,10 +92,12 @@ object ConnectIqEnvironment {
             add(devices(service.devices().size, sdk != null, service.unreadableDevices()))
             add(developerKey(project))
             add(java(service.java(), service.javaVersion()))
-            // The version as already known, never asked here: this runs on the UI thread when the
-            // settings page opens. The watch list and the page each ask in the background.
-            val tool = MtpLocator.resolve()
-            add(mtpTool(tool, tool?.let { MtpLocator.knownVersion(it) }, MtpLocator.needed()))
+            // From the last background look, never looked for here: this runs on the UI thread when
+            // the settings page opens and inside a read action for the editor banner, and looking
+            // touches every PATH entry.
+            val found = MtpLocator.snapshot()
+            if (found == null) MtpLocator.refreshInBackground()
+            add(found?.let { mtpTool(it) } ?: notLookedFor())
         }
     }
 
@@ -111,6 +113,11 @@ object ConnectIqEnvironment {
      * tool has been asked once, in the background, and calling a working tool outdated in the
      * meantime would be worse than a moment of not saying.
      */
+    internal fun mtpTool(found: MtpLocator.Snapshot): Item = mtpTool(found.tool, found.version, found.needed)
+
+    /** Before the first look, which has been started: nothing to say yet, and nothing wrong. */
+    private fun notLookedFor() = Item(Concern.MTP_TOOL, "mtp-rs", Status.READY, "Looking for it")
+
     internal fun mtpTool(tool: Path?, version: String?, needed: Boolean): Item = when {
         tool == null && needed -> Item(
             Concern.MTP_TOOL,

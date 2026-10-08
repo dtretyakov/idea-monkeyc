@@ -53,6 +53,23 @@ class MtpInstallerTest {
         assertEquals("the tool", tool.readText())
     }
 
+    /**
+     * Installing over an earlier copy replaces it and leaves nothing behind. The earlier one is
+     * moved aside first rather than overwritten — Windows will not overwrite an executable that is
+     * running — and cleared once it is out of the way.
+     */
+    @Test
+    fun `installing again replaces the copy and leaves nothing behind`(@TempDir temp: Path) {
+        val into = temp.resolve("installed").also { it.createDirectories() }
+        into.resolve("mtp-rs.exe").writeText("the previous one")
+        val archive = zip(temp.resolve("mtp-rs-cli-x86_64-pc-windows-msvc.zip"), "mtp-rs.exe", "the new one")
+
+        val tool = MtpInstaller.install(asset(archive), into, windows = true, download = copy(archive))
+
+        assertEquals("the new one", tool.readText())
+        assertEquals(listOf("mtp-rs.exe"), into.toFile().list()!!.sorted())
+    }
+
     @Test
     fun `a download that is not the pinned file is refused, and what was there is kept`(@TempDir temp: Path) {
         val archive = zip(temp.resolve("mtp-rs-cli-x86_64-pc-windows-msvc.zip"), "mtp-rs.exe", "something else")

@@ -70,6 +70,14 @@ class MtpReleaseTest {
         assertEquals(MtpRelease.Compatibility.UNREADABLE, MtpRelease.compatibility("not a version"))
     }
 
+    /** A pre-release precedes its release, and promises nothing about the releases after it. */
+    @Test
+    fun `pre-releases are not taken for the release`() {
+        assertEquals(MtpRelease.Compatibility.OLDER, MtpRelease.compatibility("0.9.1-rc.1"))
+        assertEquals(MtpRelease.Compatibility.NEWER, MtpRelease.compatibility("0.9.2-beta.1"))
+        assertEquals(MtpRelease.Compatibility.OLDER, MtpRelease.compatibility("0.8.0-rc.1"))
+    }
+
     @Test
     fun `only the compatible range is used as it is`() {
         assertTrue(MtpRelease.isSupported("0.9.4"))

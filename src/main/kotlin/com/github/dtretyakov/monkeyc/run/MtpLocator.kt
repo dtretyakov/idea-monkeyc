@@ -1,11 +1,13 @@
 package com.github.dtretyakov.monkeyc.run
 
 import com.github.dtretyakov.monkeyc.project.MonkeyCAppSettings
+import com.intellij.openapi.application.ApplicationManager
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.FileTime
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.io.path.isDirectory
 
 /**
@@ -27,11 +29,13 @@ object MtpLocator {
      * 1. a copy the user installed — on `PATH`, Homebrew's, the install scripts', cargo's — that is
      *    known to be compatible ([MtpRelease.compatibility]): theirs is the one they meant;
      * 2. the plugin's own copy, which is compatible by construction;
-     * 3. a copy of the user's whose version is not known yet, and then one known not to fit — a
-     *    tool that may answer differently still beats no tool, and the watch list says which it is.
+     * 3. a copy of the user's that has not been asked its version yet, and then one known not to
+     *    fit — a tool that may answer differently still beats no tool, and the watch list says
+     *    which it is.
      *
-     * [version] says what is known of each candidate. The default never starts a process, so this
-     * can be asked on the UI thread; [refreshVersions] fills it in from the background.
+     * [standing] says what is known of each candidate: null for one not asked yet. The default
+     * reads what [refreshVersions] learnt and never starts a process — but this still looks at the
+     * filesystem, once per `PATH` entry, so it is for background threads: the UI reads [snapshot].
      */
     fun resolve(
         configured: String? = MonkeyCAppSettings.getInstance().mtpToolPath,
@@ -40,7 +44,7 @@ object MtpLocator {
         windows: Boolean = System.getProperty("os.name").startsWith("Windows"),
         system: Path = Path.of("/"),
         managed: Path? = runCatching { MtpInstaller.managedTool(windows) }.getOrNull(),
-        version: (Path) -> String? = ::knownVersion,
+        standing: (Path) -> MtpRelease.Compatibility? = ::knownStanding,
     ): Path? {
         configured?.trim()?.takeIf { it.isNotEmpty() }?.let { setting ->
             val candidate = Path.of(setting)
@@ -52,7 +56,6 @@ object MtpLocator {
 
         val theirs = userCandidates(home, path, windows, system).filter { MtpTool.isUsable(it, windows) }
         val ours = managed?.takeIf { MtpTool.isUsable(it, windows) }
-        fun standing(tool: Path) = version(tool)?.let { MtpRelease.compatibility(it) }
 
         return theirs.firstOrNull { standing(it) == MtpRelease.Compatibility.COMPATIBLE }
             ?: ours
@@ -67,23 +70,43 @@ object MtpLocator {
     /**
      * Whether a current watch needs the tool on this machine.
      *
-     * Always on macOS and Windows. On Linux only where nothing mounts the watch for it: gvfs keeps
-     * its mounts under the session's runtime directory, and where that directory exists the
-     * desktop does the work — under GNOME and most others. KDE and a machine without a desktop
-     * have none.
+     * Always on macOS and Windows. On Linux, unless a desktop that mounts MTP devices by itself is
+     * running and gvfs is there to do it. The gvfs directory alone is not that: gvfsd starts on
+     * demand in KDE and Xfce sessions as well, and nothing there mounts a watch when it is plugged
+     * in — Nautilus and its relatives do. Erring this way costs an install button someone did not
+     * need; the other way it cost a watch nobody could reach and no word about why.
      */
     fun needed(
         os: String = System.getProperty("os.name"),
+        desktop: String? = System.getenv("XDG_CURRENT_DESKTOP"),
         gvfsPresent: () -> Boolean = { GvfsMtp.roots().any { it.isDirectory() } },
-    ): Boolean = os.startsWith("Mac") || os.startsWith("Windows") || !gvfsPresent()
+    ): Boolean {
+        if (os.startsWith("Mac") || os.startsWith("Windows")) return true
+        val mounting = desktop.orEmpty().split(':').any { it.trim().uppercase() in MOUNTING_DESKTOPS }
+        return !(mounting && gvfsPresent())
+    }
 
     /**
-     * The version of the tool at [tool], if it has been asked already. Never starts a process.
-     *
-     * For the UI thread, which builds the watch list and the settings page and must not wait on a
-     * subprocess. The answer is remembered against the file's modification time, so a tool
-     * replaced in place — by an update — is asked again rather than reported by its old version.
+     * Desktops whose file manager mounts an MTP device through gvfs when it is plugged in, as
+     * `XDG_CURRENT_DESKTOP` names them. Ubuntu's reads `ubuntu:GNOME`, Mint's `X-Cinnamon`.
      */
+    private val MOUNTING_DESKTOPS = setOf("GNOME", "UNITY", "CINNAMON", "X-CINNAMON", "BUDGIE", "PANTHEON", "MATE")
+
+    /**
+     * What is known of the tool at [tool]: null if it has not been asked, [MtpRelease.Compatibility.UNREADABLE]
+     * if it was and gave no version. Never starts a process.
+     *
+     * The answer is remembered against the file's modification time, so a tool replaced in place —
+     * by an update — is asked again rather than reported by its old version. A tool that cannot say
+     * its version is remembered as such: forgetting it meant asking again, with a ten-second
+     * timeout, on every look.
+     */
+    fun knownStanding(tool: Path): MtpRelease.Compatibility? {
+        val asked = versions[tool]?.takeIf { it.first == stamp(tool) } ?: return null
+        return asked.second?.let { MtpRelease.compatibility(it) } ?: MtpRelease.Compatibility.UNREADABLE
+    }
+
+    /** The version the tool at [tool] gave when asked, or null if it gave none or was not asked. */
     fun knownVersion(tool: Path): String? =
         versions[tool]?.takeIf { it.first == stamp(tool) }?.second
 
@@ -98,10 +121,9 @@ object MtpLocator {
     }
 
     /**
-     * Asks every copy on the machine whose version is not known yet. Not on the UI thread.
+     * Asks every copy on the machine that has not been asked yet. Not on the UI thread.
      *
-     * Every copy, not only the one in use: which one is used depends on their versions, so the
-     * choice made on the UI thread is only right once all of them are known.
+     * Every copy, not only the one in use: which one is used depends on all of them.
      */
     fun refreshVersions(
         home: Path = Path.of(System.getProperty("user.home")),
@@ -110,9 +132,48 @@ object MtpLocator {
     ) {
         val managed = runCatching { MtpInstaller.managedTool(windows) }.getOrNull()
         (userCandidates(home, path, windows, Path.of("/")) + listOfNotNull(managed))
-            .filter { MtpTool.isUsable(it, windows) && knownVersion(it) == null }
+            .filter { MtpTool.isUsable(it, windows) && knownStanding(it) == null }
             .forEach { readVersion(it) }
     }
+
+    /** What the last look found: the tool that would be used, its version, and whether it is needed. */
+    data class Snapshot(val tool: Path?, val version: String?, val needed: Boolean)
+
+    /**
+     * What the last look found, or null before the first. Never touches the disk.
+     *
+     * For the UI thread, and for the editor banner's read action: resolving looks at every `PATH`
+     * entry, and on Windows one of those can be a network share that is not there, where the look
+     * waits rather than failing.
+     */
+    fun snapshot(): Snapshot? = snapshot
+
+    /** Looks: asks what has not been asked, decides which tool is used, and remembers it. Not on the UI thread. */
+    fun refresh(): Snapshot {
+        refreshVersions()
+        val tool = resolve()
+        return Snapshot(tool, tool?.let { knownVersion(it) }, needed()).also { snapshot = it }
+    }
+
+    /**
+     * Starts a look in the background unless one is running. For the UI thread, when it found no
+     * [snapshot] to read: the next reader finds one.
+     */
+    fun refreshInBackground() {
+        if (!looking.compareAndSet(false, true)) return
+        ApplicationManager.getApplication().executeOnPooledThread {
+            try {
+                runCatching { refresh() }
+            } finally {
+                looking.set(false)
+            }
+        }
+    }
+
+    @Volatile
+    private var snapshot: Snapshot? = null
+
+    private val looking = AtomicBoolean(false)
 
     /** What stands between this machine and a current watch. */
     enum class Shortfall {
@@ -121,26 +182,27 @@ object MtpLocator {
         /** Older than the plugin is built for. */
         OUTDATED,
 
-        /** Past the next breaking release: it may answer in a way the plugin does not read. */
+        /** Past the next breaking release, or a pre-release: it may answer in a way the plugin does not read. */
         UNTESTED,
     }
 
+    /** Looks, then says what stands between this machine and a current watch. Not on the UI thread. */
+    fun shortfall(): Shortfall? = shortfallOf(refresh())
+
     /**
-     * What stands between this machine and a current watch, or null when nothing does.
-     *
-     * Asks the tool its version if that is not known yet, so it starts a process: not on the UI
-     * thread. [knownShortfall] is the one that never does.
+     * The same from the last look, for the UI thread. Null before the first look, which this
+     * starts: saying nothing for a moment is better than guessing.
      */
-    fun shortfall(): Shortfall? {
-        refreshVersions()
-        return knownShortfall()
+    fun knownShortfall(): Shortfall? {
+        val last = snapshot ?: return null.also { refreshInBackground() }
+        return shortfallOf(last)
     }
 
-    /** The same, from what is already known. Never starts a process; for the UI thread. */
-    fun knownShortfall(): Shortfall? {
-        if (!needed()) return null
-        val tool = resolve() ?: return Shortfall.MISSING
-        return shortfallOf(knownVersion(tool))
+    /** What a look's result lacks, or null when nothing is in the way. */
+    fun shortfallOf(snapshot: Snapshot): Shortfall? {
+        if (!snapshot.needed) return null
+        if (snapshot.tool == null) return Shortfall.MISSING
+        return shortfallOf(snapshot.version)
     }
 
     /**
@@ -194,8 +256,8 @@ object MtpLocator {
                 "A current Garmin watch connects over MTP rather than as a drive, and the IDE reaches " +
                     "it through mtp-rs."
             else ->
-                "A current Garmin watch connects over MTP. GNOME and most other desktops mount it on " +
-                    "their own and the IDE installs through that mount; under KDE, or without a " +
+                "A current Garmin watch connects over MTP. GNOME and its relatives mount it on their " +
+                    "own and the IDE installs through that mount; under KDE or Xfce, or without a " +
                     "desktop, it needs mtp-rs."
         }
         return "$lead Install mtp-rs ${MtpRelease.VERSION} from the notification, from the watch list " +
