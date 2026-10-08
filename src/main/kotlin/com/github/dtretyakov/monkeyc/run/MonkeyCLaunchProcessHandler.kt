@@ -141,7 +141,7 @@ class MonkeyCLaunchProcessHandler(
         if (stopped) return
 
         val targets = GarminTarget.attached()
-        if (targets.isEmpty()) return sayWhereItGoes()
+        if (targets.isEmpty()) return sayWhereItGoes(built)
 
         val target = targets.singleOrNull()
             ?: targets.firstOrNull { it.device?.id == built.device }
@@ -182,7 +182,7 @@ class MonkeyCLaunchProcessHandler(
      */
     private fun offerToInstall(built: BuiltArtifact) {
         val targets = GarminTarget.attached()
-        if (targets.isEmpty()) return sayWhereItGoes()
+        if (targets.isEmpty()) return sayWhereItGoes(built)
 
         notifyTextAvailable("Connected: ${targets.joinToString { it.name }}.\n", ProcessOutputTypes.SYSTEM)
         MonkeyCInstallNotice.offer(project, built, targets)
@@ -191,18 +191,22 @@ class MonkeyCLaunchProcessHandler(
     /**
      * What to do with a device build when no device can be seen.
      *
-     * The hint about the tool is only for this case: a current watch speaks MTP and appears under
-     * no volume, so "no device" and "no tool to see it with" look identical from here, and only
-     * the second is fixable. Nothing is missing when a watch was found, so nothing is said then.
+     * A current watch speaks MTP and appears under no volume, so "no watch" and "no tool to see it
+     * with" look identical from here, and only the second is fixable — by a click, which is
+     * offered beside the console. Once installed the watch is looked for again and the build
+     * offered to it, so the click finishes the job rather than starting the run over.
      */
-    private fun sayWhereItGoes() {
-        notifyTextAvailable(
-            "Copy it to GARMIN/APPS on the watch over USB to install it.\n",
-            ProcessOutputTypes.SYSTEM,
-        )
-        if (GarminTarget.mtpToolMissing()) {
-            notifyTextAvailable("\n${MtpLocator.installHint()}\n", ProcessOutputTypes.SYSTEM)
+    private fun sayWhereItGoes(built: BuiltArtifact) {
+        val shortfall = MtpLocator.shortfall()
+        if (shortfall == null) {
+            notifyTextAvailable(
+                "No watch was found. Connect one with its USB cable and run again.\n",
+                ProcessOutputTypes.SYSTEM,
+            )
+            return
         }
+        notifyTextAvailable("\n${MtpLocator.installHint()}\n", ProcessOutputTypes.SYSTEM)
+        MtpToolSetup.offerAfterBuild(project, built, shortfall)
     }
 
     private fun runInSimulator() {

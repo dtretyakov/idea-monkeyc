@@ -150,4 +150,66 @@ class ConnectIqEnvironmentTest {
         assertEquals(Status.READY, item.status)
     }
 
+
+    @Test
+    fun `no mtp-rs where a watch needs it is reported with the install, and blocks nothing`() {
+        val item = ConnectIqEnvironment.mtpTool(tool = null, version = null, needed = true)
+
+        assertEquals(Status.MISSING, item.status)
+        assertEquals(Fix.INSTALL_MTP_TOOL, item.fix)
+        // A build does not need it, and the banner must not interrupt someone with no watch.
+        assertFalse(item.blocking)
+        assertNull(ConnectIqEnvironment.firstProblem(listOf(item)))
+    }
+
+    @Test
+    fun `no mtp-rs where the desktop mounts the watch is nothing to fix`() {
+        val item = ConnectIqEnvironment.mtpTool(tool = null, version = null, needed = false)
+
+        assertEquals(Status.READY, item.status)
+        assertNull(item.fix)
+    }
+
+    @Test
+    fun `an mtp-rs older than the plugin is built against is offered the update`() {
+        // The one found on a real machine: 0.3.0, left in ~/.cargo/bin from before the releases.
+        val item = ConnectIqEnvironment.mtpTool(Path.of("/home/dev/.cargo/bin/mtp-rs"), "0.3.0", needed = true)
+
+        assertEquals(Status.MISSING, item.status)
+        assertEquals(Fix.INSTALL_MTP_TOOL, item.fix)
+        assertTrue(item.detail.contains("0.3.0"), item.detail)
+        assertFalse(item.blocking)
+    }
+
+    @Test
+    fun `an mtp-rs past the next breaking release is said, and offered the plugin's own`() {
+        val item = ConnectIqEnvironment.mtpTool(Path.of("/opt/homebrew/bin/mtp-rs"), "0.10.0", needed = true)
+
+        assertEquals(Status.MISSING, item.status)
+        assertEquals(Fix.INSTALL_MTP_TOOL, item.fix)
+        assertTrue(item.detail.contains("newer"), item.detail)
+        assertFalse(item.blocking)
+    }
+
+    @Test
+    fun `a current mtp-rs is reported with its version`() {
+        val item = ConnectIqEnvironment.mtpTool(
+            Path.of("/opt/homebrew/bin/mtp-rs"),
+            com.github.dtretyakov.monkeyc.run.MtpRelease.VERSION,
+            needed = true,
+        )
+
+        assertEquals(Status.READY, item.status)
+        assertTrue(item.detail.startsWith(com.github.dtretyakov.monkeyc.run.MtpRelease.VERSION), item.detail)
+    }
+
+    @Test
+    fun `an mtp-rs whose version is not known yet is not called old`() {
+        // Unknown only until it has been asked once, in the background.
+        val item = ConnectIqEnvironment.mtpTool(Path.of("/opt/homebrew/bin/mtp-rs"), version = null, needed = true)
+
+        assertEquals(Status.READY, item.status)
+        assertNull(item.fix)
+    }
+
 }

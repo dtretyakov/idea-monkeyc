@@ -14,9 +14,19 @@ find those programs and speak their protocols:
 | Building | `bin/monkeybrains.jar` | command line, output parsed into the Build tool window |
 | Running | the simulator — `bin/ConnectIQ.app` on macOS, `bin/simulator.exe` on Windows, `bin/simulator` on Linux — and `MonkeyDoDeux` | command line, plus a socket to the simulator's own shell |
 | Debugging | `bin/LanguageServer.jar` | DAP over stdio, through LSP4IJ's DAP client |
+| Installing on a watch | a file copy for a watch that mounts as a drive; `gio` for one a Linux desktop mounted over MTP; [mtp-rs](https://github.com/vdavid/mtp-rs) otherwise | command line, `--json` output and exit codes parsed |
 
 Nothing from Garmin is redistributed: the plugin finds the SDK the user installed with the SDK
 Manager and launches its jars.
+
+Installing on a current watch is the one job Garmin ships no program for. The watch speaks MTP,
+which macOS cannot open at all and the JVM cannot reach on any system, so the plugin drives
+`mtp-rs`, a small MTP command-line tool — found where the user installed it, or downloaded by
+the plugin when they click **Install mtp-rs**. That download is pinned to one release and its
+checksums (`MtpRelease`), because the tool is at 0.x and its JSON is what the plugin parses; a new
+upstream release must not be able to break installing on a watch for everyone at once. A copy the
+user installed is preferred when its version is within `^0.9.1` — semver's promise that it answers
+the same way — and the plugin's own is the fallback, kept beside theirs rather than over it.
 
 That is the whole design argument. Monkey C changes with every SDK release — new types, new
 annotations, new `.mss` properties — and a parser maintained in this plugin would be behind from the

@@ -1,6 +1,7 @@
 package com.github.dtretyakov.monkeyc.run
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -16,9 +17,9 @@ import kotlin.io.path.writeText
 /**
  * Finding `mtp-rs` without making it a requirement.
  *
- * `~/.cargo/bin` is searched explicitly because `cargo install mtp-rs-cli` is currently the only
- * way to get the tool, and that directory is on the `PATH` of a shell but not necessarily of an
- * IDE launched from the desktop — which is the case that matters here.
+ * Each way of installing the tool has a directory of its own — `~/.cargo/bin`, `~/.local/bin`,
+ * Homebrew's — and each is searched explicitly, because it is on the `PATH` of a shell but not
+ * necessarily of an IDE launched from the desktop, which is the case that matters here.
  *
  * Every test names the platform it is about rather than inheriting the one it runs on: the tool is
  * `mtp-rs.exe` on Windows and `mtp-rs` elsewhere, and a suite that only asks about the platform
@@ -38,7 +39,7 @@ class MtpLocatorTest {
 
         assertEquals(
             tool,
-            MtpLocator.resolve(configured = tool.toString(), home = temp, path = null, windows = false),
+            MtpLocator.resolve(configured = tool.toString(), home = temp, path = null, windows = false, managed = null),
         )
     }
 
@@ -49,7 +50,7 @@ class MtpLocatorTest {
 
         assertEquals(
             tool,
-            MtpLocator.resolve(configured = tool.parent.toString(), home = temp, path = null, windows = false),
+            MtpLocator.resolve(configured = tool.parent.toString(), home = temp, path = null, windows = false, managed = null),
         )
     }
 
@@ -59,7 +60,7 @@ class MtpLocatorTest {
 
         assertEquals(
             tool,
-            MtpLocator.resolve(configured = tool.parent.toString(), home = temp, path = null, windows = true),
+            MtpLocator.resolve(configured = tool.parent.toString(), home = temp, path = null, windows = true, managed = null),
         )
     }
 
@@ -70,7 +71,7 @@ class MtpLocatorTest {
         executable(temp.resolve(".cargo/bin/mtp-rs"))
 
         assertNull(
-            MtpLocator.resolve(configured = temp.resolve("gone").toString(), home = temp, path = null, windows = false),
+            MtpLocator.resolve(configured = temp.resolve("gone").toString(), home = temp, path = null, windows = false, managed = null),
         )
     }
 
@@ -85,8 +86,7 @@ class MtpLocatorTest {
                 configured = "",
                 home = temp,
                 path = onPath.parent.toString(),
-                windows = false,
-            ),
+                windows = false, managed = null),
         )
     }
 
@@ -109,7 +109,7 @@ class MtpLocatorTest {
 
         assertEquals(
             cargo,
-            MtpLocator.resolve(configured = "", home = temp, path = NOT_A_PATH, windows = true),
+            MtpLocator.resolve(configured = "", home = temp, path = NOT_A_PATH, windows = true, managed = null),
         )
     }
 
@@ -117,9 +117,11 @@ class MtpLocatorTest {
     fun `cargo's directory is found when PATH does not have it`(@TempDir temp: Path) {
         val cargo = executable(temp.resolve(".cargo/bin/mtp-rs"))
 
+        // The system root is the temporary directory too, or a tool Homebrew put on this machine
+        // would answer first.
         assertEquals(
             cargo,
-            MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false),
+            MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false, system = temp, managed = null),
         )
     }
 
@@ -133,7 +135,7 @@ class MtpLocatorTest {
 
         assertEquals(
             cargo,
-            MtpLocator.resolve(configured = "", home = temp, path = null, windows = true),
+            MtpLocator.resolve(configured = "", home = temp, path = null, windows = true, managed = null),
         )
     }
 
@@ -141,14 +143,14 @@ class MtpLocatorTest {
     fun `on Windows the bare name is not the tool`(@TempDir temp: Path) {
         executable(temp.resolve(".cargo/bin/mtp-rs"))
 
-        assertNull(MtpLocator.resolve(configured = "", home = temp, path = null, windows = true))
+        assertNull(MtpLocator.resolve(configured = "", home = temp, path = null, windows = true, managed = null))
     }
 
     @Test
     fun `nothing installed is null, not an error`(@TempDir temp: Path) {
         // A watch that mounts as a disk needs none of this, so absence is normal. The system root
         // is the temporary directory too, or a tool Homebrew put on this machine would answer.
-        assertNull(MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false, system = temp))
+        assertNull(MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false, system = temp, managed = null))
     }
 
     /**
@@ -161,7 +163,7 @@ class MtpLocatorTest {
 
         assertEquals(
             brewed,
-            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp),
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp, managed = null),
         )
     }
 
@@ -171,18 +173,34 @@ class MtpLocatorTest {
 
         assertEquals(
             placed,
-            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp),
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp, managed = null),
+        )
+    }
+
+    /**
+     * Found on a real machine: `mtp-rs` 0.3.0 left in `~/.cargo/bin` from the months when cargo
+     * was the only way, and 0.9.1 just installed with Homebrew as the hint now says. The plugin
+     * took the old one.
+     */
+    @Test
+    fun `Homebrew's copy wins over an older cargo install`(@TempDir temp: Path) {
+        executable(temp.resolve("home/.cargo/bin/mtp-rs"))
+        val brewed = executable(temp.resolve("opt/homebrew/bin/mtp-rs"))
+
+        assertEquals(
+            brewed,
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp, managed = null),
         )
     }
 
     @Test
-    fun `cargo's copy wins over Homebrew's, as it did before Homebrew was looked at`(@TempDir temp: Path) {
-        val cargo = executable(temp.resolve("home/.cargo/bin/mtp-rs"))
-        executable(temp.resolve("opt/homebrew/bin/mtp-rs"))
+    fun `the install script's copy wins over an older cargo install`(@TempDir temp: Path) {
+        executable(temp.resolve("home/.cargo/bin/mtp-rs.exe"))
+        val scripted = executable(temp.resolve("home/.local/bin/mtp-rs.exe"))
 
         assertEquals(
-            cargo,
-            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp),
+            scripted,
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = null, windows = true, system = temp, managed = null),
         )
     }
 
@@ -190,30 +208,230 @@ class MtpLocatorTest {
     fun `Windows does not look in Homebrew's directories`(@TempDir temp: Path) {
         executable(temp.resolve("usr/local/bin/mtp-rs.exe"))
 
-        assertNull(MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = null, windows = true, system = temp))
+        assertNull(MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = null, windows = true, system = temp, managed = null))
     }
 
     /**
-     * Only macOS has no way onto a current watch without the tool, and the hint has to say so
-     * there — and must not tell a Windows user, whose File Explorer shows the watch, that it is
-     * the only way.
+     * The lead says what the platform itself can do, and every hint offers the same remedy: the
+     * plugin installs the tool when asked. Nothing sends anyone to copy a file by hand, and nothing
+     * asks for a Rust toolchain.
      */
     @Test
-    fun `the hint says what the platform itself can do`() {
+    fun `the hint says what the platform can do, and offers the install`() {
         val mac = MtpLocator.installHint("Mac OS X")
         val windows = MtpLocator.installHint("Windows 11")
         val linux = MtpLocator.installHint("Linux")
 
         assertTrue(mac.contains("Finder will not show it"), mac)
-        assertTrue(windows.contains("File Explorer"), windows)
-        assertTrue(windows.contains("GARMIN\\APPS"), windows)
         assertTrue(linux.contains("GNOME"), linux)
         assertTrue(linux.contains("KDE"), linux)
-        // Every one of them still says how to get the tool and where to point at it.
         listOf(mac, windows, linux).forEach {
-            assertTrue(it.contains("cargo install mtp-rs-cli"), it)
-            assertTrue(it.contains("Settings | Languages & Frameworks | Monkey C"), it)
+            assertTrue(it.contains("Install mtp-rs ${MtpRelease.VERSION}"), it)
+            assertTrue(it.contains(MtpLocator.INSTALL_URL), it)
+            assertFalse(it.contains("cargo"), it)
+            assertFalse(it.contains("by hand"), it)
+            assertFalse(it.contains("File Explorer"), it)
         }
+    }
+
+    /** The user's own install is the one they meant, as long as it answers the way the plugin reads. */
+    @Test
+    fun `a compatible copy the user installed wins over the plugin's own`(@TempDir temp: Path) {
+        val managed = executable(temp.resolve("managed/mtp-rs"))
+        val brewed = executable(temp.resolve("opt/homebrew/bin/mtp-rs"))
+
+        assertEquals(
+            brewed,
+            MtpLocator.resolve(
+                configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp,
+                managed = managed, standing = versions(brewed to "0.9.4", managed to MtpRelease.VERSION),
+            ),
+        )
+    }
+
+    /**
+     * An old copy of the user's — 0.3.0 left in `~/.cargo/bin` — stays where it is, and the plugin
+     * uses its own beside it rather than overwriting what something else may rely on.
+     */
+    @Test
+    fun `the plugin's own copy wins over an old one of the user's`(@TempDir temp: Path) {
+        val managed = executable(temp.resolve("managed/mtp-rs"))
+        executable(temp.resolve("home/.cargo/bin/mtp-rs")).also { old ->
+            assertEquals(
+                managed,
+                MtpLocator.resolve(
+                    configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp,
+                    managed = managed, standing = versions(old to "0.3.0", managed to MtpRelease.VERSION),
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `the plugin's own copy wins over one past the next breaking release`(@TempDir temp: Path) {
+        val managed = executable(temp.resolve("managed/mtp-rs"))
+        val newer = executable(temp.resolve("opt/homebrew/bin/mtp-rs"))
+
+        assertEquals(
+            managed,
+            MtpLocator.resolve(
+                configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp,
+                managed = managed, standing = versions(newer to "0.10.0", managed to MtpRelease.VERSION),
+            ),
+        )
+    }
+
+    /** A tool that may answer differently still beats no tool; the watch list says which it is. */
+    @Test
+    fun `without the plugin's copy, an incompatible one of the user's is still used`(@TempDir temp: Path) {
+        val newer = executable(temp.resolve("opt/homebrew/bin/mtp-rs"))
+
+        assertEquals(
+            newer,
+            MtpLocator.resolve(
+                configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp,
+                managed = null, standing = versions(newer to "0.10.0"),
+            ),
+        )
+    }
+
+    /**
+     * Before any version is known — the first look, on the UI thread — the plugin's own copy is
+     * the safe answer, and a copy of the user's is used when there is no such thing.
+     */
+    @Test
+    fun `with nothing known yet the plugin's own copy comes first`(@TempDir temp: Path) {
+        val managed = executable(temp.resolve("managed/mtp-rs"))
+        val onPath = executable(temp.resolve("bin/mtp-rs"))
+
+        assertEquals(
+            managed,
+            MtpLocator.resolve(configured = "", home = temp, path = onPath.parent.toString(), windows = false, system = temp, managed = managed, standing = { null }),
+        )
+        assertEquals(
+            onPath,
+            MtpLocator.resolve(configured = "", home = temp, path = onPath.parent.toString(), windows = false, system = temp, managed = null, standing = { null }),
+        )
+    }
+
+    @Test
+    fun `what a version lacks is said as the shortfall it is`() {
+        assertEquals(MtpLocator.Shortfall.OUTDATED, MtpLocator.shortfallOf("0.3.0"))
+        assertEquals(MtpLocator.Shortfall.UNTESTED, MtpLocator.shortfallOf("0.10.0"))
+        assertEquals(null, MtpLocator.shortfallOf("0.9.4"))
+        // Not known yet is not a problem: it is only unknown until asked once, in the background.
+        assertEquals(null, MtpLocator.shortfallOf(null))
+    }
+
+    @Test
+    fun `a path set in the settings still wins over the plugin's own copy`(@TempDir temp: Path) {
+        val managed = executable(temp.resolve("managed/mtp-rs"))
+        val chosen = executable(temp.resolve("chosen/mtp-rs"))
+
+        assertEquals(
+            chosen,
+            MtpLocator.resolve(configured = chosen.toString(), home = temp, path = null, windows = false, system = temp, managed = managed),
+        )
+    }
+
+    @Test
+    fun `the plugin's own copy that is not there yet is skipped`(@TempDir temp: Path) {
+        val brewed = executable(temp.resolve("opt/homebrew/bin/mtp-rs"))
+
+        assertEquals(
+            brewed,
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp, managed = temp.resolve("managed/mtp-rs")),
+        )
+    }
+
+    /** Where a current watch is unreachable without the tool, and where the desktop does it instead. */
+    @Test
+    fun `the tool is needed on macOS and Windows, and on Linux unless a desktop mounts the watch`() {
+        assertTrue(MtpLocator.needed("Mac OS X", desktop = null) { true })
+        assertTrue(MtpLocator.needed("Windows 11", desktop = null) { true })
+        assertFalse(MtpLocator.needed("Linux", desktop = "ubuntu:GNOME") { true })
+        assertFalse(MtpLocator.needed("Linux", desktop = "X-Cinnamon") { true })
+        // GNOME, but no gvfs to mount anything with.
+        assertTrue(MtpLocator.needed("Linux", desktop = "GNOME") { false })
+        // No desktop at all.
+        assertTrue(MtpLocator.needed("Linux", desktop = null) { false })
+    }
+
+    /**
+     * gvfsd starts on demand under KDE and Xfce too, so its directory is there — and nothing mounts
+     * the watch. Taking the directory for the desktop meant a KDE machine was never offered the
+     * tool, and never found the watch.
+     */
+    @Test
+    fun `a gvfs directory under KDE does not mean the watch is mounted`() {
+        assertTrue(MtpLocator.needed("Linux", desktop = "KDE") { true })
+        assertTrue(MtpLocator.needed("Linux", desktop = "XFCE") { true })
+    }
+
+    /**
+     * A tool asked once and unable to say its version is remembered as unreadable. Forgotten, it
+     * was asked again — with a ten-second timeout — on every look at the attached watches.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    fun `a tool that gives no version is asked once`(@TempDir temp: Path) {
+        val silent = temp.resolve("bin/mtp-rs").also {
+            it.parent.createDirectories()
+            it.writeText("#!/bin/sh\necho hello\n")
+            it.toFile().setExecutable(true)
+        }
+
+        assertEquals(null, MtpLocator.knownStanding(silent), "not asked yet")
+        MtpLocator.readVersion(silent)
+
+        assertEquals(MtpRelease.Compatibility.UNREADABLE, MtpLocator.knownStanding(silent))
+    }
+
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    fun `a tool's version is remembered as it said it`(@TempDir temp: Path) {
+        val tool = temp.resolve("bin/mtp-rs").also {
+            it.parent.createDirectories()
+            it.writeText("#!/bin/sh\necho 'mtp-rs 0.9.4'\n")
+            it.toFile().setExecutable(true)
+        }
+
+        assertEquals("0.9.4", MtpLocator.readVersion(tool))
+        assertEquals(MtpRelease.Compatibility.COMPATIBLE, MtpLocator.knownStanding(tool))
+    }
+
+    @Test
+    fun `a look's result says what stands in the way`() {
+        val tool = Path.of("/opt/homebrew/bin/mtp-rs")
+        assertEquals(MtpLocator.Shortfall.MISSING, MtpLocator.shortfallOf(MtpLocator.Snapshot(null, null, needed = true)))
+        assertEquals(null, MtpLocator.shortfallOf(MtpLocator.Snapshot(null, null, needed = false)))
+        assertEquals(MtpLocator.Shortfall.OUTDATED, MtpLocator.shortfallOf(MtpLocator.Snapshot(tool, "0.3.0", needed = true)))
+        assertEquals(null, MtpLocator.shortfallOf(MtpLocator.Snapshot(tool, MtpRelease.VERSION, needed = true)))
+    }
+
+    /** Where the project's install script puts it, on every platform. */
+    @Test
+    fun `the install script's directory is found when PATH does not have it`(@TempDir temp: Path) {
+        val scripted = executable(temp.resolve("home/.local/bin/mtp-rs"))
+
+        assertEquals(
+            scripted,
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp, managed = null),
+        )
+    }
+
+    /**
+     * The PowerShell installer writes to `~/.local/bin` and adds it to the user's `PATH` — which an
+     * IDE already running never sees, so the next build after installing would not find it.
+     */
+    @Test
+    fun `on Windows the install script's directory is found too`(@TempDir temp: Path) {
+        val scripted = executable(temp.resolve("home/.local/bin/mtp-rs.exe"))
+
+        assertEquals(
+            scripted,
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = null, windows = true, system = temp, managed = null),
+        )
     }
 
     /**
@@ -227,8 +445,12 @@ class MtpLocatorTest {
         notExecutable.parent.createDirectories()
         notExecutable.writeText("text")
 
-        assertNull(MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false, system = temp))
+        assertNull(MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false, system = temp, managed = null))
     }
+
+    /** Versions as already known, for the candidates named; everything else not asked yet. */
+    private fun versions(vararg known: Pair<Path, String>): (Path) -> MtpRelease.Compatibility? =
+        { tool -> known.toMap()[tool]?.let { MtpRelease.compatibility(it) } }
 
     private companion object {
         /** A NUL, which no platform allows in a path. Spelled as a character to keep it visible. */

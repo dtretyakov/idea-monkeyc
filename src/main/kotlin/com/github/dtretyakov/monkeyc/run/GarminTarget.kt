@@ -79,8 +79,8 @@ sealed interface GarminTarget {
          * Every Garmin device attached right now, of either kind.
          *
          * The MTP half is skipped in silence when the tool is not installed: a watch that mounts as
-         * a disk needs none of it, and telling somebody to install a Rust toolchain when nothing is
-         * plugged in would be noise.
+         * a disk needs none of it, and telling somebody to install a tool when nothing is plugged in
+         * would be noise.
          */
         fun attached(): List<GarminTarget> {
             val volumes = GarminVolume.mounted()
@@ -170,11 +170,11 @@ sealed interface GarminTarget {
          */
         private const val CACHE_MILLIS = 2_000L
 
-        /** Whether the tool is missing, which is only worth saying when a watch might need it. */
-        fun mtpToolMissing(): Boolean = MtpLocator.resolve() == null
-
         private fun mtpDevices(): List<Mtp> {
-            val tool = MtpLocator.resolve() ?: return emptyList()
+            // A fresh look rather than the last one: which copy is used depends on the versions of
+            // all of them, and this runs off the UI thread, so it can ask the ones not asked yet.
+            // It is also what keeps the watch list's word about the tool current.
+            val tool = runCatching { MtpLocator.refresh().tool }.getOrNull() ?: return emptyList()
             val outcome = runCatching {
                 MtpTool.run(
                     listOf(tool.toString()) + MtpTool.deviceArguments(),
