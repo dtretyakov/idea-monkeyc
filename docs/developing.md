@@ -56,6 +56,9 @@ accident. `-Pfixture` is the way to work in a project that lasts.
 
 These build the fixture with the actual compiler, generate a project from an SDK template and
 compile that too, drive the actual language server, and shake hands with the actual debug adapter.
+The MTP ones download the pinned `mtp-rs` release for this platform and check it, and drive
+whichever `mtp-rs` the plugin would find — skipped where there is none; the one that asks a watch
+its model needs a watch plugged in.
 They are opt-in so a checkout on a machine without Connect IQ still goes green — a red test there
 would be reporting the machine rather than the code.
 

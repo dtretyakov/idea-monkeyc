@@ -5,6 +5,8 @@ import com.github.dtretyakov.monkeyc.project.MonkeyCProject
 import com.github.dtretyakov.monkeyc.project.MonkeyCSettings
 import com.github.dtretyakov.monkeyc.project.MonkeyCTarget
 import com.github.dtretyakov.monkeyc.run.GarminTarget
+import com.github.dtretyakov.monkeyc.run.MtpLocator
+import com.github.dtretyakov.monkeyc.run.MtpToolSetup
 import com.github.dtretyakov.monkeyc.run.MonkeyCRunConfiguration
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
 import com.github.dtretyakov.monkeyc.ui.manifest.ManifestModel
@@ -170,7 +172,7 @@ class SelectDeviceAction : ToggleAction(), CustomComponentAction, DumbAware {
         // project is open, to answer a question nobody is asking.
         ApplicationManager.getApplication().executeOnPooledThread { GarminTarget.refreshAttached() }
 
-        val watch = attachedSection(project, root, devices)
+        val watch = attachedSection(project, root, devices) + listOfNotNull(mtpToolRow(project))
 
         if (devices.isEmpty()) {
             val head = listOf(Unavailable(offer.empty ?: "No devices are downloaded"))
@@ -234,6 +236,21 @@ class SelectDeviceAction : ToggleAction(), CustomComponentAction, DumbAware {
             else -> Unavailable(found.name, secondary = "model unknown")
         }
     }
+
+    /**
+     * The row that says a current watch cannot be seen here yet, and installs what sees it.
+     *
+     * In the watch section because that is where its absence shows: on macOS and Windows a watch
+     * that speaks MTP is invisible without the tool, and an empty section said nothing about why.
+     * Read from what is already known — this is built on the UI thread — and the background look
+     * started above asks the tool its version for next time.
+     */
+    private fun mtpToolRow(project: Project): AnAction? =
+        when (MtpLocator.knownShortfall()) {
+            null -> null
+            MtpLocator.Shortfall.MISSING -> InstallMtpTool(project, outdated = false, note = "to see a watch over USB")
+            MtpLocator.Shortfall.OUTDATED -> InstallMtpTool(project, outdated = true, note = "the one found is too old")
+        }
 
     /** The target the selected run configuration will actually use. */
     private fun effectiveTarget(project: Project): MonkeyCTarget? = MonkeyCTarget.resolve(
@@ -381,6 +398,30 @@ class SelectDeviceAction : ToggleAction(), CustomComponentAction, DumbAware {
                 .getNotificationGroup("Monkey C")
                 .createNotification("Could not add ${device.displayName}", detail, NotificationType.ERROR)
                 .notify(project)
+        }
+    }
+
+    /**
+     * Installs `mtp-rs`, then looks for watches again so the next opening of this list shows one.
+     *
+     * Enabled, with the note beside it, for the reason [AddProduct] is: a disabled row cannot be
+     * clicked, and this row is a remedy.
+     */
+    private class InstallMtpTool(
+        private val project: Project,
+        outdated: Boolean,
+        note: String,
+    ) : AnAction(MtpToolSetup.label(outdated), null, AllIcons.Actions.Download) {
+        init {
+            templatePresentation.putClientProperty(ActionUtil.SECONDARY_TEXT, note)
+        }
+
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+
+        override fun actionPerformed(event: AnActionEvent) {
+            MtpToolSetup.install(project) {
+                ApplicationManager.getApplication().executeOnPooledThread { GarminTarget.refreshAttached() }
+            }
         }
     }
 

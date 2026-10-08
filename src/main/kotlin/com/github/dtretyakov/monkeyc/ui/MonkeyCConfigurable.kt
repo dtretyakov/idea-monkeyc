@@ -11,6 +11,9 @@ import com.github.dtretyakov.monkeyc.project.OptimizationLevel
 import com.github.dtretyakov.monkeyc.project.ProjectLayout
 import com.github.dtretyakov.monkeyc.project.TypeCheckLevel
 import com.github.dtretyakov.monkeyc.run.MtpLocator
+import com.github.dtretyakov.monkeyc.run.MtpToolSetup
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqDevice
 import com.github.dtretyakov.monkeyc.sdk.DeveloperKey
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
@@ -80,7 +83,7 @@ class MonkeyCConfigurable(private val project: Project) :
             version = { versions[it] ?: ConnectIqSdk.at(it).version?.toString() },
         )
 
-        return panel {
+        val page = panel {
             group("Connect IQ") {
                 // One SDK control, not two. There used to be a machine-wide path field in a group
                 // of its own and a project combo down here, which between them answered "where is
@@ -273,10 +276,13 @@ class MonkeyCConfigurable(private val project: Project) :
                         }
                 }
                 row {
-                    mtpStatus = comment(mtpToolStatus())
+                    mtpStatus = comment(mtpToolStatus(environment), action = HyperlinkEventAction { installMtpTool() })
                 }
             }
         }
+        // The line about mtp-rs opens with what is already known; this asks the tool and corrects it.
+        refreshMtpStatus()
+        return page
     }
 
     override fun apply() {
@@ -288,7 +294,7 @@ class MonkeyCConfigurable(private val project: Project) :
         val environment = ConnectIqEnvironment.check(project)
         keyStatus?.component?.text = ConnectIqEnvironment
             .of(environment, ConnectIqEnvironment.Concern.DEVELOPER_KEY)?.detail.orEmpty()
-        mtpStatus?.component?.text = mtpToolStatus()
+        mtpStatus?.component?.text = mtpToolStatus(environment)
 
         // The server reads all of this once, at initialize; it has to be told to start over.
         project.messageBus.syncPublisher(MonkeyCSettings.TOPIC).settingsChanged(project)
@@ -335,10 +341,41 @@ class MonkeyCConfigurable(private val project: Project) :
         return "New key$fingerprint. No other key can update an app signed with it."
     }
 
-    /** What `mtp-rs` is for, or where it was found. Absence is normal, so it is not an error. */
-    private fun mtpToolStatus(): String =
-        MtpLocator.resolve()?.let { "Found at ${FileUtil.getLocationRelativeToUserHome(it.toString())}" }
-            ?: "${MtpLocator.purpose()} <a href=\"${MtpLocator.INSTALL_URL}\">Get mtp-rs</a>"
+    /**
+     * The environment's line about `mtp-rs`, with the button that installs it when there is one.
+     *
+     * `<a>` without an href, as for the SDK Manager above: the link is a command, not a page.
+     */
+    private fun mtpToolStatus(environment: List<ConnectIqEnvironment.Item>): String {
+        val item = ConnectIqEnvironment.of(environment, ConnectIqEnvironment.Concern.MTP_TOOL) ?: return ""
+        val sentence = ConnectIqEnvironment.sentence(environment, ConnectIqEnvironment.Concern.MTP_TOOL)
+        if (item.fix != ConnectIqEnvironment.Fix.INSTALL_MTP_TOOL) return sentence
+        val outdated = MtpLocator.knownShortfall() == MtpLocator.Shortfall.OUTDATED
+        return "$sentence <a>${MtpToolSetup.label(outdated)}</a>"
+    }
+
+    /** Installs the tool, then rewrites the line above so it says where it went. */
+    private fun installMtpTool() {
+        MtpToolSetup.install(project) { refreshMtpStatus() }
+    }
+
+    /**
+     * Asks the tool its version off the UI thread, then rewrites the line with what it said.
+     *
+     * The page opens with what is already known, which is nothing the first time; an old tool is
+     * only called old once it has been asked.
+     */
+    private fun refreshMtpStatus() {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            runCatching { MtpLocator.refreshVersion() }
+            // `any`, because the page is a modal dialog and the default would hold this back until
+            // it closed — which is after the line it rewrites has gone. It sets a label's text and
+            // touches no model, which is what `any` is safe for.
+            ApplicationManager.getApplication().invokeLater({
+                mtpStatus?.component?.text = mtpToolStatus(ConnectIqEnvironment.check(project))
+            }, ModalityState.any())
+        }
+    }
 
     /**
      * Where a new key is offered first: where [MonkeyCProject.developerKey] already looks when

@@ -1,5 +1,7 @@
 package com.github.dtretyakov.monkeyc.project
 
+import com.github.dtretyakov.monkeyc.run.MtpLocator
+import com.github.dtretyakov.monkeyc.run.MtpRelease
 import com.github.dtretyakov.monkeyc.sdk.ConnectIqSdk
 import com.github.dtretyakov.monkeyc.sdk.SdkManagerApp
 import com.github.dtretyakov.monkeyc.sdk.SdkVersion
@@ -13,7 +15,7 @@ import java.nio.file.Path
 /**
  * Everything that has to be in place before a Connect IQ project can be built, in one list.
  *
- * There are six prerequisites and the user used to meet them one at a time, each at the moment it
+ * There are seven prerequisites and the user used to meet them one at a time, each at the moment it
  * blocked something, each as a sentence with no button. Gathered here they become a checklist that
  * can be read before anything is attempted — which is what Garmin's own VS Code extension offers as
  * "Verify Installation", and what this plugin previously had only as a headless Gradle task.
@@ -25,7 +27,7 @@ object ConnectIqEnvironment {
     enum class Status { READY, MISSING }
 
     /** What to offer when something is missing. Null means there is nothing the plugin can do. */
-    enum class Fix { SDK_MANAGER, GENERATE_KEY }
+    enum class Fix { SDK_MANAGER, GENERATE_KEY, INSTALL_MTP_TOOL }
 
     /**
      * Which prerequisite an item is about.
@@ -34,7 +36,7 @@ object ConnectIqEnvironment {
      * text and therefore free to change. The settings page shows each of these beside the control
      * that fixes it rather than as a checklist of its own.
      */
-    enum class Concern { SDK_MANAGER, SDK, LANGUAGE_SERVER, LIVE_ANALYSIS, DEVICES, DEVELOPER_KEY, JAVA }
+    enum class Concern { SDK_MANAGER, SDK, LANGUAGE_SERVER, LIVE_ANALYSIS, DEVICES, DEVELOPER_KEY, JAVA, MTP_TOOL }
 
     data class Item(
         val concern: Concern,
@@ -90,7 +92,58 @@ object ConnectIqEnvironment {
             add(devices(service.devices().size, sdk != null, service.unreadableDevices()))
             add(developerKey(project))
             add(java(service.java(), service.javaVersion()))
+            // The version as already known, never asked here: this runs on the UI thread when the
+            // settings page opens. The watch list and the page each ask in the background.
+            val tool = MtpLocator.resolve()
+            add(mtpTool(tool, tool?.let { MtpLocator.knownVersion(it) }, MtpLocator.needed()))
         }
+    }
+
+    /**
+     * The tool that installs on a current watch, which is a prerequisite only where nothing else
+     * can reach one — see [MtpLocator.needed].
+     *
+     * Never blocking: a build does not need it, and the editor banner that shows the first blocking
+     * item must not interrupt someone who has no watch. It is said where a watch is the subject —
+     * the watch list, the settings field, the console after a build for one.
+     *
+     * A version that is not known yet is not reported as a problem. It is only unknown until the
+     * tool has been asked once, in the background, and calling a working tool outdated in the
+     * meantime would be worse than a moment of not saying.
+     */
+    internal fun mtpTool(tool: Path?, version: String?, needed: Boolean): Item = when {
+        tool == null && needed -> Item(
+            Concern.MTP_TOOL,
+            "mtp-rs",
+            Status.MISSING,
+            "Not installed. A current watch connects over MTP, and installing a build on one needs it.",
+            Fix.INSTALL_MTP_TOOL,
+            blocking = false,
+        )
+
+        tool == null -> Item(
+            Concern.MTP_TOOL,
+            "mtp-rs",
+            Status.READY,
+            "Not needed here: the desktop mounts a watch on its own",
+        )
+
+        version != null && !MtpRelease.isSupported(version) -> Item(
+            Concern.MTP_TOOL,
+            "mtp-rs",
+            Status.MISSING,
+            "$version at ${shorten(tool)}, which is older than ${MtpRelease.MINIMUM}, the version this " +
+                "plugin is built against.",
+            Fix.INSTALL_MTP_TOOL,
+            blocking = false,
+        )
+
+        else -> Item(
+            Concern.MTP_TOOL,
+            "mtp-rs",
+            Status.READY,
+            listOfNotNull(version, "at ${shorten(tool)}").joinToString(" "),
+        )
     }
 
     /**

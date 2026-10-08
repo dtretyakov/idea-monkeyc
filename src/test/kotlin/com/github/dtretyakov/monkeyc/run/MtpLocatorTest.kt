@@ -39,7 +39,7 @@ class MtpLocatorTest {
 
         assertEquals(
             tool,
-            MtpLocator.resolve(configured = tool.toString(), home = temp, path = null, windows = false),
+            MtpLocator.resolve(configured = tool.toString(), home = temp, path = null, windows = false, managed = null),
         )
     }
 
@@ -50,7 +50,7 @@ class MtpLocatorTest {
 
         assertEquals(
             tool,
-            MtpLocator.resolve(configured = tool.parent.toString(), home = temp, path = null, windows = false),
+            MtpLocator.resolve(configured = tool.parent.toString(), home = temp, path = null, windows = false, managed = null),
         )
     }
 
@@ -60,7 +60,7 @@ class MtpLocatorTest {
 
         assertEquals(
             tool,
-            MtpLocator.resolve(configured = tool.parent.toString(), home = temp, path = null, windows = true),
+            MtpLocator.resolve(configured = tool.parent.toString(), home = temp, path = null, windows = true, managed = null),
         )
     }
 
@@ -71,7 +71,7 @@ class MtpLocatorTest {
         executable(temp.resolve(".cargo/bin/mtp-rs"))
 
         assertNull(
-            MtpLocator.resolve(configured = temp.resolve("gone").toString(), home = temp, path = null, windows = false),
+            MtpLocator.resolve(configured = temp.resolve("gone").toString(), home = temp, path = null, windows = false, managed = null),
         )
     }
 
@@ -86,8 +86,7 @@ class MtpLocatorTest {
                 configured = "",
                 home = temp,
                 path = onPath.parent.toString(),
-                windows = false,
-            ),
+                windows = false, managed = null),
         )
     }
 
@@ -110,7 +109,7 @@ class MtpLocatorTest {
 
         assertEquals(
             cargo,
-            MtpLocator.resolve(configured = "", home = temp, path = NOT_A_PATH, windows = true),
+            MtpLocator.resolve(configured = "", home = temp, path = NOT_A_PATH, windows = true, managed = null),
         )
     }
 
@@ -122,7 +121,7 @@ class MtpLocatorTest {
         // would answer first.
         assertEquals(
             cargo,
-            MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false, system = temp),
+            MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false, system = temp, managed = null),
         )
     }
 
@@ -136,7 +135,7 @@ class MtpLocatorTest {
 
         assertEquals(
             cargo,
-            MtpLocator.resolve(configured = "", home = temp, path = null, windows = true),
+            MtpLocator.resolve(configured = "", home = temp, path = null, windows = true, managed = null),
         )
     }
 
@@ -144,14 +143,14 @@ class MtpLocatorTest {
     fun `on Windows the bare name is not the tool`(@TempDir temp: Path) {
         executable(temp.resolve(".cargo/bin/mtp-rs"))
 
-        assertNull(MtpLocator.resolve(configured = "", home = temp, path = null, windows = true))
+        assertNull(MtpLocator.resolve(configured = "", home = temp, path = null, windows = true, managed = null))
     }
 
     @Test
     fun `nothing installed is null, not an error`(@TempDir temp: Path) {
         // A watch that mounts as a disk needs none of this, so absence is normal. The system root
         // is the temporary directory too, or a tool Homebrew put on this machine would answer.
-        assertNull(MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false, system = temp))
+        assertNull(MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false, system = temp, managed = null))
     }
 
     /**
@@ -164,7 +163,7 @@ class MtpLocatorTest {
 
         assertEquals(
             brewed,
-            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp),
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp, managed = null),
         )
     }
 
@@ -174,7 +173,7 @@ class MtpLocatorTest {
 
         assertEquals(
             placed,
-            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp),
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp, managed = null),
         )
     }
 
@@ -190,7 +189,7 @@ class MtpLocatorTest {
 
         assertEquals(
             brewed,
-            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp),
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp, managed = null),
         )
     }
 
@@ -201,7 +200,7 @@ class MtpLocatorTest {
 
         assertEquals(
             scripted,
-            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = null, windows = true, system = temp),
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = null, windows = true, system = temp, managed = null),
         )
     }
 
@@ -209,45 +208,71 @@ class MtpLocatorTest {
     fun `Windows does not look in Homebrew's directories`(@TempDir temp: Path) {
         executable(temp.resolve("usr/local/bin/mtp-rs.exe"))
 
-        assertNull(MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = null, windows = true, system = temp))
+        assertNull(MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = null, windows = true, system = temp, managed = null))
     }
 
     /**
-     * Only macOS has no way onto a current watch without the tool, and the hint has to say so
-     * there — and must not tell a Windows user, whose File Explorer shows the watch, that it is
-     * the only way.
+     * The lead says what the platform itself can do, and every hint offers the same remedy: the
+     * plugin installs the tool when asked. Nothing sends anyone to copy a file by hand, and nothing
+     * asks for a Rust toolchain.
      */
     @Test
-    fun `the hint says what the platform itself can do`() {
+    fun `the hint says what the platform can do, and offers the install`() {
         val mac = MtpLocator.installHint("Mac OS X")
         val windows = MtpLocator.installHint("Windows 11")
         val linux = MtpLocator.installHint("Linux")
 
         assertTrue(mac.contains("Finder will not show it"), mac)
-        assertTrue(windows.contains("File Explorer"), windows)
-        assertTrue(windows.contains("GARMIN\\APPS"), windows)
         assertTrue(linux.contains("GNOME"), linux)
         assertTrue(linux.contains("KDE"), linux)
-        // Every one of them says how to get the tool and where to point at it.
         listOf(mac, windows, linux).forEach {
+            assertTrue(it.contains("Install mtp-rs ${MtpRelease.VERSION}"), it)
             assertTrue(it.contains(MtpLocator.INSTALL_URL), it)
-            assertTrue(it.contains("Settings | Languages & Frameworks | Monkey C"), it)
+            assertFalse(it.contains("cargo"), it)
+            assertFalse(it.contains("by hand"), it)
+            assertFalse(it.contains("File Explorer"), it)
         }
     }
 
-    /**
-     * One command where Homebrew exists, and nothing that needs a Rust toolchain. The formula is
-     * named in full: that is what lets Homebrew load it from a tap nobody has told it to trust.
-     */
     @Test
-    fun `the hint offers Homebrew where there is Homebrew`() {
-        listOf("Mac OS X", "Linux").map { MtpLocator.installHint(it) }.forEach {
-            assertTrue(it.contains("`brew install vdavid/tap/mtp-rs`"), it)
-            assertFalse(it.contains("cargo"), it)
-        }
-        val windows = MtpLocator.installHint("Windows 11")
-        assertTrue(windows.contains("PowerShell installer"), windows)
-        assertFalse(windows.contains("brew"), windows)
+    fun `the plugin's own copy is used before anything on PATH`(@TempDir temp: Path) {
+        val managed = executable(temp.resolve("managed/mtp-rs"))
+        val onPath = executable(temp.resolve("bin/mtp-rs"))
+
+        assertEquals(
+            managed,
+            MtpLocator.resolve(configured = "", home = temp, path = onPath.parent.toString(), windows = false, system = temp, managed = managed),
+        )
+    }
+
+    @Test
+    fun `a path set in the settings still wins over the plugin's own copy`(@TempDir temp: Path) {
+        val managed = executable(temp.resolve("managed/mtp-rs"))
+        val chosen = executable(temp.resolve("chosen/mtp-rs"))
+
+        assertEquals(
+            chosen,
+            MtpLocator.resolve(configured = chosen.toString(), home = temp, path = null, windows = false, system = temp, managed = managed),
+        )
+    }
+
+    @Test
+    fun `the plugin's own copy that is not there yet is skipped`(@TempDir temp: Path) {
+        val brewed = executable(temp.resolve("opt/homebrew/bin/mtp-rs"))
+
+        assertEquals(
+            brewed,
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp, managed = temp.resolve("managed/mtp-rs")),
+        )
+    }
+
+    /** Where a current watch is unreachable without the tool, and where the desktop does it instead. */
+    @Test
+    fun `the tool is needed on macOS and Windows, and on Linux only without gvfs`() {
+        assertTrue(MtpLocator.needed("Mac OS X") { true })
+        assertTrue(MtpLocator.needed("Windows 11") { true })
+        assertFalse(MtpLocator.needed("Linux") { true })
+        assertTrue(MtpLocator.needed("Linux") { false })
     }
 
     /** Where the project's install script puts it, on every platform. */
@@ -257,7 +282,7 @@ class MtpLocatorTest {
 
         assertEquals(
             scripted,
-            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp),
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp, managed = null),
         )
     }
 
@@ -271,7 +296,7 @@ class MtpLocatorTest {
 
         assertEquals(
             scripted,
-            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = null, windows = true, system = temp),
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = null, windows = true, system = temp, managed = null),
         )
     }
 
@@ -286,7 +311,7 @@ class MtpLocatorTest {
         notExecutable.parent.createDirectories()
         notExecutable.writeText("text")
 
-        assertNull(MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false, system = temp))
+        assertNull(MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false, system = temp, managed = null))
     }
 
     private companion object {
