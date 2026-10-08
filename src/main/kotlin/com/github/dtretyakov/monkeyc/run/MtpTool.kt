@@ -94,20 +94,22 @@ object MtpTool {
     /**
      * Where to look for it when nothing is configured.
      *
-     * `~/.cargo/bin` is on the list because `cargo install mtp-rs-cli` is currently the only way to
-     * get it, and that directory is on `PATH` for a shell but not always for a GUI application —
-     * an IDE launched from Finder inherits a `PATH` that a terminal would not recognise.
+     * One directory for each way it is installed, because none of them is reliably on the `PATH`
+     * of a GUI application — an IDE launched from Finder or the Dock inherits a `PATH` that a
+     * terminal would not recognise, and one already running never sees an installer's change to
+     * it:
      *
-     * Homebrew's directories are there for the same reason: an IDE started from the Dock has
-     * neither `/opt/homebrew/bin` nor `/usr/local/bin` on its `PATH`, and a tool put in one —
-     * by hand today, by a package manager once one carries it — would otherwise be in plain sight
-     * and not found. [system] is the filesystem root they are resolved against, so a test can
-     * supply one.
+     * - `~/.cargo/bin`, where `cargo install mtp-rs-cli` puts it;
+     * - `~/.local/bin`, where the project's install scripts put it, on every platform;
+     * - Homebrew's `bin`, for `brew install vdavid/tap/mtp-rs`: `/opt/homebrew` on Apple
+     *   Silicon, `/usr/local` on Intel, `/home/linuxbrew/.linuxbrew` on Linux.
+     *
+     * [system] is the filesystem root Homebrew's are resolved against, so a test can supply one.
      */
     fun candidates(home: Path, windows: Boolean = isWindows, system: Path = SYSTEM_ROOT): List<Path> {
-        val cargo = home.resolve(".cargo/bin").resolve(executable(windows))
-        if (windows) return listOf(cargo)
-        return listOf(cargo) + HOMEBREW_BINS.map { system.resolve(it).resolve(executable(windows)) }
+        val inHome = listOf(".cargo/bin", ".local/bin").map { home.resolve(it).resolve(executable(windows)) }
+        if (windows) return inHome
+        return inHome + HOMEBREW_BINS.map { system.resolve(it).resolve(executable(windows)) }
     }
 
     /** Apple Silicon, Intel macOS, and Linux, in Homebrew's own words. Relative to [SYSTEM_ROOT]. */

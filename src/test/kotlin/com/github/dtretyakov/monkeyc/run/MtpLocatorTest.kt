@@ -1,6 +1,7 @@
 package com.github.dtretyakov.monkeyc.run
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -16,9 +17,9 @@ import kotlin.io.path.writeText
 /**
  * Finding `mtp-rs` without making it a requirement.
  *
- * `~/.cargo/bin` is searched explicitly because `cargo install mtp-rs-cli` is currently the only
- * way to get the tool, and that directory is on the `PATH` of a shell but not necessarily of an
- * IDE launched from the desktop — which is the case that matters here.
+ * Each way of installing the tool has a directory of its own — `~/.cargo/bin`, `~/.local/bin`,
+ * Homebrew's — and each is searched explicitly, because it is on the `PATH` of a shell but not
+ * necessarily of an IDE launched from the desktop, which is the case that matters here.
  *
  * Every test names the platform it is about rather than inheriting the one it runs on: the tool is
  * `mtp-rs.exe` on Windows and `mtp-rs` elsewhere, and a suite that only asks about the platform
@@ -209,11 +210,51 @@ class MtpLocatorTest {
         assertTrue(windows.contains("GARMIN\\APPS"), windows)
         assertTrue(linux.contains("GNOME"), linux)
         assertTrue(linux.contains("KDE"), linux)
-        // Every one of them still says how to get the tool and where to point at it.
+        // Every one of them says how to get the tool and where to point at it.
         listOf(mac, windows, linux).forEach {
-            assertTrue(it.contains("cargo install mtp-rs-cli"), it)
+            assertTrue(it.contains(MtpLocator.INSTALL_URL), it)
             assertTrue(it.contains("Settings | Languages & Frameworks | Monkey C"), it)
         }
+    }
+
+    /**
+     * One command where Homebrew exists, and nothing that needs a Rust toolchain. The formula is
+     * named in full: that is what lets Homebrew load it from a tap nobody has told it to trust.
+     */
+    @Test
+    fun `the hint offers Homebrew where there is Homebrew`() {
+        listOf("Mac OS X", "Linux").map { MtpLocator.installHint(it) }.forEach {
+            assertTrue(it.contains("`brew install vdavid/tap/mtp-rs`"), it)
+            assertFalse(it.contains("cargo"), it)
+        }
+        val windows = MtpLocator.installHint("Windows 11")
+        assertTrue(windows.contains("PowerShell installer"), windows)
+        assertFalse(windows.contains("brew"), windows)
+    }
+
+    /** Where the project's install script puts it, on every platform. */
+    @Test
+    fun `the install script's directory is found when PATH does not have it`(@TempDir temp: Path) {
+        val scripted = executable(temp.resolve("home/.local/bin/mtp-rs"))
+
+        assertEquals(
+            scripted,
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp),
+        )
+    }
+
+    /**
+     * The PowerShell installer writes to `~/.local/bin` and adds it to the user's `PATH` — which an
+     * IDE already running never sees, so the next build after installing would not find it.
+     */
+    @Test
+    fun `on Windows the install script's directory is found too`(@TempDir temp: Path) {
+        val scripted = executable(temp.resolve("home/.local/bin/mtp-rs.exe"))
+
+        assertEquals(
+            scripted,
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = null, windows = true, system = temp),
+        )
     }
 
     /**

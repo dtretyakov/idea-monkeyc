@@ -155,7 +155,7 @@ class MtpToolTest {
     }
 
     @Test
-    fun `cargo's bin directory is searched, because that is the only way to install it`() {
+    fun `cargo's bin directory is searched, for those who install it with cargo`() {
         val home = Path.of("/home/dev")
         val candidates = MtpTool.candidates(home, windows = false)
 
@@ -239,8 +239,8 @@ class MtpToolTest {
         assertEquals("mtp-rs", MtpTool.executable(windows = false))
         assertEquals("mtp-rs.exe", MtpTool.executable(windows = true))
         assertEquals(
-            Path.of("/home/dev/.cargo/bin/mtp-rs.exe"),
-            MtpTool.candidates(Path.of("/home/dev"), windows = true).single(),
+            listOf(Path.of("/home/dev/.cargo/bin/mtp-rs.exe"), Path.of("/home/dev/.local/bin/mtp-rs.exe")),
+            MtpTool.candidates(Path.of("/home/dev"), windows = true),
         )
     }
 

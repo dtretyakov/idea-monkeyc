@@ -79,8 +79,8 @@ sealed interface GarminTarget {
          * Every Garmin device attached right now, of either kind.
          *
          * The MTP half is skipped in silence when the tool is not installed: a watch that mounts as
-         * a disk needs none of it, and telling somebody to install a Rust toolchain when nothing is
-         * plugged in would be noise.
+         * a disk needs none of it, and telling somebody to install a tool when nothing is plugged in
+         * would be noise.
          */
         fun attached(): List<GarminTarget> {
             val volumes = GarminVolume.mounted()

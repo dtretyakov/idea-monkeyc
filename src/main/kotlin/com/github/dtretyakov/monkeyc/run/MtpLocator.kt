@@ -8,8 +8,7 @@ import kotlin.io.path.isDirectory
  * Finds `mtp-rs`, or says it is not here.
  *
  * Deliberately not a hard dependency. A watch that mounts as storage needs none of this, and a
- * developer who never plugs one in should not be told to install a Rust toolchain — which, until
- * the project publishes binaries, is what installing it means.
+ * developer who never plugs one in should not be told to install anything.
  */
 object MtpLocator {
 
@@ -44,8 +43,12 @@ object MtpLocator {
             .filter { it.isNotBlank() }
             .mapNotNull { runCatching { Path.of(it).resolve(MtpTool.executable(windows)) }.getOrNull() }
 
-    /** Where to get it: the crate `cargo install mtp-rs-cli` installs from. */
-    const val PROJECT_URL = "https://crates.io/crates/mtp-rs-cli"
+    /**
+     * Where to get it: the CLI's own install instructions, which cover Homebrew, an install script
+     * for each platform, the prebuilt binaries and cargo. Linked rather than repeated, because the
+     * script's one-liner is long and belongs to the project that publishes it.
+     */
+    const val INSTALL_URL = "https://github.com/vdavid/mtp-rs/tree/main/crates/mtp-rs-cli#install"
 
     /**
      * What to tell someone who has no tool and whose watch could not be found, on this platform.
@@ -60,16 +63,16 @@ object MtpLocator {
     fun installHint(os: String = System.getProperty("os.name")): String = when {
         os.startsWith("Mac") ->
             "A current Garmin watch connects over MTP, which macOS does not speak: Finder will not " +
-                "show it, and installing on one needs mtp-rs. $HOW_TO_GET_IT"
+                "show it, and installing on one needs mtp-rs. ${howToGetIt(os)}"
         os.startsWith("Windows") ->
             "A current Garmin watch connects over MTP and appears in File Explorer under This PC " +
                 "rather than as a drive: copy the .prg to GARMIN\\APPS there, or install mtp-rs and " +
-                "let the IDE do it. $HOW_TO_GET_IT"
+                "let the IDE do it. ${howToGetIt(os)}"
         else ->
             "A current Garmin watch connects over MTP. GNOME and most other desktops mount it on " +
                 "their own, and the IDE installs through that mount; KDE reaches it in a way the IDE " +
                 "cannot use, and without a desktop nothing mounts it. There, install mtp-rs. " +
-                HOW_TO_GET_IT
+                howToGetIt(os)
     }
 
     /**
@@ -83,7 +86,19 @@ object MtpLocator {
         else -> "Needed only where the desktop does not mount the watch itself: under KDE, or with no desktop."
     }
 
-    private const val HOW_TO_GET_IT =
-        "Install it with `cargo install mtp-rs-cli` ($PROJECT_URL), or set its path in " +
-            "Settings | Languages & Frameworks | Monkey C."
+    /**
+     * The shortest way to get it here, then where the rest are.
+     *
+     * Homebrew where there is Homebrew, because one command needs no explanation. Naming the
+     * formula in full is also what lets Homebrew load it from a tap it has not been told to trust.
+     * Windows has no Homebrew, and its installer is a PowerShell one-liner too long for a hint.
+     */
+    private fun howToGetIt(os: String): String {
+        val shortest = if (os.startsWith("Windows")) {
+            "Install it with the PowerShell installer from $INSTALL_URL"
+        } else {
+            "Install it with `brew install vdavid/tap/mtp-rs`, or another way from $INSTALL_URL"
+        }
+        return "$shortest, or set its path in Settings | Languages & Frameworks | Monkey C."
+    }
 }

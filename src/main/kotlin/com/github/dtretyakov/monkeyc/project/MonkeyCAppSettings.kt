@@ -32,10 +32,10 @@ class MonkeyCAppSettings : PersistentStateComponent<MonkeyCAppSettings> {
      * Path to `mtp-rs`, which is how a build reaches a watch that is not a disk. Empty means
      * "look for it".
      *
-     * Needed because current Garmin devices speak MTP, and only older ones mount as storage. The
-     * tool installs with `cargo install mtp-rs-cli`, so it lands in `~/.cargo/bin` — a directory
-     * on the `PATH` of a shell but not necessarily of an IDE launched from the desktop, which is
-     * why looking for it is worth doing rather than trusting the environment.
+     * Needed because current Garmin devices speak MTP, and only older ones mount as storage. Each
+     * way of installing the tool puts it in a directory of its own — Homebrew's, `~/.local/bin`,
+     * `~/.cargo/bin` — that is on the `PATH` of a shell but not necessarily of an IDE launched from
+     * the desktop, which is why looking for it is worth doing rather than trusting the environment.
      */
     var mtpToolPath: String = ""
 
