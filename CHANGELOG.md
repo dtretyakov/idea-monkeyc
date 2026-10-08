@@ -8,6 +8,28 @@
   on the listing before publishing, not after.
 -->
 
+## 0.3.0
+
+### Installing on a watch
+
+- On macOS and Windows a current watch is reached through mtp-rs and nothing else, and its absence
+  is now said where the watch would have been: in the watch list beside Run, in the settings, and
+  after a build for a watch that could not be found — each with an Install mtp-rs button.
+- The button downloads mtp-rs 0.9.1 for this system from the project's GitHub release, installs it
+  only if it matches a checksum built into the plugin, and keeps it in JetBrains' shared data
+  directory, so it survives IDE updates. After a build, the watch is then looked for again and
+  offered the build. This is the plugin's only network request, and it is only ever made on that
+  click.
+- An mtp-rs installed by hand — with `brew install vdavid/tap/mtp-rs`, the project's install
+  scripts or cargo — is found and preferred when it is 0.9.1 or a later 0.9.x. An older one, or one
+  past the next breaking release, is said, and the plugin's own is offered beside it rather than
+  over it.
+- On Linux, a watch that GNOME, Cinnamon, MATE, Budgie or Pantheon has mounted is installed on
+  through that mount, with no mtp-rs at all. Under KDE or Xfce, or with no desktop, mtp-rs is
+  offered as above.
+- On macOS, a watch that cannot be opened because the system's ptpcamerad holds it now says so, with
+  the command that frees it.
+
 ## 0.2.0
 
 First release.
