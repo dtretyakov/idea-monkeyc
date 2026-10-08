@@ -156,7 +156,7 @@ sealed interface GarminTarget {
             try {
                 // Asked here because this is the background look the watch list starts: the list
                 // says when the tool is too old, and must not start a process itself to find out.
-                runCatching { MtpLocator.refreshVersion() }
+                runCatching { MtpLocator.refreshVersions() }
                 val fresh = runCatching { attached().map { Attached(it.name, it.device?.id) } }
                     .getOrDefault(emptyList())
                 attachedCache = System.currentTimeMillis() to fresh
@@ -174,6 +174,9 @@ sealed interface GarminTarget {
         private const val CACHE_MILLIS = 2_000L
 
         private fun mtpDevices(): List<Mtp> {
+            // Which copy is used depends on the versions of all of them; this runs off the UI
+            // thread, so it can ask the ones not asked yet before choosing.
+            runCatching { MtpLocator.refreshVersions() }
             val tool = MtpLocator.resolve() ?: return emptyList()
             val outcome = runCatching {
                 MtpTool.run(

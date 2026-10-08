@@ -234,15 +234,93 @@ class MtpLocatorTest {
         }
     }
 
+    /** The user's own install is the one they meant, as long as it answers the way the plugin reads. */
     @Test
-    fun `the plugin's own copy is used before anything on PATH`(@TempDir temp: Path) {
+    fun `a compatible copy the user installed wins over the plugin's own`(@TempDir temp: Path) {
+        val managed = executable(temp.resolve("managed/mtp-rs"))
+        val brewed = executable(temp.resolve("opt/homebrew/bin/mtp-rs"))
+
+        assertEquals(
+            brewed,
+            MtpLocator.resolve(
+                configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp,
+                managed = managed, version = versions(brewed to "0.9.4", managed to MtpRelease.VERSION),
+            ),
+        )
+    }
+
+    /**
+     * An old copy of the user's — 0.3.0 left in `~/.cargo/bin` — stays where it is, and the plugin
+     * uses its own beside it rather than overwriting what something else may rely on.
+     */
+    @Test
+    fun `the plugin's own copy wins over an old one of the user's`(@TempDir temp: Path) {
+        val managed = executable(temp.resolve("managed/mtp-rs"))
+        executable(temp.resolve("home/.cargo/bin/mtp-rs")).also { old ->
+            assertEquals(
+                managed,
+                MtpLocator.resolve(
+                    configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp,
+                    managed = managed, version = versions(old to "0.3.0", managed to MtpRelease.VERSION),
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `the plugin's own copy wins over one past the next breaking release`(@TempDir temp: Path) {
+        val managed = executable(temp.resolve("managed/mtp-rs"))
+        val newer = executable(temp.resolve("opt/homebrew/bin/mtp-rs"))
+
+        assertEquals(
+            managed,
+            MtpLocator.resolve(
+                configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp,
+                managed = managed, version = versions(newer to "0.10.0", managed to MtpRelease.VERSION),
+            ),
+        )
+    }
+
+    /** A tool that may answer differently still beats no tool; the watch list says which it is. */
+    @Test
+    fun `without the plugin's copy, an incompatible one of the user's is still used`(@TempDir temp: Path) {
+        val newer = executable(temp.resolve("opt/homebrew/bin/mtp-rs"))
+
+        assertEquals(
+            newer,
+            MtpLocator.resolve(
+                configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp,
+                managed = null, version = versions(newer to "0.10.0"),
+            ),
+        )
+    }
+
+    /**
+     * Before any version is known — the first look, on the UI thread — the plugin's own copy is
+     * the safe answer, and a copy of the user's is used when there is no such thing.
+     */
+    @Test
+    fun `with nothing known yet the plugin's own copy comes first`(@TempDir temp: Path) {
         val managed = executable(temp.resolve("managed/mtp-rs"))
         val onPath = executable(temp.resolve("bin/mtp-rs"))
 
         assertEquals(
             managed,
-            MtpLocator.resolve(configured = "", home = temp, path = onPath.parent.toString(), windows = false, system = temp, managed = managed),
+            MtpLocator.resolve(configured = "", home = temp, path = onPath.parent.toString(), windows = false, system = temp, managed = managed, version = { null }),
         )
+        assertEquals(
+            onPath,
+            MtpLocator.resolve(configured = "", home = temp, path = onPath.parent.toString(), windows = false, system = temp, managed = null, version = { null }),
+        )
+    }
+
+    @Test
+    fun `what a version lacks is said as the shortfall it is`() {
+        assertEquals(MtpLocator.Shortfall.OUTDATED, MtpLocator.shortfallOf("0.3.0"))
+        assertEquals(MtpLocator.Shortfall.UNTESTED, MtpLocator.shortfallOf("0.10.0"))
+        assertEquals(null, MtpLocator.shortfallOf("0.9.4"))
+        // Not known yet is not a problem: it is only unknown until asked once, in the background.
+        assertEquals(null, MtpLocator.shortfallOf(null))
     }
 
     @Test
@@ -313,6 +391,9 @@ class MtpLocatorTest {
 
         assertNull(MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false, system = temp, managed = null))
     }
+
+    /** Versions as already known, for the candidates named; everything else unknown. */
+    private fun versions(vararg known: Pair<Path, String>): (Path) -> String? = known.toMap()::get
 
     private companion object {
         /** A NUL, which no platform allows in a path. Spelled as a character to keep it visible. */

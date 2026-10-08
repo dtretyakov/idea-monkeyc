@@ -128,12 +128,24 @@ object ConnectIqEnvironment {
             "Not needed here: the desktop mounts a watch on its own",
         )
 
-        version != null && !MtpRelease.isSupported(version) -> Item(
+        version != null && MtpRelease.compatibility(version) == MtpRelease.Compatibility.OLDER -> Item(
             Concern.MTP_TOOL,
             "mtp-rs",
             Status.MISSING,
             "$version at ${shorten(tool)}, which is older than ${MtpRelease.MINIMUM}, the version this " +
-                "plugin is built against.",
+                "plugin is built against. The plugin can keep its own beside it.",
+            Fix.INSTALL_MTP_TOOL,
+            blocking = false,
+        )
+
+        // Past the next breaking release, which semver lets change what the plugin parses. Used
+        // all the same, because it may well work; said, so a strange failure has a reason on screen.
+        version != null && MtpRelease.compatibility(version) == MtpRelease.Compatibility.NEWER -> Item(
+            Concern.MTP_TOOL,
+            "mtp-rs",
+            Status.MISSING,
+            "$version at ${shorten(tool)}, which is newer than the ${MtpRelease.MINIMUM} line this plugin " +
+                "reads and may answer differently. The plugin can keep its own ${MtpRelease.VERSION} beside it.",
             Fix.INSTALL_MTP_TOOL,
             blocking = false,
         )

@@ -246,11 +246,7 @@ class SelectDeviceAction : ToggleAction(), CustomComponentAction, DumbAware {
      * started above asks the tool its version for next time.
      */
     private fun mtpToolRow(project: Project): AnAction? =
-        when (MtpLocator.knownShortfall()) {
-            null -> null
-            MtpLocator.Shortfall.MISSING -> InstallMtpTool(project, outdated = false, note = "to see a watch over USB")
-            MtpLocator.Shortfall.OUTDATED -> InstallMtpTool(project, outdated = true, note = "the one found is too old")
-        }
+        MtpLocator.knownShortfall()?.let { InstallMtpTool(project, MtpToolSetup.reason(it)) }
 
     /** The target the selected run configuration will actually use. */
     private fun effectiveTarget(project: Project): MonkeyCTarget? = MonkeyCTarget.resolve(
@@ -409,9 +405,8 @@ class SelectDeviceAction : ToggleAction(), CustomComponentAction, DumbAware {
      */
     private class InstallMtpTool(
         private val project: Project,
-        outdated: Boolean,
         note: String,
-    ) : AnAction(MtpToolSetup.label(outdated), null, AllIcons.Actions.Download) {
+    ) : AnAction(MtpToolSetup.label(), null, AllIcons.Actions.Download) {
         init {
             templatePresentation.putClientProperty(ActionUtil.SECONDARY_TEXT, note)
         }

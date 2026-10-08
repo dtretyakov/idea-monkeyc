@@ -182,6 +182,16 @@ class ConnectIqEnvironmentTest {
     }
 
     @Test
+    fun `an mtp-rs past the next breaking release is said, and offered the plugin's own`() {
+        val item = ConnectIqEnvironment.mtpTool(Path.of("/opt/homebrew/bin/mtp-rs"), "0.10.0", needed = true)
+
+        assertEquals(Status.MISSING, item.status)
+        assertEquals(Fix.INSTALL_MTP_TOOL, item.fix)
+        assertTrue(item.detail.contains("newer"), item.detail)
+        assertFalse(item.blocking)
+    }
+
+    @Test
     fun `a current mtp-rs is reported with its version`() {
         val item = ConnectIqEnvironment.mtpTool(
             Path.of("/opt/homebrew/bin/mtp-rs"),

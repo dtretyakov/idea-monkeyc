@@ -54,14 +54,26 @@ class MtpReleaseTest {
         assertNull(MtpRelease.parseVersion("error: unexpected argument '--version'"))
     }
 
+    /**
+     * Cargo's `^0.9.1`. Below 1.0 semver lets the minor number break things, so 0.10.0 is not "a
+     * newer 0.9" but the release allowed to change the JSON this plugin parses. "At least the
+     * minimum" waved it through.
+     */
     @Test
-    fun `older versions are refused and newer ones accepted`() {
+    fun `compatibility is the caret range, as Cargo reads it`() {
+        assertEquals(MtpRelease.Compatibility.OLDER, MtpRelease.compatibility("0.3.0"))
+        assertEquals(MtpRelease.Compatibility.OLDER, MtpRelease.compatibility("0.9.0"))
+        assertEquals(MtpRelease.Compatibility.COMPATIBLE, MtpRelease.compatibility(MtpRelease.MINIMUM))
+        assertEquals(MtpRelease.Compatibility.COMPATIBLE, MtpRelease.compatibility("0.9.7"))
+        assertEquals(MtpRelease.Compatibility.NEWER, MtpRelease.compatibility("0.10.0"))
+        assertEquals(MtpRelease.Compatibility.NEWER, MtpRelease.compatibility("1.0.0"))
+        assertEquals(MtpRelease.Compatibility.UNREADABLE, MtpRelease.compatibility("not a version"))
+    }
+
+    @Test
+    fun `only the compatible range is used as it is`() {
+        assertTrue(MtpRelease.isSupported("0.9.4"))
         assertFalse(MtpRelease.isSupported("0.3.0"))
-        assertFalse(MtpRelease.isSupported("0.9.0"))
-        assertTrue(MtpRelease.isSupported(MtpRelease.MINIMUM))
-        assertTrue(MtpRelease.isSupported("0.9.2"))
-        assertTrue(MtpRelease.isSupported("0.10.0"), "compared as numbers, not as text")
-        assertTrue(MtpRelease.isSupported("1.0.0"))
-        assertFalse(MtpRelease.isSupported("not a version"))
+        assertFalse(MtpRelease.isSupported("0.10.0"))
     }
 }

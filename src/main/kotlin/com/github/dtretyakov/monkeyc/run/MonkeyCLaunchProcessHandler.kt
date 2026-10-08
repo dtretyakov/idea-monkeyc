@@ -206,7 +206,7 @@ class MonkeyCLaunchProcessHandler(
             return
         }
         notifyTextAvailable("\n${MtpLocator.installHint()}\n", ProcessOutputTypes.SYSTEM)
-        MtpToolSetup.offerAfterBuild(project, built, outdated = shortfall == MtpLocator.Shortfall.OUTDATED)
+        MtpToolSetup.offerAfterBuild(project, built, shortfall)
     }
 
     private fun runInSimulator() {

@@ -27,9 +27,10 @@ Worth knowing when judging whether something is a vulnerability at all:
   Garmin's SDK Manager records.
 * **It runs the SDK's programs, and two others to install on a watch**, always as an argument list
   and never through a shell. The two are `mtp-rs` and, on Linux, `gio`. `mtp-rs` is run from the
-  path set in the settings if there is one; otherwise from the plugin's own copy, then from
-  `PATH`, Homebrew's `bin`, `~/.local/bin` and `~/.cargo/bin`, in that order — directories the user
-  can write to, which is worth knowing when judging what running it means. `gio` is run from
+  path set in the settings if there is one; otherwise from the first copy of a version it can read
+  on `PATH`, in Homebrew's `bin`, `~/.local/bin` or `~/.cargo/bin`; otherwise from the plugin's own
+  copy. Those are directories the user can write to, which is worth knowing when judging what
+  running it means. Each candidate is run once with `--version` to learn which it is. `gio` is run from
   `PATH` or `/usr/bin`.
 * **It writes** the developer key where the user chose in a save dialog — created `rw-------` where
   the filesystem supports it — build output under the project, a stamp beside that output, and,

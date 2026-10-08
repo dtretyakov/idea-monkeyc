@@ -25,9 +25,19 @@ import java.nio.file.Path
  */
 object MtpToolSetup {
 
-    /** What the button says: install when there is none, update when there is an old one. */
-    fun label(outdated: Boolean): String =
-        if (outdated) "Update mtp-rs to ${MtpRelease.VERSION}" else "Install mtp-rs ${MtpRelease.VERSION}"
+    /**
+     * What the button says, whatever the reason for it. It never touches a copy the user installed —
+     * an old or a newer one stays where it is, for whatever else uses it — and only adds the
+     * plugin's own beside it, so "install" is what it does in every case.
+     */
+    fun label(): String = "Install mtp-rs ${MtpRelease.VERSION}"
+
+    /** Why the button is there, in a few words for beside it. */
+    fun reason(shortfall: MtpLocator.Shortfall): String = when (shortfall) {
+        MtpLocator.Shortfall.MISSING -> "to see a watch over USB"
+        MtpLocator.Shortfall.OUTDATED -> "the one found is too old"
+        MtpLocator.Shortfall.UNTESTED -> "the one found is newer than this plugin knows"
+    }
 
     /**
      * Installs the tool, then runs [then] if it worked — on the background thread that did the work.
@@ -91,18 +101,22 @@ object MtpToolSetup {
      * Looking again is the point. Without it the click installs a tool and leaves the user where
      * they were — a build, a watch on the desk, and the run to start over.
      */
-    fun offerAfterBuild(project: Project, built: BuiltArtifact, outdated: Boolean) {
+    fun offerAfterBuild(project: Project, built: BuiltArtifact, shortfall: MtpLocator.Shortfall) {
         ApplicationManager.getApplication().invokeLater {
             if (project.isDisposed) return@invokeLater
-            val title = if (outdated) "mtp-rs is out of date" else "Installing on a watch needs mtp-rs"
-            val detail = if (outdated) {
-                "The mtp-rs found is older than ${MtpRelease.MINIMUM}, the version this plugin is built against."
-            } else {
-                "A current Garmin watch connects over MTP, and the IDE reaches it through mtp-rs."
+            val (title, detail) = when (shortfall) {
+                MtpLocator.Shortfall.MISSING -> "Installing on a watch needs mtp-rs" to
+                    "A current Garmin watch connects over MTP, and the IDE reaches it through mtp-rs."
+                MtpLocator.Shortfall.OUTDATED -> "mtp-rs is out of date" to
+                    "The mtp-rs found is older than ${MtpRelease.MINIMUM}, the version this plugin is built " +
+                    "against. Installing ${MtpRelease.VERSION} for the IDE leaves that one where it is."
+                MtpLocator.Shortfall.UNTESTED -> "mtp-rs is newer than this plugin knows" to
+                    "The mtp-rs found is past the ${MtpRelease.MINIMUM} line this plugin reads, and may " +
+                    "answer differently. Installing ${MtpRelease.VERSION} for the IDE leaves that one where it is."
             }
             val notification = group().createNotification(title, detail, NotificationType.WARNING)
             notification.addAction(
-                NotificationAction.createSimpleExpiring(label(outdated)) {
+                NotificationAction.createSimpleExpiring(label()) {
                     install(project) { lookAgain(project, built) }
                 },
             )

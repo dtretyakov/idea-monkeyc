@@ -22,6 +22,21 @@ object MtpRelease {
      */
     const val MINIMUM = VERSION
 
+    /** How a version found on the machine stands against the one the plugin is built for. */
+    enum class Compatibility {
+        /** Within `^MINIMUM`: the same answers, perhaps with fixes. Used as it is. */
+        COMPATIBLE,
+
+        /** Older than [MINIMUM]. */
+        OLDER,
+
+        /** Past the next breaking release, and free to answer differently. */
+        NEWER,
+
+        /** Not a version at all. */
+        UNREADABLE,
+    }
+
     /** One release archive: its file name, and what it hashes to. */
     data class Asset(val file: String, val sha256: String) {
         val url: String get() = "https://github.com/vdavid/mtp-rs/releases/download/mtp-rs-cli-v$VERSION/$file"
@@ -75,16 +90,34 @@ object MtpRelease {
     fun parseVersion(output: String): String? =
         VERSION_LINE.find(output)?.groupValues?.get(1)
 
-    /** Whether [version] is at least [MINIMUM]. A version that cannot be read is not. */
-    fun isSupported(version: String): Boolean {
-        val have = numbers(version) ?: return false
-        val need = numbers(MINIMUM) ?: return true
-        for (i in 0 until maxOf(have.size, need.size)) {
-            val a = have.getOrElse(i) { 0 }
-            val b = need.getOrElse(i) { 0 }
-            if (a != b) return a > b
+    /**
+     * Where [version] stands, by the rule Cargo applies to `^MINIMUM`.
+     *
+     * mtp-rs follows semver, and below 1.0 semver lets the *minor* number break things: 0.10 may
+     * change the JSON 0.9 printed. So a compatible version is one at least [MINIMUM] with the same
+     * leftmost non-zero number — 0.9.1 to anything before 0.10.0 now; after 1.0, anything before the
+     * next major. "At least the minimum" alone would wave through the very release that breaks it.
+     */
+    fun compatibility(version: String): Compatibility {
+        val have = numbers(version) ?: return Compatibility.UNREADABLE
+        val need = numbers(MINIMUM) ?: return Compatibility.COMPATIBLE
+        if (compare(have, need) < 0) return Compatibility.OLDER
+        // The leftmost non-zero part of the minimum is the one a breaking release moves.
+        val breaking = need.indexOfFirst { it != 0 }.let { if (it < 0) need.lastIndex else it }
+        val sameLine = (0..breaking).all { have.getOrElse(it) { 0 } == need.getOrElse(it) { 0 } }
+        return if (sameLine) Compatibility.COMPATIBLE else Compatibility.NEWER
+    }
+
+    /** Whether the plugin can use [version] as it is. */
+    fun isSupported(version: String): Boolean = compatibility(version) == Compatibility.COMPATIBLE
+
+    private fun compare(a: List<Int>, b: List<Int>): Int {
+        for (i in 0 until maxOf(a.size, b.size)) {
+            val x = a.getOrElse(i) { 0 }
+            val y = b.getOrElse(i) { 0 }
+            if (x != y) return x.compareTo(y)
         }
-        return true
+        return 0
     }
 
     private fun numbers(version: String): List<Int>? =

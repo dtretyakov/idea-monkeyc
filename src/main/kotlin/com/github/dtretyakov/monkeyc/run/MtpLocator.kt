@@ -22,8 +22,16 @@ object MtpLocator {
      * The tool, or null when nothing on this machine looks like it.
      *
      * A path set in the settings is used as given and nothing else is tried: falling back would run
-     * something the user did not choose. Otherwise the plugin's own copy comes first — it is the
-     * version the plugin was checked against — and then wherever the user may have put one.
+     * something the user did not choose. Otherwise, in this order:
+     *
+     * 1. a copy the user installed — on `PATH`, Homebrew's, the install scripts', cargo's — that is
+     *    known to be compatible ([MtpRelease.compatibility]): theirs is the one they meant;
+     * 2. the plugin's own copy, which is compatible by construction;
+     * 3. a copy of the user's whose version is not known yet, and then one known not to fit — a
+     *    tool that may answer differently still beats no tool, and the watch list says which it is.
+     *
+     * [version] says what is known of each candidate. The default never starts a process, so this
+     * can be asked on the UI thread; [refreshVersions] fills it in from the background.
      */
     fun resolve(
         configured: String? = MonkeyCAppSettings.getInstance().mtpToolPath,
@@ -32,6 +40,7 @@ object MtpLocator {
         windows: Boolean = System.getProperty("os.name").startsWith("Windows"),
         system: Path = Path.of("/"),
         managed: Path? = runCatching { MtpInstaller.managedTool(windows) }.getOrNull(),
+        version: (Path) -> String? = ::knownVersion,
     ): Path? {
         configured?.trim()?.takeIf { it.isNotEmpty() }?.let { setting ->
             val candidate = Path.of(setting)
@@ -41,9 +50,19 @@ object MtpLocator {
             return executable.takeIf { MtpTool.isUsable(it, windows) }
         }
 
-        return (listOfNotNull(managed) + onPath(path, windows) + MtpTool.candidates(home, windows, system))
-            .firstOrNull { MtpTool.isUsable(it, windows) }
+        val theirs = userCandidates(home, path, windows, system).filter { MtpTool.isUsable(it, windows) }
+        val ours = managed?.takeIf { MtpTool.isUsable(it, windows) }
+        fun standing(tool: Path) = version(tool)?.let { MtpRelease.compatibility(it) }
+
+        return theirs.firstOrNull { standing(it) == MtpRelease.Compatibility.COMPATIBLE }
+            ?: ours
+            ?: theirs.firstOrNull { standing(it) == null }
+            ?: theirs.firstOrNull()
     }
+
+    /** Everywhere the user may have put one, in the order they are preferred. */
+    private fun userCandidates(home: Path, path: String?, windows: Boolean, system: Path): List<Path> =
+        (onPath(path, windows) + MtpTool.candidates(home, windows, system)).distinct()
 
     /**
      * Whether a current watch needs the tool on this machine.
@@ -78,14 +97,33 @@ object MtpLocator {
         return version
     }
 
-    /** Asks the tool that would be used, if its version is not known yet. Not on the UI thread. */
-    fun refreshVersion() {
-        val tool = resolve() ?: return
-        if (knownVersion(tool) == null) readVersion(tool)
+    /**
+     * Asks every copy on the machine whose version is not known yet. Not on the UI thread.
+     *
+     * Every copy, not only the one in use: which one is used depends on their versions, so the
+     * choice made on the UI thread is only right once all of them are known.
+     */
+    fun refreshVersions(
+        home: Path = Path.of(System.getProperty("user.home")),
+        path: String? = System.getenv("PATH"),
+        windows: Boolean = System.getProperty("os.name").startsWith("Windows"),
+    ) {
+        val managed = runCatching { MtpInstaller.managedTool(windows) }.getOrNull()
+        (userCandidates(home, path, windows, Path.of("/")) + listOfNotNull(managed))
+            .filter { MtpTool.isUsable(it, windows) && knownVersion(it) == null }
+            .forEach { readVersion(it) }
     }
 
     /** What stands between this machine and a current watch. */
-    enum class Shortfall { MISSING, OUTDATED }
+    enum class Shortfall {
+        MISSING,
+
+        /** Older than the plugin is built for. */
+        OUTDATED,
+
+        /** Past the next breaking release: it may answer in a way the plugin does not read. */
+        UNTESTED,
+    }
 
     /**
      * What stands between this machine and a current watch, or null when nothing does.
@@ -93,17 +131,26 @@ object MtpLocator {
      * Asks the tool its version if that is not known yet, so it starts a process: not on the UI
      * thread. [knownShortfall] is the one that never does.
      */
-    fun shortfall(): Shortfall? = shortfallOf { tool -> knownVersion(tool) ?: readVersion(tool) }
+    fun shortfall(): Shortfall? {
+        refreshVersions()
+        return knownShortfall()
+    }
 
     /** The same, from what is already known. Never starts a process; for the UI thread. */
-    fun knownShortfall(): Shortfall? = shortfallOf { tool -> knownVersion(tool) }
-
-    private fun shortfallOf(version: (Path) -> String?): Shortfall? {
+    fun knownShortfall(): Shortfall? {
         if (!needed()) return null
         val tool = resolve() ?: return Shortfall.MISSING
-        // A version that cannot be read is not called old: see [ConnectIqEnvironment.mtpTool].
-        val known = version(tool) ?: return null
-        return if (MtpRelease.isSupported(known)) null else Shortfall.OUTDATED
+        return shortfallOf(knownVersion(tool))
+    }
+
+    /**
+     * What a tool of [version] lacks. A version that is not known, or cannot be read, is not
+     * called a problem: see [ConnectIqEnvironment.mtpTool].
+     */
+    fun shortfallOf(version: String?): Shortfall? = when (version?.let { MtpRelease.compatibility(it) }) {
+        MtpRelease.Compatibility.OLDER -> Shortfall.OUTDATED
+        MtpRelease.Compatibility.NEWER -> Shortfall.UNTESTED
+        else -> null
     }
 
     private val versions = ConcurrentHashMap<Path, Pair<FileTime?, String?>>()

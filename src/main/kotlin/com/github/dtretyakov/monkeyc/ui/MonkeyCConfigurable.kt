@@ -350,8 +350,7 @@ class MonkeyCConfigurable(private val project: Project) :
         val item = ConnectIqEnvironment.of(environment, ConnectIqEnvironment.Concern.MTP_TOOL) ?: return ""
         val sentence = ConnectIqEnvironment.sentence(environment, ConnectIqEnvironment.Concern.MTP_TOOL)
         if (item.fix != ConnectIqEnvironment.Fix.INSTALL_MTP_TOOL) return sentence
-        val outdated = MtpLocator.knownShortfall() == MtpLocator.Shortfall.OUTDATED
-        return "$sentence <a>${MtpToolSetup.label(outdated)}</a>"
+        return "$sentence <a>${MtpToolSetup.label()}</a>"
     }
 
     /** Installs the tool, then rewrites the line above so it says where it went. */
@@ -367,7 +366,7 @@ class MonkeyCConfigurable(private val project: Project) :
      */
     private fun refreshMtpStatus() {
         ApplicationManager.getApplication().executeOnPooledThread {
-            runCatching { MtpLocator.refreshVersion() }
+            runCatching { MtpLocator.refreshVersions() }
             // `any`, because the page is a modal dialog and the default would hold this back until
             // it closed — which is after the line it rewrites has gone. It sets a label's text and
             // touches no model, which is what `any` is safe for.

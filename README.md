@@ -70,14 +70,17 @@ A current watch connects over MTP, not as a drive, and what that takes depends o
 | **Linux, GNOME and most desktops** | Nothing. The desktop mounts the watch, and the plugin copies through that mount with `gio`. |
 | **Linux, KDE or no desktop** | [mtp-rs](https://github.com/vdavid/mtp-rs), and permission to open the watch without root (a udev rule; most desktop distributions ship one). |
 
-Where mtp-rs is needed and missing, the plugin says so in the watch list beside Run, in
-*Settings | Languages & Frameworks | Monkey C*, and after a build for a watch — each with an
-**Install mtp-rs** button. The button downloads mtp-rs 0.9.1 for your system from its GitHub
-release, checks it against a checksum built into the plugin, and keeps it in JetBrains' shared
-data directory; nothing else is needed. An older mtp-rs is offered the same button as an update.
-If you would rather install it yourself (`brew install vdavid/tap/mtp-rs`, or the
-[other ways](https://github.com/vdavid/mtp-rs/tree/main/crates/mtp-rs-cli#install)), the plugin
-finds it; a path set in the settings always wins.
+If you installed mtp-rs yourself — `brew install vdavid/tap/mtp-rs`, or one of the
+[other ways](https://github.com/vdavid/mtp-rs/tree/main/crates/mtp-rs-cli#install) — the plugin
+finds it and uses it, as long as it is a version the plugin can read: 0.9.1 or a later 0.9.x
+(`^0.9.1`, as Cargo would put it; mtp-rs follows semver, and below 1.0 a new minor version may
+change what it prints). A path set in *Settings | Languages & Frameworks | Monkey C* always wins.
+
+Where there is none, or only one outside that range, the plugin says so in the watch list beside
+Run, in the settings, and after a build for a watch — each with an **Install mtp-rs** button. The
+button downloads mtp-rs 0.9.1 for your system from its GitHub release, checks it against a
+checksum built into the plugin, and keeps it in JetBrains' shared data directory, beside whatever
+you have rather than over it.
 
 Older watches that connect as a drive need none of this on any system.
 
