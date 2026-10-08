@@ -239,7 +239,7 @@ class MtpToolTest {
         assertEquals("mtp-rs", MtpTool.executable(windows = false))
         assertEquals("mtp-rs.exe", MtpTool.executable(windows = true))
         assertEquals(
-            listOf(Path.of("/home/dev/.cargo/bin/mtp-rs.exe"), Path.of("/home/dev/.local/bin/mtp-rs.exe")),
+            listOf(Path.of("/home/dev/.local/bin/mtp-rs.exe"), Path.of("/home/dev/.cargo/bin/mtp-rs.exe")),
             MtpTool.candidates(Path.of("/home/dev"), windows = true),
         )
     }

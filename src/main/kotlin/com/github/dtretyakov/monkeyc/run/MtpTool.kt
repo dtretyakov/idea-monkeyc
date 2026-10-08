@@ -99,17 +99,21 @@ object MtpTool {
      * terminal would not recognise, and one already running never sees an installer's change to
      * it:
      *
-     * - `~/.cargo/bin`, where `cargo install mtp-rs-cli` puts it;
-     * - `~/.local/bin`, where the project's install scripts put it, on every platform;
      * - Homebrew's `bin`, for `brew install vdavid/tap/mtp-rs`: `/opt/homebrew` on Apple
-     *   Silicon, `/usr/local` on Intel, `/home/linuxbrew/.linuxbrew` on Linux.
+     *   Silicon, `/usr/local` on Intel, `/home/linuxbrew/.linuxbrew` on Linux;
+     * - `~/.local/bin`, where the project's install scripts put it, on every platform;
+     * - `~/.cargo/bin`, where `cargo install mtp-rs-cli` puts it.
+     *
+     * In that order: the ways the plugin itself recommends come first. Cargo was the only way to
+     * get the tool for months, so a machine that followed the new advice may well still hold an
+     * old copy there — and the one installed today is the one meant.
      *
      * [system] is the filesystem root Homebrew's are resolved against, so a test can supply one.
      */
     fun candidates(home: Path, windows: Boolean = isWindows, system: Path = SYSTEM_ROOT): List<Path> {
-        val inHome = listOf(".cargo/bin", ".local/bin").map { home.resolve(it).resolve(executable(windows)) }
+        val inHome = listOf(".local/bin", ".cargo/bin").map { home.resolve(it).resolve(executable(windows)) }
         if (windows) return inHome
-        return inHome + HOMEBREW_BINS.map { system.resolve(it).resolve(executable(windows)) }
+        return HOMEBREW_BINS.map { system.resolve(it).resolve(executable(windows)) } + inHome
     }
 
     /** Apple Silicon, Intel macOS, and Linux, in Homebrew's own words. Relative to [SYSTEM_ROOT]. */

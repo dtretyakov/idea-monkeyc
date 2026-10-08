@@ -118,9 +118,11 @@ class MtpLocatorTest {
     fun `cargo's directory is found when PATH does not have it`(@TempDir temp: Path) {
         val cargo = executable(temp.resolve(".cargo/bin/mtp-rs"))
 
+        // The system root is the temporary directory too, or a tool Homebrew put on this machine
+        // would answer first.
         assertEquals(
             cargo,
-            MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false),
+            MtpLocator.resolve(configured = "", home = temp, path = "/nowhere", windows = false, system = temp),
         )
     }
 
@@ -176,14 +178,30 @@ class MtpLocatorTest {
         )
     }
 
+    /**
+     * Found on a real machine: `mtp-rs` 0.3.0 left in `~/.cargo/bin` from the months when cargo
+     * was the only way, and 0.9.1 just installed with Homebrew as the hint now says. The plugin
+     * took the old one.
+     */
     @Test
-    fun `cargo's copy wins over Homebrew's, as it did before Homebrew was looked at`(@TempDir temp: Path) {
-        val cargo = executable(temp.resolve("home/.cargo/bin/mtp-rs"))
-        executable(temp.resolve("opt/homebrew/bin/mtp-rs"))
+    fun `Homebrew's copy wins over an older cargo install`(@TempDir temp: Path) {
+        executable(temp.resolve("home/.cargo/bin/mtp-rs"))
+        val brewed = executable(temp.resolve("opt/homebrew/bin/mtp-rs"))
 
         assertEquals(
-            cargo,
+            brewed,
             MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = "/nowhere", windows = false, system = temp),
+        )
+    }
+
+    @Test
+    fun `the install script's copy wins over an older cargo install`(@TempDir temp: Path) {
+        executable(temp.resolve("home/.cargo/bin/mtp-rs.exe"))
+        val scripted = executable(temp.resolve("home/.local/bin/mtp-rs.exe"))
+
+        assertEquals(
+            scripted,
+            MtpLocator.resolve(configured = "", home = temp.resolve("home"), path = null, windows = true, system = temp),
         )
     }
 
